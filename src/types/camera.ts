@@ -18,4 +18,11 @@ export interface CapturedMedia {
   createdAt: number;
   width: number;
   height: number;
+  /** Present when the capture came from a SliD session, which groups it by class. */
+  session?: {
+    id: string;
+    subject: string;
+    /** Milliseconds into the session, preserving the order of the class. */
+    atMs: number;
+  };
 }

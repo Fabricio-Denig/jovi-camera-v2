@@ -53,13 +53,33 @@ export function GalleryPage({ refreshKey }: GalleryPageProps) {
       )}
 
       {items && items.length > 0 && (
-        <ul className="grid grid-cols-3 gap-1 px-1 pb-6">
-          {items.map((media) => (
-            <li key={media.id}>
-              <GalleryThumb media={media} onOpen={() => setSelected(media)} />
-            </li>
+        <div className="pb-6">
+          {groupBySession(items).map((group) => (
+            <section key={group.key} className="mb-5">
+              {group.subject && (
+                <header className="flex items-baseline justify-between px-4 pb-2">
+                  <h2 className="text-[15px] font-medium text-ink">
+                    {group.subject}
+                  </h2>
+                  <span className="font-mono text-[11px] text-ink-muted">
+                    {group.items.length}{" "}
+                    {group.items.length === 1 ? "captura" : "capturas"}
+                  </span>
+                </header>
+              )}
+              <ul className="grid grid-cols-3 gap-1 px-1">
+                {group.items.map((media) => (
+                  <li key={media.id}>
+                    <GalleryThumb
+                      media={media}
+                      onOpen={() => setSelected(media)}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </section>
           ))}
-        </ul>
+        </div>
       )}
 
       {selected && (
@@ -67,6 +87,51 @@ export function GalleryPage({ refreshKey }: GalleryPageProps) {
       )}
     </div>
   );
+}
+
+interface Group {
+  key: string;
+  subject: string | null;
+  items: CapturedMedia[];
+}
+
+/**
+ * SliD captures stay grouped under the class they came from, in the order the
+ * class happened. Loose photos and videos fall into a single "Outras" group —
+ * keeping a session together is the point, not sorting everything else.
+ */
+function groupBySession(items: CapturedMedia[]): Group[] {
+  const sessions = new Map<string, Group>();
+  const loose: CapturedMedia[] = [];
+
+  for (const media of items) {
+    if (!media.session) {
+      loose.push(media);
+      continue;
+    }
+    const existing = sessions.get(media.session.id);
+    if (existing) existing.items.push(media);
+    else
+      sessions.set(media.session.id, {
+        key: media.session.id,
+        subject: media.session.subject,
+        items: [media],
+      });
+  }
+
+  for (const group of sessions.values()) {
+    group.items.sort((a, b) => (a.session!.atMs ?? 0) - (b.session!.atMs ?? 0));
+  }
+
+  const groups = [...sessions.values()];
+  if (loose.length > 0) {
+    groups.push({
+      key: "__loose",
+      subject: groups.length > 0 ? "Outras capturas" : null,
+      items: loose,
+    });
+  }
+  return groups;
 }
 
 function GalleryThumb({

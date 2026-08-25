@@ -212,7 +212,8 @@ export function CameraShell({
         <SlidSummary
           captures={slid.captures}
           elapsedMs={slid.elapsedMs}
-          onSave={async () => {
+          onSave={async (subject) => {
+            const sessionId = crypto.randomUUID();
             for (const capture of slid.captures) {
               await saveCapture({
                 id: capture.id,
@@ -222,6 +223,7 @@ export function CameraShell({
                 createdAt: Date.now(),
                 width: videoRef.current?.videoWidth ?? 0,
                 height: videoRef.current?.videoHeight ?? 0,
+                session: { id: sessionId, subject, atMs: capture.atMs },
               });
             }
             onCaptureSaved();
