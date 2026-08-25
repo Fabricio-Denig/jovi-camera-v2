@@ -73,8 +73,8 @@ export function SlidOverlay({
       <div className="pointer-events-none absolute inset-x-0 bottom-[196px] z-20 flex justify-center">
         <span className="rounded-full bg-black/45 px-3 py-1 text-[11.5px] text-white/90 backdrop-blur">
           {captures.length === 0
-            ? "Nada importante ainda — pode deixar o celular apoiado"
-            : `${captures.length} ${captures.length === 1 ? "momento salvo" : "momentos salvos"}`}
+            ? "Pode deixar o celular apoiado — o SliD avisa quando algo importar"
+            : `${captures.length} ${captures.length === 1 ? "momento importante" : "momentos importantes"}`}
         </span>
       </div>
 

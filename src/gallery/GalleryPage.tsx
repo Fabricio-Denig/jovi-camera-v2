@@ -36,8 +36,8 @@ export function GalleryPage({ refreshKey }: GalleryPageProps) {
           {items === null
             ? "Carregando…"
             : items.length === 0
-              ? "Nada capturado ainda"
-              : `${items.length} ${items.length === 1 ? "captura" : "capturas"} neste dispositivo`}
+              ? "Nada guardado ainda"
+              : `${items.length} ${items.length === 1 ? "item" : "itens"}`}
         </p>
       </header>
 
@@ -63,7 +63,7 @@ export function GalleryPage({ refreshKey }: GalleryPageProps) {
                   </h2>
                   <span className="font-mono text-[11px] text-ink-muted">
                     {group.items.length}{" "}
-                    {group.items.length === 1 ? "captura" : "capturas"}
+                    {group.items.length === 1 ? "momento" : "momentos"}
                   </span>
                 </header>
               )}

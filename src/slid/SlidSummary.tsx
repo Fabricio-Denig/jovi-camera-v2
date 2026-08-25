@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { suggestSubject, summariseMoment } from "./readContent";
+import { describeMoment, suggestSubject } from "./readContent";
 import { useOcr } from "./useOcr";
-import { REASON_LABELS, type SlidCapture, type SlidStats } from "./useSlidSession";
+import type { SlidCapture, SlidStats } from "./useSlidSession";
 import { useObjectUrl } from "../shared/hooks/useObjectUrl";
 import { formatClock } from "../shared/lib/time";
 
@@ -16,10 +16,12 @@ interface SlidSummaryProps {
 /**
  * The class, as the camera followed it.
  *
- * Deliberately not a text or OCR screen. Reading the board happens quietly in
- * the background and only earns its place by naming each moment; the student
- * sees the lecture in order, with what the camera noticed at each point. The
- * feeling to protect is "I didn't have to remember to save anything".
+ * A timeline, not a photo grid: what a student comes back for is the sequence
+ * of the lecture, and each point on it says what the camera recognised. The
+ * board is read quietly in the background and never shown as a transcript —
+ * showing extracted text, OCR slips and all, is what makes a product read as a
+ * scanner. The feeling to protect is "I didn't have to remember to save
+ * anything".
  */
 export function SlidSummary({
   captures,
@@ -44,25 +46,36 @@ export function SlidSummary({
     return map;
   }, [ocr.pages]);
 
-  // The class names itself from what was on the board; the student only
-  // corrects it if it got it wrong.
-  const suggested = useMemo(
-    () => suggestSubject(ocr.pages),
-    [ocr.pages],
-  );
-  const subjectValue = edited ? subject : (subject || suggested);
+  const suggested = useMemo(() => suggestSubject(ocr.pages), [ocr.pages]);
+  const subjectValue = edited ? subject : subject || suggested;
 
   return (
     <div className="absolute inset-0 z-50 flex flex-col bg-canvas">
-      <header className="border-b border-line px-5 pb-4 pt-[max(20px,env(safe-area-inset-top))]">
+      <header className="border-b border-line px-5 pb-4 pt-[max(18px,env(safe-area-inset-top))]">
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-xl font-semibold text-ink">Sua aula</h1>
-            <p className="mt-0.5 text-[13px] text-ink-muted">
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-accent">
+              Aula acompanhada
+            </p>
+            {/* The title is the class itself, not a form field waiting at the
+                bottom of the screen. */}
+            <input
+              value={subjectValue}
+              onChange={(event) => {
+                setEdited(true);
+                setSubject(event.target.value);
+              }}
+              placeholder={
+                ocr.status === "running" ? "Identificando…" : "Nomear esta aula"
+              }
+              aria-label="Nome da aula"
+              className="-ml-1 mt-0.5 w-full rounded-lg bg-transparent px-1 text-[22px] font-semibold text-ink placeholder:text-ink-muted/60 focus:bg-surface-2 focus:outline-none"
+            />
+            <p className="mt-1 px-1 text-[13px] text-ink-muted">
               {formatClock(elapsedMs)} de aula ·{" "}
               {captures.length === 1
-                ? "1 momento salvo"
-                : `${captures.length} momentos salvos`}
+                ? "1 momento importante"
+                : `${captures.length} momentos importantes`}
             </p>
           </div>
           <button
@@ -78,17 +91,22 @@ export function SlidSummary({
         <CurationNote stats={stats} kept={captures.length} />
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
         {captures.length === 0 ? (
           <p className="pt-8 text-center text-sm text-ink-muted">
-            A aula terminou sem momentos relevantes. Deixe o celular apontado
-            para o quadro e o SliD registra sozinho o que mudar.
+            A aula terminou sem momentos relevantes. Deixe o celular apoiado
+            apontando para o quadro e o SliD registra sozinho o que mudar.
           </p>
         ) : (
-          <ol className="flex flex-col gap-3">
+          <ol className="relative">
+            {/* The spine is what turns a list into a lecture. */}
+            <span
+              aria-hidden="true"
+              className="absolute bottom-4 left-[5px] top-3 w-px bg-line"
+            />
             {captures.map((capture, index) => (
               <li key={capture.id}>
-                <MomentRow
+                <MomentEntry
                   capture={capture}
                   text={textByCapture.get(capture.id)}
                   previousText={
@@ -105,16 +123,6 @@ export function SlidSummary({
       </div>
 
       <footer className="border-t border-line px-5 pb-[max(16px,env(safe-area-inset-bottom))] pt-3">
-        <input
-          value={subjectValue}
-          onChange={(event) => {
-            setEdited(true);
-            setSubject(event.target.value);
-          }}
-          placeholder="Nome da aula"
-          aria-label="Nome da aula"
-          className="mb-2 min-h-11 w-full rounded-xl border border-line bg-surface-2 px-3.5 py-2.5 text-[14px] text-ink placeholder:text-ink-muted/70 focus:border-accent focus:outline-none"
-        />
         <button
           type="button"
           onClick={() => onSave(subjectValue.trim() || "Aula sem título")}
@@ -134,24 +142,22 @@ export function SlidSummary({
 function CurationNote({ stats, kept }: { stats: SlidStats; kept: number }) {
   if (stats.analysed === 0) return null;
   return (
-    <div className="mt-3 rounded-xl bg-surface-2 px-3.5 py-2.5">
-      <p className="text-[12.5px] leading-snug text-ink-muted">
-        A câmera analisou{" "}
-        <span className="text-ink">{stats.analysed} quadros</span> durante a
-        aula e guardou <span className="text-ink">{kept}</span>.
-        {stats.skippedDuplicates > 0 && (
-          <>
-            {" "}
-            Descartou {stats.skippedDuplicates} repetidos para você não revisar
-            a mesma coisa duas vezes.
-          </>
-        )}
-      </p>
-    </div>
+    <p className="mt-3 rounded-xl bg-surface-2 px-3.5 py-2.5 text-[12.5px] leading-snug text-ink-muted">
+      A câmera acompanhou a aula inteira e guardou{" "}
+      <span className="text-ink">{kept}</span>{" "}
+      {kept === 1 ? "momento" : "momentos"}.
+      {stats.skippedDuplicates > 0 && (
+        <>
+          {" "}
+          Ignorou {stats.skippedDuplicates} vezes em que nada mudou, para você
+          não revisar a mesma coisa duas vezes.
+        </>
+      )}
+    </p>
   );
 }
 
-function MomentRow({
+function MomentEntry({
   capture,
   text,
   previousText,
@@ -163,31 +169,34 @@ function MomentRow({
   reading: boolean;
 }) {
   const url = useObjectUrl(capture.blob);
-  const headline = text ? summariseMoment(text, previousText) : null;
+  const { label, detail } = describeMoment(capture.reason, text, previousText);
 
   return (
-    <article className="flex gap-3 rounded-2xl border border-line bg-surface-2 p-3">
-      <div className="relative size-20 shrink-0 overflow-hidden rounded-xl bg-canvas">
-        {url && <img src={url} alt="" className="size-full object-cover" />}
-      </div>
+    <article className="relative flex gap-3 pb-6 pl-6">
+      <span
+        aria-hidden="true"
+        className="absolute left-0 top-2.5 size-[11px] rounded-full border-2 border-accent bg-canvas"
+      />
 
       <div className="min-w-0 flex-1">
-        <div className="flex items-baseline gap-2">
-          <span className="font-mono text-[11px] text-accent">
-            {formatClock(capture.atMs)}
-          </span>
-          <span className="text-[11.5px] text-ink-muted">
-            {REASON_LABELS[capture.reason]}
-          </span>
+        <div className="font-mono text-[12px] tabular-nums text-accent">
+          {formatClock(capture.atMs)}
         </div>
-
-        {headline ? (
-          <p className="mt-1 line-clamp-3 text-[13.5px] leading-snug text-ink">
-            {headline}
+        <h3 className="mt-0.5 text-[15px] font-medium text-ink">{label}</h3>
+        {detail ? (
+          <p className="mt-0.5 line-clamp-2 text-[13px] leading-snug text-ink-muted">
+            {detail}
           </p>
         ) : reading ? (
-          <p className="mt-1 text-[12.5px] text-ink-muted/70">lendo…</p>
+          <p className="mt-0.5 text-[12.5px] text-ink-muted/60">
+            identificando…
+          </p>
         ) : null}
+      </div>
+
+      {/* The frame is evidence for the moment, not the subject of the row. */}
+      <div className="size-16 shrink-0 overflow-hidden rounded-xl bg-surface-2">
+        {url && <img src={url} alt="" className="size-full object-cover" />}
       </div>
     </article>
   );
