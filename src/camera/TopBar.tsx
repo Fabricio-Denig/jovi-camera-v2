@@ -3,6 +3,7 @@ interface TopBarProps {
   onSwitchFacing: () => void;
   isRecording: boolean;
   elapsedMs: number;
+  isSwitching: boolean;
 }
 
 function formatElapsed(ms: number): string {
@@ -17,6 +18,7 @@ export function TopBar({
   onSwitchFacing,
   isRecording,
   elapsedMs,
+  isSwitching,
 }: TopBarProps) {
   return (
     <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between px-4 pt-[max(16px,env(safe-area-inset-top))]">
@@ -33,11 +35,13 @@ export function TopBar({
         <button
           type="button"
           onClick={onSwitchFacing}
-          disabled={isRecording}
+          disabled={isRecording || isSwitching}
           aria-label="Trocar câmera"
           className="flex size-10 items-center justify-center rounded-full bg-black/40 text-white active:opacity-70 disabled:opacity-30"
         >
-          <FlipIcon />
+          <span className={isSwitching ? "animate-spin" : undefined}>
+            <FlipIcon />
+          </span>
         </button>
       )}
     </div>
