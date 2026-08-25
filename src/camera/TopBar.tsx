@@ -21,7 +21,7 @@ export function TopBar({
   isSwitching,
 }: TopBarProps) {
   return (
-    <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between px-4 pt-[max(16px,env(safe-area-inset-top))]">
+    <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between bg-gradient-to-b from-black/55 to-transparent px-4 pb-8 pt-[max(16px,env(safe-area-inset-top))]">
       {isRecording ? (
         <span className="flex items-center gap-2 rounded-full bg-black/50 px-3 py-1.5 font-mono text-xs text-white">
           <span className="size-2 rounded-full bg-danger animate-pulse" />

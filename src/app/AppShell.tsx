@@ -17,6 +17,7 @@ import { cameraReducer, initialCameraState } from "../state/cameraState";
 export function AppShell() {
   const [state, dispatch] = useReducer(cameraReducer, initialCameraState);
   const [galleryRefresh, setGalleryRefresh] = useState(0);
+  const [boardDetected, setBoardDetected] = useState(false);
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-canvas">
@@ -27,6 +28,7 @@ export function AppShell() {
             onSelectMode={(modeId) => dispatch({ type: "select-mode", modeId })}
             onOpenModes={() => dispatch({ type: "open-sheet", sheet: "modes" })}
             onCaptureSaved={() => setGalleryRefresh((n) => n + 1)}
+            onBoardDetected={setBoardDetected}
           />
         </div>
 
@@ -40,6 +42,7 @@ export function AppShell() {
         <ModesSheet
           open={state.openSheet === "modes"}
           activeModeId={state.modeId}
+          suggestedModeId={boardDetected ? "slid" : null}
           onSelect={(modeId) => dispatch({ type: "select-mode", modeId })}
           onClose={() => dispatch({ type: "close-sheet" })}
         />

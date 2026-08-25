@@ -2,16 +2,23 @@ interface ShutterButtonProps {
   mode: "photo" | "video";
   isRecording: boolean;
   onPress: () => void;
+  disabled?: boolean;
 }
 
 /** Single shutter control. White ring = photo. Turns into a pulsing red square while recording video. */
-export function ShutterButton({ mode, isRecording, onPress }: ShutterButtonProps) {
+export function ShutterButton({
+  mode,
+  isRecording,
+  onPress,
+  disabled = false,
+}: ShutterButtonProps) {
   const isVideoArmed = mode === "video";
 
   return (
     <button
       type="button"
       onClick={onPress}
+      disabled={disabled}
       aria-label={
         isVideoArmed
           ? isRecording
@@ -19,7 +26,7 @@ export function ShutterButton({ mode, isRecording, onPress }: ShutterButtonProps
             : "Iniciar gravação"
           : "Tirar foto"
       }
-      className="relative flex size-[72px] items-center justify-center rounded-full border-4 border-white/90 active:scale-95"
+      className="relative flex size-[72px] items-center justify-center rounded-full border-4 border-white/90 active:scale-95 disabled:opacity-30"
     >
       <span
         className={

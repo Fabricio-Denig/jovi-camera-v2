@@ -10,7 +10,12 @@ import { TopBar } from "./TopBar";
 import { useCamera } from "./useCamera";
 import { useVideoRecorder } from "./useVideoRecorder";
 import { Viewfinder } from "./Viewfinder";
+import { ModePreviewCard } from "../modes/ModePreviewCard";
 import { getMode } from "../modes/modes";
+import { SlidOverlay } from "../slid/SlidOverlay";
+import { SlidSuggestion } from "../slid/SlidSuggestion";
+import { SlidSummary } from "../slid/SlidSummary";
+import { useSlidSession } from "../slid/useSlidSession";
 import { getLatestCapture, saveCapture } from "../shared/lib/mediaStore";
 import type { CapturedMedia } from "../types/camera";
 
@@ -22,6 +27,8 @@ interface CameraShellProps {
   onSelectMode: (modeId: string) => void;
   onOpenModes: () => void;
   onCaptureSaved: () => void;
+  /** Lets the shell surface the same suggestion inside the mode catalog. */
+  onBoardDetected: (detected: boolean) => void;
 }
 
 /** The camera screen: permission, preview, capture and local persistence. */
@@ -30,6 +37,7 @@ export function CameraShell({
   onSelectMode,
   onOpenModes,
   onCaptureSaved,
+  onBoardDetected,
 }: CameraShellProps) {
   const {
     videoRef,
@@ -50,6 +58,27 @@ export function CameraShell({
   const [viewerOpen, setViewerOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [captureError, setCaptureError] = useState<string | null>(null);
+
+  const isSlid = mode.id === "slid";
+  const slid = useSlidSession({
+    videoRef,
+    // Only look for a board when the suggestion could actually be acted on.
+    detectionEnabled: status === "ready" && !isSlid && mode.fidelity === "real",
+  });
+
+  useEffect(() => {
+    onBoardDetected(slid.boardDetected);
+  }, [slid.boardDetected, onBoardDetected]);
+
+  // Entering SliD from the mode bar starts the session directly, so the mode
+  // and the session never disagree about what is happening.
+  useEffect(() => {
+    if (isSlid && slid.status === "idle") slid.start();
+    if (!isSlid && slid.status !== "idle" && slid.status !== "finished") {
+      slid.finish();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSlid]);
 
   useEffect(() => {
     requestCamera();
@@ -82,6 +111,13 @@ export function CameraShell({
   async function handleShutterPress() {
     setCaptureError(null);
     try {
+      // Inside a session the shutter forces a capture — the student decides
+      // something matters even when the board hasn't changed.
+      if (isSlid) {
+        await slid.captureManually();
+        return;
+      }
+
       if (mode.kind === "photo") {
         if (!videoRef.current) return;
         const { blob, width, height } = await capturePhotoFromVideo(
@@ -150,6 +186,55 @@ export function CameraShell({
         />
       )}
 
+      {isReady && slid.boardDetected && !isSlid && (
+        <SlidSuggestion
+          onAccept={() => onSelectMode("slid")}
+          onDismiss={slid.dismissSuggestion}
+        />
+      )}
+
+      {isReady && !isSlid && mode.fidelity === "simulated" && (
+        <ModePreviewCard mode={mode} onBack={() => onSelectMode("photo")} />
+      )}
+
+      {isReady && isSlid && slid.status !== "finished" && (
+        <SlidOverlay
+          status={slid.status}
+          captures={slid.captures}
+          elapsedMs={slid.elapsedMs}
+          onPause={slid.pause}
+          onResume={slid.resume}
+          onFinish={slid.finish}
+        />
+      )}
+
+      {isSlid && slid.status === "finished" && (
+        <SlidSummary
+          captures={slid.captures}
+          elapsedMs={slid.elapsedMs}
+          onSave={async () => {
+            for (const capture of slid.captures) {
+              await saveCapture({
+                id: capture.id,
+                kind: "photo",
+                blob: capture.blob,
+                mimeType: capture.blob.type,
+                createdAt: Date.now(),
+                width: videoRef.current?.videoWidth ?? 0,
+                height: videoRef.current?.videoHeight ?? 0,
+              });
+            }
+            onCaptureSaved();
+            slid.reset();
+            onSelectMode("photo");
+          }}
+          onDiscard={() => {
+            slid.reset();
+            onSelectMode("photo");
+          }}
+        />
+      )}
+
       {isReady && (
         <>
           <TopBar
@@ -159,6 +244,11 @@ export function CameraShell({
             elapsedMs={recorder.elapsedMs}
             isSwitching={isSwitching}
           />
+
+          {/* Scrim behind the controls: white text over a bright scene — a
+              whiteboard, a sunlit wall — is otherwise unreadable, and the
+              whiteboard is exactly where SliD is used. */}
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[5] h-56 bg-gradient-to-t from-black/75 via-black/35 to-transparent" />
 
           <div className="absolute inset-x-0 bottom-0 z-10 flex flex-col items-center gap-5 pb-6">
             <ModeTabs
@@ -178,6 +268,7 @@ export function CameraShell({
                   mode={mode.kind}
                   isRecording={recorder.isRecording}
                   onPress={handleShutterPress}
+                  disabled={mode.fidelity === "simulated"}
                 />
               </div>
               <div />
