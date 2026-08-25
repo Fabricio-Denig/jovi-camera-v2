@@ -5,6 +5,8 @@ import { formatClock } from "../shared/lib/time";
 
 interface SlidOverlayProps {
   status: SlidStatus;
+  /** Whether study material is actually in front of the camera right now. */
+  sceneReady: boolean;
   captures: SlidCapture[];
   lastMoment: SlidCapture | null;
   elapsedMs: number;
@@ -24,6 +26,7 @@ interface SlidOverlayProps {
  */
 export function SlidOverlay({
   status,
+  sceneReady,
   captures,
   lastMoment,
   elapsedMs,
@@ -33,6 +36,9 @@ export function SlidOverlay({
   onFinish,
 }: SlidOverlayProps) {
   const running = status === "running";
+  // Saying "acompanhando a aula" while the camera faces a wall is the kind of
+  // small lie that costs the whole demo. The session says what it is doing.
+  const searching = running && !sceneReady;
 
   return (
     <>
@@ -40,13 +46,19 @@ export function SlidOverlay({
         <div className="pointer-events-auto flex items-center gap-2 rounded-full bg-canvas/90 px-3.5 py-2 backdrop-blur">
           <span
             className={
-              running
-                ? "size-2 animate-pulse rounded-full bg-accent"
-                : "size-2 rounded-full bg-warn"
+              !running
+                ? "size-2 rounded-full bg-warn"
+                : searching
+                  ? "size-2 animate-pulse rounded-full bg-ink-muted"
+                  : "size-2 animate-pulse rounded-full bg-accent"
             }
           />
           <span className="text-[12.5px] font-semibold text-ink">
-            {running ? "Acompanhando a aula" : "Pausado"}
+            {!running
+              ? "Pausado"
+              : searching
+                ? "Procurando o conteúdo"
+                : "Acompanhando a aula"}
           </span>
           <span className="font-mono text-[12px] tabular-nums text-ink-muted">
             {formatClock(elapsedMs)}
@@ -81,11 +93,13 @@ export function SlidOverlay({
       <div className="absolute inset-x-0 bottom-0 z-20 flex flex-col items-center gap-4 pb-7">
         {/* Says the quiet part out loud: nothing is expected of the student. */}
         <p className="mx-8 rounded-full bg-black/45 px-3.5 py-1.5 text-center text-[11.5px] leading-snug text-white/90 backdrop-blur">
-          {captures.length === 0
-            ? running
-              ? "Pode apoiar o celular e assistir — o SliD guarda o que for importante"
-              : "Sessão pausada. Nada está sendo guardado."
-            : `${captures.length} ${captures.length === 1 ? "momento guardado" : "momentos guardados"} até agora`}
+          {!running
+            ? "Sessão pausada. Nada está sendo guardado."
+            : searching
+              ? "Aponte para o quadro, o slide ou o caderno — o SliD só guarda conteúdo de estudo"
+              : captures.length === 0
+                ? "Pode apoiar o celular e assistir — o SliD guarda o que for importante"
+                : `${captures.length} ${captures.length === 1 ? "momento guardado" : "momentos guardados"} até agora`}
         </p>
 
         <div className="flex items-center gap-2.5 px-5">

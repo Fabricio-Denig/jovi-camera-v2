@@ -201,6 +201,7 @@ export function CameraShell({
       {isReady && isSlid && slid.status !== "finished" && (
         <SlidOverlay
           status={slid.status}
+          sceneReady={slid.sceneReady}
           captures={slid.captures}
           lastMoment={slid.lastMoment}
           elapsedMs={slid.elapsedMs}

@@ -49,9 +49,7 @@ export function sampleFrame(video: HTMLVideoElement): Uint8Array | null {
   return gray;
 }
 
-export interface BoardSignals {
-  /** 0..1 — how strongly this frame looks like a board or projected slide. */
-  score: number;
+export interface FrameSignals {
   brightness: number;
   /** Local contrast energy: the fingerprint of writing on a flat surface. */
   edgeEnergy: number;
@@ -59,17 +57,23 @@ export interface BoardSignals {
   surfaceSd: number;
 }
 
+export interface BoardSignals extends FrameSignals {
+  /** 0..1 — how strongly this frame looks like a board or projected slide. */
+  score: number;
+}
+
 /*
- * Thresholds below come from measuring four scenes at 128×96:
+ * Thresholds below come from measuring the reference scenes at 128×96:
  *
- *   board (positive)   brightness 0.93   edge 3.81   sd  3.5
- *   blank wall         brightness 0.90   edge 0.00   sd  0.0
- *   busy scene         brightness 0.50   edge 7.12   sd 42.5
- *   colour test card   brightness 0.37   edge 3.37   sd 32.5
+ *   lecture board      brightness 0.86   edge 3.7 – 8.2   sd  2.9 – 4.7
+ *   blank wall         brightness 0.84   edge 0.00        sd  0.0
+ *   face, 60 s         brightness 0.45   edge 2.40        sd 30.2
+ *   busy scene         brightness 0.49   edge 6.10        sd 36.8
  *
  * Each signal alone confuses at least one pair; together they separate cleanly.
- * Edge energy is what distinguishes a written board from a bare wall, and it
- * survives downscaling far better than counting dark pixels does.
+ * Edge energy is what distinguishes a written board from a bare wall, and the
+ * surface spread is what rules out a face: skin and background never settle
+ * into one even panel, whatever the lighting does.
  */
 const MIN_BRIGHTNESS = 0.62;
 const BRIGHTNESS_RAMP = 0.12;
@@ -80,7 +84,20 @@ const MAX_EDGE = 6.5;
 /** Spread across the surface; a real board stays close to uniform. */
 const MAX_SURFACE_SD = 18;
 
-export function analyzeBoard(gray: Uint8Array): BoardSignals {
+/*
+ * The capture gate is deliberately more forgiving than the suggestion. Offering
+ * to follow a class uninvited should require confidence; deciding whether the
+ * student who already opened SliD is pointing at study material should still
+ * work on a notebook page in a badly lit room. Only the brightness floor and
+ * the evenness tolerance move — the two signals that reject a face are exactly
+ * the ones kept intact, and measured faces sit 37 % above the wider limit.
+ */
+const SCENE_MIN_BRIGHTNESS = 0.45;
+const SCENE_BRIGHTNESS_RAMP = 0.15;
+const SCENE_MAX_SURFACE_SD = 22;
+
+/** The three raw signals, measured once and scored twice. */
+export function measureFrame(gray: Uint8Array): FrameSignals {
   let sum = 0;
   for (const value of gray) sum += value;
   const mean = sum / gray.length;
@@ -114,21 +131,89 @@ export function analyzeBoard(gray: Uint8Array): BoardSignals {
   }
   const surfaceSd = brightCount ? Math.sqrt(variance / brightCount) : 999;
 
-  const brightScore = clamp01((brightness - MIN_BRIGHTNESS) / BRIGHTNESS_RAMP);
+  return { brightness, edgeEnergy, surfaceSd };
+}
+
+function score(
+  { brightness, edgeEnergy, surfaceSd }: FrameSignals,
+  minBrightness: number,
+  ramp: number,
+  maxSd: number,
+): number {
+  const brightScore = clamp01((brightness - minBrightness) / ramp);
   const writingScore =
     edgeEnergy < MIN_EDGE
       ? 0
       : edgeEnergy > MAX_EDGE
         ? clamp01(1 - (edgeEnergy - MAX_EDGE) / MAX_EDGE)
         : 1;
-  const evennessScore = clamp01(1 - surfaceSd / MAX_SURFACE_SD);
+  const evennessScore = clamp01(1 - surfaceSd / maxSd);
+  return brightScore * writingScore * evennessScore;
+}
 
+/** Does this frame look enough like a board to offer following the class? */
+export function analyzeBoard(gray: Uint8Array): BoardSignals {
+  const signals = measureFrame(gray);
   return {
-    score: brightScore * writingScore * evennessScore,
-    brightness,
-    edgeEnergy,
-    surfaceSd,
+    ...signals,
+    score: score(signals, MIN_BRIGHTNESS, BRIGHTNESS_RAMP, MAX_SURFACE_SD),
   };
+}
+
+/**
+ * Is there study material in front of the camera at all?
+ *
+ * Every automatic capture passes through this. Without it the session is a
+ * motion detector: pointed at a person for a minute it kept saving frames,
+ * because pixels had moved. Pixels moving is not a reason to keep anything.
+ */
+export function studySceneScore(gray: Uint8Array): number {
+  return score(
+    measureFrame(gray),
+    SCENE_MIN_BRIGHTNESS,
+    SCENE_BRIGHTNESS_RAMP,
+    SCENE_MAX_SURFACE_SD,
+  );
+}
+
+/*
+ * Content, not pixels.
+ *
+ * Ink is measured against the frame's own mean, so a light being switched on
+ * moves every pixel and the mask not at all. Measured on the reference board,
+ * each new line the lecturer writes adds 0.6 – 1.0 % of the frame in ink and
+ * removes none; a person moving through a scene adds 1.3 % and removes 1.7 –
+ * 4.7 %. That asymmetry — not the amount of change — is what tells writing
+ * apart from movement.
+ */
+const INK_CUTOFF = 0.82;
+
+/** Pixels meaningfully darker than the lit surface: the writing itself. */
+export function inkMask(gray: Uint8Array): Uint8Array {
+  let sum = 0;
+  for (const value of gray) sum += value;
+  const cutoff = (sum / gray.length) * INK_CUTOFF;
+  const mask = new Uint8Array(gray.length);
+  for (let i = 0; i < gray.length; i++) mask[i] = gray[i] < cutoff ? 1 : 0;
+  return mask;
+}
+
+export interface ContentDelta {
+  /** Fraction of the frame that gained ink — something was written or shown. */
+  added: number;
+  /** Fraction that lost ink — the board was wiped or the slide moved on. */
+  removed: number;
+}
+
+export function contentDelta(before: Uint8Array, after: Uint8Array): ContentDelta {
+  if (before.length !== after.length) return { added: 1, removed: 1 };
+  let added = 0;
+  let removed = 0;
+  for (let i = 0; i < before.length; i++) {
+    if (after[i] && !before[i]) added++;
+    else if (before[i] && !after[i]) removed++;
+  }
+  return { added: added / before.length, removed: removed / before.length };
 }
 
 /** Mean absolute difference between two samples, 0..1. */
