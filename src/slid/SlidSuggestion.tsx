@@ -21,11 +21,11 @@ export function SlidSuggestion({ onAccept, onDismiss }: SlidSuggestionProps) {
           </span>
           <div className="min-w-0 flex-1">
             <p className="text-[13px] font-semibold text-ink">
-              Lousa detectada
+              Parece uma aula
             </p>
             <p className="mt-0.5 text-[12.5px] leading-snug text-ink-muted">
-              O SliD acompanha a aula e captura sozinho cada vez que o conteúdo
-              muda. Você assiste, ele registra.
+              Deixe o celular apoiado e assista. O SliD acompanha o quadro e
+              salva sozinho só o que for importante.
             </p>
           </div>
           <button
@@ -43,7 +43,7 @@ export function SlidSuggestion({ onAccept, onDismiss }: SlidSuggestionProps) {
           onClick={onAccept}
           className="mt-3 min-h-11 w-full rounded-xl bg-accent py-3 text-[13px] font-medium text-accent-ink active:opacity-80"
         >
-          Iniciar sessão SliD
+          Acompanhar esta aula
         </button>
       </div>
     </div>

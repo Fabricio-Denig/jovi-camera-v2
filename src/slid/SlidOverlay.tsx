@@ -1,10 +1,12 @@
+import { useEffect, useState } from "react";
+import { REASON_LABELS, type SlidCapture, type SlidStatus } from "./useSlidSession";
 import { useObjectUrl } from "../shared/hooks/useObjectUrl";
 import { formatClock } from "../shared/lib/time";
-import type { SlidCapture, SlidStatus } from "./useSlidSession";
 
 interface SlidOverlayProps {
   status: SlidStatus;
   captures: SlidCapture[];
+  lastMoment: SlidCapture | null;
   elapsedMs: number;
   onPause: () => void;
   onResume: () => void;
@@ -12,15 +14,16 @@ interface SlidOverlayProps {
 }
 
 /**
- * The live session: timer, capture stack and session controls.
+ * The live session.
  *
- * Captures land here as they happen so the student can see the session working
- * without interrupting it — the reassurance that replaces photographing the
- * board by hand.
+ * The screen has one job: make it believable that the camera is following the
+ * class, so the student can stop thinking about saving anything. It shows what
+ * was just noticed and why — not a viewfinder full of controls.
  */
 export function SlidOverlay({
   status,
   captures,
+  lastMoment,
   elapsedMs,
   onPause,
   onResume,
@@ -30,8 +33,8 @@ export function SlidOverlay({
 
   return (
     <>
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-center pt-[max(70px,calc(env(safe-area-inset-top)+54px))]">
-        <div className="pointer-events-auto flex items-center gap-2 rounded-full bg-canvas/90 px-3 py-1.5 backdrop-blur">
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex flex-col items-center gap-2 pt-[max(70px,calc(env(safe-area-inset-top)+54px))]">
+        <div className="pointer-events-auto flex items-center gap-2 rounded-full bg-canvas/90 px-3.5 py-2 backdrop-blur">
           <span
             className={
               running
@@ -39,34 +42,43 @@ export function SlidOverlay({
                 : "size-2 rounded-full bg-warn"
             }
           />
-          <span className="text-[12px] font-semibold text-ink">SliD</span>
+          <span className="text-[12.5px] font-semibold text-ink">
+            {running ? "Acompanhando a aula" : "Pausado"}
+          </span>
           <span className="font-mono text-[12px] tabular-nums text-ink-muted">
             {formatClock(elapsedMs)}
           </span>
-          {!running && (
-            <span className="text-[11px] text-warn">pausado</span>
-          )}
         </div>
+
+        {running && lastMoment && (
+          // Keyed by the moment so each new one mounts its own toast, instead
+          // of resetting a timer inside an effect.
+          <MomentToast key={lastMoment.id} moment={lastMoment} />
+        )}
       </div>
 
-      {/* Capture stack, mirroring the Figma v2 session frame. */}
       {captures.length > 0 && (
-        <div className="pointer-events-none absolute right-3 top-[max(118px,calc(env(safe-area-inset-top)+102px))] z-20 flex max-h-[45%] flex-col gap-2 overflow-hidden">
+        <div className="pointer-events-none absolute right-3 top-[max(140px,calc(env(safe-area-inset-top)+124px))] z-20 flex max-h-[38%] flex-col gap-2 overflow-hidden">
           {captures
-            .slice(-4)
+            .slice(-3)
             .reverse()
             .map((capture) => (
-              <CaptureChip key={capture.id} capture={capture} />
+              <MomentChip key={capture.id} capture={capture} />
             ))}
-          {captures.length > 4 && (
-            <span className="rounded-full bg-black/60 px-2 py-0.5 text-center font-mono text-[10px] text-white">
-              +{captures.length - 4}
-            </span>
-          )}
         </div>
       )}
 
-      <div className="pointer-events-auto absolute inset-x-0 bottom-[150px] z-20 flex items-center justify-center gap-3 px-6">
+      {/* The count is the reassurance: proof the session is working without
+          the student having to check anything. */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-[196px] z-20 flex justify-center">
+        <span className="rounded-full bg-black/45 px-3 py-1 text-[11.5px] text-white/90 backdrop-blur">
+          {captures.length === 0
+            ? "Nada importante ainda — pode deixar o celular apoiado"
+            : `${captures.length} ${captures.length === 1 ? "momento salvo" : "momentos salvos"}`}
+        </span>
+      </div>
+
+      <div className="pointer-events-auto absolute inset-x-0 bottom-[142px] z-20 flex items-center justify-center gap-3 px-6">
         <button
           type="button"
           onClick={running ? onPause : onResume}
@@ -79,26 +91,64 @@ export function SlidOverlay({
           onClick={onFinish}
           className="min-h-11 rounded-full bg-accent px-5 py-2.5 text-[13px] font-medium text-accent-ink active:opacity-80"
         >
-          Encerrar sessão
+          Encerrar aula
         </button>
       </div>
     </>
   );
 }
 
-function CaptureChip({ capture }: { capture: SlidCapture }) {
+/**
+ * Announces what the camera just recognised, then gets out of the way.
+ * This is the moment the product is arguing for — the student sees the camera
+ * decide, without being asked to do anything.
+ */
+function MomentToast({ moment }: { moment: SlidCapture }) {
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setVisible(false), 2600);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (!visible) return null;
+
+  return (
+    <div className="pointer-events-auto flex items-center gap-2 rounded-full bg-accent px-3.5 py-2 text-accent-ink">
+      <CheckIcon />
+      <span className="text-[12.5px] font-medium">
+        {REASON_LABELS[moment.reason]}
+      </span>
+    </div>
+  );
+}
+
+function MomentChip({ capture }: { capture: SlidCapture }) {
   const url = useObjectUrl(capture.blob);
   return (
-    <div className="relative size-16 overflow-hidden rounded-lg border border-accent/60">
+    <div className="relative size-16 overflow-hidden rounded-lg border border-white/40">
       {url && <img src={url} alt="" className="size-full object-cover" />}
       <span className="absolute inset-x-0 bottom-0 bg-black/65 text-center font-mono text-[9px] text-white">
         {formatClock(capture.atMs)}
       </span>
-      {capture.auto && (
-        <span className="absolute left-1 top-1 rounded bg-accent px-1 text-[8px] font-semibold text-accent-ink">
-          auto
-        </span>
-      )}
     </div>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="3"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="m5 13 4 4L19 7" />
+    </svg>
   );
 }

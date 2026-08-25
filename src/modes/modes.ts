@@ -61,9 +61,9 @@ export const MODES: CameraMode[] = [
     id: "slid",
     label: "SliD",
     summary:
-      "Acompanha a aula inteira e captura sozinho cada vez que a lousa muda.",
+      "Entende a aula e salva sozinho só os momentos que importam.",
     whenToUse:
-      "Em aula, palestra ou reunião com slides — você assiste, a câmera registra.",
+      "Aulas longas: em vez de escolher entre prestar atenção e registrar, você só assiste.",
     kind: "photo",
     fidelity: "partial",
     section: "frequentes",

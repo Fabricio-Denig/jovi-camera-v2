@@ -201,6 +201,7 @@ export function CameraShell({
         <SlidOverlay
           status={slid.status}
           captures={slid.captures}
+          lastMoment={slid.lastMoment}
           elapsedMs={slid.elapsedMs}
           onPause={slid.pause}
           onResume={slid.resume}
@@ -211,6 +212,7 @@ export function CameraShell({
       {isSlid && slid.status === "finished" && (
         <SlidSummary
           captures={slid.captures}
+          stats={slid.stats}
           elapsedMs={slid.elapsedMs}
           onSave={async (subject) => {
             const sessionId = crypto.randomUUID();
