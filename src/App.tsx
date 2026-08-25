@@ -1,5 +1,5 @@
-import { CameraShell } from "./camera/CameraShell";
+import { AppShell } from "./app/AppShell";
 
 export function App() {
-  return <CameraShell />;
+  return <AppShell />;
 }
