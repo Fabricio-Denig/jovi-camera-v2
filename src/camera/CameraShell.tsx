@@ -1,20 +1,44 @@
 import { useEffect, useState } from "react";
 import { capturePhotoFromVideo } from "./capturePhoto";
-import { CaptureModeToggle } from "./CaptureModeToggle";
 import { CaptureThumb } from "./CaptureThumb";
 import { CaptureViewer } from "./CaptureViewer";
 import { DebugPanel } from "./DebugPanel";
+import { ModeTabs } from "./ModeTabs";
 import { PermissionGate } from "./PermissionGate";
 import { ShutterButton } from "./ShutterButton";
 import { TopBar } from "./TopBar";
 import { useCamera } from "./useCamera";
 import { useVideoRecorder } from "./useVideoRecorder";
 import { Viewfinder } from "./Viewfinder";
+import { ModePreviewCard } from "../modes/ModePreviewCard";
+import { getMode } from "../modes/modes";
+import { SlidOverlay } from "../slid/SlidOverlay";
+import { SlidSuggestion } from "../slid/SlidSuggestion";
+import { SlidSummary } from "../slid/SlidSummary";
+import { useSlidSession } from "../slid/useSlidSession";
 import { getLatestCapture, saveCapture } from "../shared/lib/mediaStore";
-import type { CaptureKind, CapturedMedia } from "../types/camera";
+import type { CapturedMedia } from "../types/camera";
 
-/** Top-level camera screen: wires permission, preview, capture and local persistence together. */
-export function CameraShell() {
+/** Diagnostics stay out of the demo but remain one query param away if the camera misbehaves on stage. */
+const debugEnabled = new URLSearchParams(window.location.search).has("debug");
+
+interface CameraShellProps {
+  modeId: string;
+  onSelectMode: (modeId: string) => void;
+  onOpenModes: () => void;
+  onCaptureSaved: () => void;
+  /** Lets the shell surface the same suggestion inside the mode catalog. */
+  onBoardDetected: (detected: boolean) => void;
+}
+
+/** The camera screen: permission, preview, capture and local persistence. */
+export function CameraShell({
+  modeId,
+  onSelectMode,
+  onOpenModes,
+  onCaptureSaved,
+  onBoardDetected,
+}: CameraShellProps) {
   const {
     videoRef,
     status,
@@ -29,11 +53,33 @@ export function CameraShell() {
   } = useCamera();
   const recorder = useVideoRecorder(stream);
 
-  const [mode, setMode] = useState<CaptureKind>("photo");
+  const mode = getMode(modeId);
   const [lastCapture, setLastCapture] = useState<CapturedMedia | null>(null);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [captureError, setCaptureError] = useState<string | null>(null);
+  const [savedClass, setSavedClass] = useState<string | null>(null);
+
+  const isSlid = mode.id === "slid";
+  const slid = useSlidSession({
+    videoRef,
+    // Only look for a board when the suggestion could actually be acted on.
+    detectionEnabled: status === "ready" && !isSlid && mode.fidelity === "real",
+  });
+
+  useEffect(() => {
+    onBoardDetected(slid.boardDetected);
+  }, [slid.boardDetected, onBoardDetected]);
+
+  // Entering SliD from the mode bar starts the session directly, so the mode
+  // and the session never disagree about what is happening.
+  useEffect(() => {
+    if (isSlid && slid.status === "idle") slid.start();
+    if (!isSlid && slid.status !== "idle" && slid.status !== "finished") {
+      slid.finish();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSlid]);
 
   useEffect(() => {
     requestCamera();
@@ -55,6 +101,7 @@ export function CameraShell() {
     try {
       await saveCapture(media);
       setLastCapture(media);
+      onCaptureSaved();
     } catch {
       setCaptureError("Não foi possível salvar a captura no dispositivo.");
     } finally {
@@ -65,7 +112,14 @@ export function CameraShell() {
   async function handleShutterPress() {
     setCaptureError(null);
     try {
-      if (mode === "photo") {
+      // Inside a session the shutter forces a capture — the student decides
+      // something matters even when the board hasn't changed.
+      if (isSlid) {
+        await slid.captureManually();
+        return;
+      }
+
+      if (mode.kind === "photo") {
         if (!videoRef.current) return;
         const { blob, width, height } = await capturePhotoFromVideo(
           videoRef.current,
@@ -110,7 +164,7 @@ export function CameraShell() {
   const isReady = status === "ready";
 
   return (
-    <div className="relative h-dvh overflow-hidden bg-black">
+    <div className="relative size-full overflow-hidden bg-black">
       {/* Mounted unconditionally: the stream is attached to this element from an
           effect, so unmounting it on a status change would silently drop the
           preview and leave a black screen. */}
@@ -124,14 +178,73 @@ export function CameraShell() {
         />
       )}
 
-      <DebugPanel
-        status={status}
-        facing={facing}
-        diagnostics={diagnostics}
-        lastError={captureError ?? errorMessage}
-      />
+      {debugEnabled && (
+        <DebugPanel
+          status={status}
+          facing={facing}
+          diagnostics={diagnostics}
+          lastError={captureError ?? errorMessage}
+        />
+      )}
 
-      {isReady && (
+      {isReady && slid.boardDetected && !isSlid && (
+        <SlidSuggestion
+          onAccept={() => onSelectMode("slid")}
+          onDismiss={slid.dismissSuggestion}
+        />
+      )}
+
+      {isReady && !isSlid && mode.fidelity === "simulated" && (
+        <ModePreviewCard mode={mode} onBack={() => onSelectMode("photo")} />
+      )}
+
+      {isReady && isSlid && slid.status !== "finished" && (
+        <SlidOverlay
+          status={slid.status}
+          captures={slid.captures}
+          lastMoment={slid.lastMoment}
+          elapsedMs={slid.elapsedMs}
+          onMarkMoment={() => void slid.captureManually()}
+          onPause={slid.pause}
+          onResume={slid.resume}
+          onFinish={slid.finish}
+        />
+      )}
+
+      {isSlid && slid.status === "finished" && (
+        <SlidSummary
+          captures={slid.captures}
+          stats={slid.stats}
+          elapsedMs={slid.elapsedMs}
+          onSave={async (subject) => {
+            const sessionId = crypto.randomUUID();
+            for (const capture of slid.captures) {
+              await saveCapture({
+                id: capture.id,
+                kind: "photo",
+                blob: capture.blob,
+                mimeType: capture.blob.type,
+                createdAt: Date.now(),
+                width: videoRef.current?.videoWidth ?? 0,
+                height: videoRef.current?.videoHeight ?? 0,
+                session: { id: sessionId, subject, atMs: capture.atMs },
+              });
+            }
+            onCaptureSaved();
+            slid.reset();
+            onSelectMode("photo");
+            // The class disappearing without a word reads as "did that work?".
+            setSavedClass(subject);
+            setTimeout(() => setSavedClass(null), 3200);
+          }}
+          onDiscard={() => {
+            slid.reset();
+            onSelectMode("photo");
+          }}
+        />
+      )}
+
+      {isReady && !isSlid && (
         <>
           <TopBar
             canSwitchFacing={canSwitchFacing}
@@ -141,10 +254,16 @@ export function CameraShell() {
             isSwitching={isSwitching}
           />
 
-          <div className="absolute inset-x-0 bottom-0 z-10 flex flex-col items-center gap-5 pb-[max(28px,env(safe-area-inset-bottom))]">
-            <CaptureModeToggle
-              mode={mode}
-              onChange={setMode}
+          {/* Scrim behind the controls: white text over a bright scene — a
+              whiteboard, a sunlit wall — is otherwise unreadable, and the
+              whiteboard is exactly where SliD is used. */}
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[5] h-56 bg-gradient-to-t from-black/75 via-black/35 to-transparent" />
+
+          <div className="absolute inset-x-0 bottom-0 z-10 flex flex-col items-center gap-5 pb-6">
+            <ModeTabs
+              modeId={modeId}
+              onSelect={onSelectMode}
+              onOpenCatalog={onOpenModes}
               disabled={recorder.isRecording}
             />
 
@@ -155,9 +274,10 @@ export function CameraShell() {
               />
               <div className="flex justify-center">
                 <ShutterButton
-                  mode={mode}
+                  mode={mode.kind}
                   isRecording={recorder.isRecording}
                   onPress={handleShutterPress}
+                  disabled={mode.fidelity === "simulated"}
                 />
               </div>
               <div />
@@ -173,13 +293,21 @@ export function CameraShell() {
                 {captureError}
               </span>
             )}
-            {mode === "video" && !recorder.isSupported && (
+            {mode.kind === "video" && !recorder.isSupported && (
               <span className="max-w-[80%] text-center font-mono text-[11px] text-warn">
                 Gravação de vídeo não é suportada neste navegador.
               </span>
             )}
           </div>
         </>
+      )}
+
+      {savedClass && (
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-40 flex justify-center pt-[max(70px,calc(env(safe-area-inset-top)+54px))]">
+          <span className="animate-[slid-rise_240ms_ease-out] rounded-full bg-accent px-4 py-2 text-[12.5px] font-medium text-accent-ink">
+            {savedClass} guardada na galeria
+          </span>
+        </div>
       )}
 
       {viewerOpen && lastCapture && (

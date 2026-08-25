@@ -25,7 +25,7 @@ export function CaptureViewer({ media, onClose }: CaptureViewerProps) {
           type="button"
           onClick={onClose}
           aria-label="Fechar"
-          className="flex size-9 items-center justify-center rounded-full bg-surface-2 text-ink active:opacity-80"
+          className="flex size-11 items-center justify-center rounded-full bg-surface-2 text-ink active:opacity-80"
         >
           ✕
         </button>
