@@ -17,54 +17,162 @@ export interface MomentDescription {
   detail: string | null;
 }
 
+/**
+ * What kind of thing is on the surface — by its shape, never by its subject.
+ *
+ * A formula looks like a formula in physics, chemistry and economics alike; a
+ * list looks like a list in law and in biology. Recognising structure is what
+ * lets one camera follow any class without anybody teaching it the discipline.
+ */
+export type ContentKind =
+  | "formula"
+  | "codigo"
+  | "datas"
+  | "lista"
+  | "tabela"
+  | "definicao"
+  | "esquema"
+  | "texto";
+
+interface DescribeOptions {
+  text?: string;
+  previousText?: string;
+  /** Fraction of the frame covered in ink, used when nothing reads as text. */
+  ink?: number;
+}
+
 const FALLBACK_LABELS: Record<MomentReason, string> = {
   "novo-topico": "Novo tópico no quadro",
-  "novo-conteudo": "Conteúdo complementar",
+  "novo-slide": "Novo slide",
+  "novo-conteudo": "Conteúdo acrescentado",
   manual: "Você marcou este momento",
+};
+
+/** Ink covering this much of the frame with nothing readable is a drawing. */
+const DIAGRAM_INK = 0.006;
+
+const KIND_LABELS: Record<ContentKind, { first: string; added: string }> = {
+  formula: { first: "Fórmula no quadro", added: "Nova fórmula" },
+  codigo: { first: "Código no quadro", added: "Novo trecho de código" },
+  datas: { first: "Datas no quadro", added: "Novas datas" },
+  lista: { first: "Lista de tópicos", added: "Itens novos na lista" },
+  tabela: { first: "Tabela no quadro", added: "Tabela atualizada" },
+  definicao: { first: "Definição no quadro", added: "Nova definição" },
+  esquema: { first: "Esquema no quadro", added: "Esquema acrescentado" },
+  texto: { first: "Início do tópico", added: "Novo conceito" },
 };
 
 export function describeMoment(
   reason: MomentReason,
-  text?: string,
-  previousText?: string,
+  { text, previousText, ink }: DescribeOptions = {},
 ): MomentDescription {
-  if (!text) return { label: FALLBACK_LABELS[reason], detail: null };
+  const lines = text ? toLines(text) : [];
 
-  const lines = toLines(text);
-  if (lines.length === 0) return { label: FALLBACK_LABELS[reason], detail: null };
+  if (lines.length === 0) {
+    // Nothing readable. Plenty of ink still means something was drawn — a
+    // diagram, a graph, a circuit — and saying so beats a generic label.
+    if (reason !== "manual" && (ink ?? 0) >= DIAGRAM_INK) {
+      return { label: KIND_LABELS.esquema.first, detail: null };
+    }
+    return { label: FALLBACK_LABELS[reason], detail: null };
+  }
 
-  // What this moment added, rather than everything the board still carries.
-  const added = previousText
-    ? lines.filter(
-        (line) =>
-          !new Set(toLines(previousText).map(normalise)).has(normalise(line)),
-      )
+  // What this moment added, rather than everything the surface still carries.
+  const previousLines = previousText ? toLines(previousText) : [];
+  const seen = new Set(previousLines.map(normalise));
+  const added = previousLines.length
+    ? lines.filter((line) => !seen.has(normalise(line)))
     : lines;
 
   const focus = added.length > 0 ? added : lines;
-  const formula = focus.find(isFormula);
-  const prose = focus.find((line) => !isFormula(line) && line.length >= 4);
+  const kind = classifyContent(focus);
+  const detail = clean(pickLine(focus, kind));
 
   if (reason === "manual") {
-    return { label: FALLBACK_LABELS.manual, detail: clean(formula ?? prose) };
+    return { label: FALLBACK_LABELS.manual, detail };
   }
 
-  // A formula appearing is the most recognisable thing that happens on a board.
-  if (formula) {
-    return {
-      label: previousText ? "Nova fórmula" : "Fórmula no quadro",
-      detail: clean(formula),
-    };
-  }
+  const labels = KIND_LABELS[kind];
+  return {
+    label: previousLines.length > 0 ? labels.added : labels.first,
+    detail,
+  };
+}
 
-  if (prose) {
-    return {
-      label: previousText ? "Novo conceito" : "Início do tópico",
-      detail: clean(prose),
-    };
-  }
+/**
+ * Structure detectors, ordered by how specific they are. Code carries `=` and
+ * would read as a formula, so it is asked first; a table's columns survive OCR
+ * as runs of spaces or pipes, so it comes before the line-level tests.
+ */
+function classifyContent(lines: string[]): ContentKind {
+  const hits = (test: (line: string) => boolean) => lines.filter(test).length;
 
-  return { label: FALLBACK_LABELS[reason], detail: null };
+  if (hits(isCode) >= 1 && hits(isCode) * 2 >= lines.length) return "codigo";
+  if (hits(isTableRow) >= 2) return "tabela";
+  if (hits(isFormula) >= 1) return "formula";
+  if (hits(hasYear) >= 2) return "datas";
+  if (hits(isListItem) >= 2) return "lista";
+  if (hits(isDefinition) >= 1) return "definicao";
+  return "texto";
+}
+
+/** The line worth showing is the one that justified the label. */
+function pickLine(lines: string[], kind: ContentKind): string | undefined {
+  const test =
+    kind === "codigo"
+      ? isCode
+      : kind === "formula"
+        ? isFormula
+        : kind === "datas"
+          ? hasYear
+          : kind === "lista"
+            ? isListItem
+            : kind === "definicao"
+              ? isDefinition
+              : kind === "tabela"
+                ? isTableRow
+                : (line: string) => line.length >= 4;
+  return lines.find(test) ?? lines.find((line) => line.length >= 4);
+}
+
+function isFormula(line: string): boolean {
+  return (
+    /[=≠≤≥±√∑∫∆Δπ∞]/.test(line) ||
+    /\d\s*[a-z]\s*[²³^]/i.test(line) ||
+    /\b\d+\s*[+\-*/×÷]\s*\d+/.test(line)
+  );
+}
+
+function isCode(line: string): boolean {
+  return (
+    /[{};]\s*$/.test(line) ||
+    /=>|::|!==|===|\+\+|<\/\w+>/.test(line) ||
+    /\b(function|const|let|var|def|class|import|from|return|public|static|void|print|console|SELECT|INSERT|WHERE)\b/.test(
+      line,
+    )
+  );
+}
+
+function hasYear(line: string): boolean {
+  return (
+    /\b(1[0-9]{3}|20[0-2][0-9])\b/.test(line) ||
+    /\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/.test(line)
+  );
+}
+
+function isListItem(line: string): boolean {
+  return /^\s*([-–—•*·]|\d{1,2}[.)]|[a-z][.)])\s+\S/i.test(line);
+}
+
+function isTableRow(line: string): boolean {
+  return /\|/.test(line) || (line.match(/ {3,}/g) ?? []).length >= 2;
+}
+
+function isDefinition(line: string): boolean {
+  return (
+    /^[\p{Lu}][\p{L} ]{2,28}\s*[:—–]\s+\S/u.test(line) ||
+    /\b(é|são|significa|chama-se|define-se|consiste em|trata-se)\b/i.test(line)
+  );
 }
 
 /** Below this, a reading is too shaky to put in the largest text on the screen. */
@@ -137,10 +245,6 @@ function clean(line: string | undefined): string | null {
 /** OCR wobbles between readings; compare on a loose key so a re-read isn't "new". */
 function normalise(line: string): string {
   return line.toLowerCase().replace(/[^a-z0-9]/g, "");
-}
-
-function isFormula(line: string): boolean {
-  return /[=<>±√∆Δ]/.test(line) || /\d\s*[a-z]\s*[²^]/i.test(line);
 }
 
 function capitalise(text: string): string {

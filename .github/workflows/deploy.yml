@@ -39,6 +39,11 @@ jobs:
 
   deploy:
     needs: build
+    # O ambiente github-pages só aceita a branch padrão, então em qualquer
+    # outra branch este job é rejeitado antes de rodar — um X vermelho
+    # garantido que não diz nada sobre o código. O build continua rodando e
+    # é ele que vale como sinal na PR.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment:
       name: github-pages

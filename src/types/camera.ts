@@ -24,5 +24,21 @@ export interface CapturedMedia {
     subject: string;
     /** Milliseconds into the session, preserving the order of the class. */
     atMs: number;
+    /**
+     * What the camera recognised, already in the student's language. Stored
+     * because it is the result — reopening a class months later must not
+     * depend on reading the board again, and the reading itself is never
+     * persisted: a transcript is exactly what this product is not.
+     */
+    label?: string;
+    detail?: string | null;
+    /*
+     * Class-level facts, repeated on every moment. Denormalised on purpose: a
+     * class is then one query and no second object store, and the subject was
+     * already stored this way.
+     */
+    durationMs?: number;
+    skippedDuplicates?: number;
+    savedAt?: number;
   };
 }

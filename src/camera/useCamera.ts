@@ -21,12 +21,36 @@ interface UseCameraResult {
   stream: MediaStream | null;
   requestCamera: () => void;
   switchFacing: () => void;
+  /** Ask for one specific side. A mode that only makes sense pointed away needs this. */
+  selectFacing: (target: CameraFacing) => void;
   canSwitchFacing: boolean;
   isSwitching: boolean;
   diagnostics: CameraDiagnostics;
 }
 
 const MAX_LOG_LINES = 14;
+
+/**
+ * `ideal` is a preference the browser may ignore, and on several Android
+ * devices it does — asking for the rear camera returned the front one. `exact`
+ * is a real constraint, so it goes first and only steps down when the device
+ * genuinely has no camera on that side.
+ */
+async function openVideoStream(target: CameraFacing): Promise<MediaStream> {
+  try {
+    return await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { exact: target } },
+      audio: false,
+    });
+  } catch (error) {
+    const name = error instanceof DOMException ? error.name : "";
+    if (name !== "OverconstrainedError" && name !== "NotFoundError") throw error;
+    return await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: target } },
+      audio: false,
+    });
+  }
+}
 
 /**
  * Owns the getUserMedia lifecycle.
@@ -102,10 +126,7 @@ export function useCamera(): UseCameraResult {
       // the preview — video must never depend on audio being available.
       let mediaStream: MediaStream | null = null;
       try {
-        mediaStream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: targetFacing } },
-          audio: false,
-        });
+        mediaStream = await openVideoStream(targetFacing);
         addLog("stream de vídeo obtido");
       } catch (error) {
         const name = error instanceof DOMException ? error.name : "Erro";
@@ -134,11 +155,14 @@ export function useCamera(): UseCameraResult {
 
       streamRef.current = mediaStream;
       setStream(mediaStream);
-      setFacing(targetFacing);
       setStatus("ready");
       acquiringRef.current = false;
 
       const [videoTrack] = mediaStream.getVideoTracks();
+      // Trust the track over the request: the flip control should reflect the
+      // camera that is actually open, not the one that was asked for.
+      const granted = videoTrack?.getSettings().facingMode;
+      setFacing(granted === "user" || granted === "environment" ? granted : targetFacing);
       if (videoTrack) {
         addLog(`track: ${videoTrack.label || "sem rótulo"}`);
       }
@@ -169,6 +193,14 @@ export function useCamera(): UseCameraResult {
     await acquireStream(facing === "environment" ? "user" : "environment");
     setIsSwitching(false);
   }, [acquireStream, facing]);
+
+  const selectFacing = useCallback(
+    (target: CameraFacing) => {
+      if (acquiringRef.current || facing === target) return;
+      void acquireStream(target);
+    },
+    [acquireStream, facing],
+  );
 
   // Attaching the stream from an effect is what makes the preview work: it runs
   // after render, so the <video> is guaranteed to be in the DOM.
@@ -224,6 +256,7 @@ export function useCamera(): UseCameraResult {
     stream,
     requestCamera,
     switchFacing,
+    selectFacing,
     canSwitchFacing,
     isSwitching,
     diagnostics: {
