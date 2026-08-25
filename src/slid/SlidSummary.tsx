@@ -169,7 +169,11 @@ function MomentEntry({
   reading: boolean;
 }) {
   const url = useObjectUrl(capture.blob);
-  const { label, detail } = describeMoment(capture.reason, text, previousText);
+  const { label, detail } = describeMoment(capture.reason, {
+    text,
+    previousText,
+    ink: capture.ink,
+  });
 
   return (
     <article className="relative flex gap-3 pb-6 pl-6">

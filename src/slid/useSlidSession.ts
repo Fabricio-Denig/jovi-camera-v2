@@ -17,10 +17,15 @@ export type SlidStatus = "idle" | "running" | "paused" | "finished";
  * trusts the session when the camera can say what it noticed, not merely that
  * something changed.
  */
-export type MomentReason = "novo-topico" | "novo-conteudo" | "manual";
+export type MomentReason =
+  | "novo-topico"
+  | "novo-slide"
+  | "novo-conteudo"
+  | "manual";
 
 export const REASON_LABELS: Record<MomentReason, string> = {
   "novo-topico": "Novo tópico no quadro",
+  "novo-slide": "Novo slide",
   "novo-conteudo": "Conteúdo acrescentado",
   manual: "Você marcou este momento",
 };
@@ -32,6 +37,8 @@ export interface SlidCapture {
   atMs: number;
   auto: boolean;
   reason: MomentReason;
+  /** Fraction of the frame covered in ink — how a drawing is told from a blank surface. */
+  ink: number;
 }
 
 /** What the session watched but chose not to keep — the curation made visible. */
@@ -160,13 +167,20 @@ export function useSlidSession({
       try {
         const { blob } = await capturePhotoFromVideo(video);
         const reference = sample ?? sampleFrame(video);
-        if (reference) lastCapturedInkRef.current = inkMask(reference);
+        let ink = 0;
+        if (reference) {
+          const mask = inkMask(reference);
+          lastCapturedInkRef.current = mask;
+          for (const pixel of mask) ink += pixel;
+          ink /= mask.length;
+        }
         const moment: SlidCapture = {
           id: crypto.randomUUID(),
           blob,
           atMs: Date.now() - startedAtRef.current - pausedTotalRef.current,
           auto: reason !== "manual",
           reason,
+          ink,
         };
         setCaptures((prev) => [...prev, moment]);
         setLastMoment(moment);
@@ -366,7 +380,7 @@ function classifyChange({ added, removed }: ContentDelta): MomentReason | null {
     added + removed > SURFACE_REPLACED
   ) {
     // Everything was replaced at once: the slide advanced.
-    return "novo-topico";
+    return "novo-slide";
   }
   if (removed > INK_REMOVED_MIN && removed > added * DIRECTION_DOMINANCE) {
     // The board was wiped to start something else.
