@@ -3,6 +3,7 @@ import { capturePhotoFromVideo } from "./capturePhoto";
 import { CaptureModeToggle } from "./CaptureModeToggle";
 import { CaptureThumb } from "./CaptureThumb";
 import { CaptureViewer } from "./CaptureViewer";
+import { DebugPanel } from "./DebugPanel";
 import { PermissionGate } from "./PermissionGate";
 import { ShutterButton } from "./ShutterButton";
 import { TopBar } from "./TopBar";
@@ -23,6 +24,8 @@ export function CameraShell() {
     requestCamera,
     switchFacing,
     canSwitchFacing,
+    isSwitching,
+    diagnostics,
   } = useCamera();
   const recorder = useVideoRecorder(stream);
 
@@ -30,11 +33,12 @@ export function CameraShell() {
   const [lastCapture, setLastCapture] = useState<CapturedMedia | null>(null);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [captureError, setCaptureError] = useState<string | null>(null);
 
-  // Request the camera as soon as the screen mounts — the explanation lives
-  // in PermissionGate, this just starts the flow immediately.
   useEffect(() => {
     requestCamera();
+    // Runs once on mount. requestCamera is stable enough for this purpose and
+    // re-running on its identity would re-acquire the camera on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -48,102 +52,135 @@ export function CameraShell() {
 
   async function persist(media: CapturedMedia) {
     setIsSaving(true);
-    await saveCapture(media);
-    setLastCapture(media);
-    setIsSaving(false);
+    try {
+      await saveCapture(media);
+      setLastCapture(media);
+    } catch {
+      setCaptureError("Não foi possível salvar a captura no dispositivo.");
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   async function handleShutterPress() {
-    if (mode === "photo") {
-      if (!videoRef.current) return;
-      const { blob, width, height } = await capturePhotoFromVideo(
-        videoRef.current,
+    setCaptureError(null);
+    try {
+      if (mode === "photo") {
+        if (!videoRef.current) return;
+        const { blob, width, height } = await capturePhotoFromVideo(
+          videoRef.current,
+          { mirrored: facing === "user" },
+        );
+        await persist({
+          id: crypto.randomUUID(),
+          kind: "photo",
+          blob,
+          mimeType: blob.type,
+          createdAt: Date.now(),
+          width,
+          height,
+        });
+        return;
+      }
+
+      if (!recorder.isRecording) {
+        await recorder.start();
+        return;
+      }
+
+      const result = await recorder.stop();
+      if (result) {
+        await persist({
+          id: crypto.randomUUID(),
+          kind: "video",
+          blob: result.blob,
+          mimeType: result.mimeType,
+          createdAt: Date.now(),
+          width: videoRef.current?.videoWidth ?? 0,
+          height: videoRef.current?.videoHeight ?? 0,
+        });
+      }
+    } catch (error) {
+      setCaptureError(
+        error instanceof Error ? error.message : "Falha ao capturar.",
       );
-      await persist({
-        id: crypto.randomUUID(),
-        kind: "photo",
-        blob,
-        mimeType: blob.type,
-        createdAt: Date.now(),
-        width,
-        height,
-      });
-      return;
-    }
-
-    if (!recorder.isRecording) {
-      recorder.start();
-      return;
-    }
-
-    const result = await recorder.stop();
-    if (result) {
-      await persist({
-        id: crypto.randomUUID(),
-        kind: "video",
-        blob: result.blob,
-        mimeType: result.mimeType,
-        createdAt: Date.now(),
-        width: videoRef.current?.videoWidth ?? 0,
-        height: videoRef.current?.videoHeight ?? 0,
-      });
     }
   }
 
-  if (status !== "ready") {
-    return (
-      <PermissionGate
-        status={status}
-        errorMessage={errorMessage}
-        onRequest={requestCamera}
-      />
-    );
-  }
+  const isReady = status === "ready";
 
   return (
     <div className="relative h-dvh overflow-hidden bg-black">
+      {/* Mounted unconditionally: the stream is attached to this element from an
+          effect, so unmounting it on a status change would silently drop the
+          preview and leave a black screen. */}
       <Viewfinder videoRef={videoRef} facing={facing} />
 
-      <TopBar
-        canSwitchFacing={canSwitchFacing}
-        onSwitchFacing={switchFacing}
-        isRecording={recorder.isRecording}
-        elapsedMs={recorder.elapsedMs}
+      {!isReady && (
+        <PermissionGate
+          status={status}
+          errorMessage={errorMessage}
+          onRequest={requestCamera}
+        />
+      )}
+
+      <DebugPanel
+        status={status}
+        facing={facing}
+        diagnostics={diagnostics}
+        lastError={captureError ?? errorMessage}
       />
 
-      <div className="absolute inset-x-0 bottom-0 z-10 flex flex-col items-center gap-5 pb-[max(28px,env(safe-area-inset-bottom))]">
-        <CaptureModeToggle
-          mode={mode}
-          onChange={setMode}
-          disabled={recorder.isRecording}
-        />
-
-        <div className="grid w-full grid-cols-3 items-center px-8">
-          <CaptureThumb
-            media={lastCapture}
-            onOpen={() => setViewerOpen(true)}
+      {isReady && (
+        <>
+          <TopBar
+            canSwitchFacing={canSwitchFacing}
+            onSwitchFacing={switchFacing}
+            isRecording={recorder.isRecording}
+            elapsedMs={recorder.elapsedMs}
+            isSwitching={isSwitching}
           />
-          <div className="flex justify-center">
-            <ShutterButton
-              mode={mode}
-              isRecording={recorder.isRecording}
-              onPress={handleShutterPress}
-            />
-          </div>
-          <div />
-        </div>
 
-        {isSaving && (
-          <span className="font-mono text-[11px] text-white/60">
-            salvando…
-          </span>
-        )}
-        {mode === "video" && !recorder.isSupported && (
-          <span className="max-w-[80%] text-center font-mono text-[11px] text-warn">
-            Gravação de vídeo não é suportada neste navegador.
-          </span>
-        )}
-      </div>
+          <div className="absolute inset-x-0 bottom-0 z-10 flex flex-col items-center gap-5 pb-[max(28px,env(safe-area-inset-bottom))]">
+            <CaptureModeToggle
+              mode={mode}
+              onChange={setMode}
+              disabled={recorder.isRecording}
+            />
+
+            <div className="grid w-full grid-cols-3 items-center px-8">
+              <CaptureThumb
+                media={lastCapture}
+                onOpen={() => setViewerOpen(true)}
+              />
+              <div className="flex justify-center">
+                <ShutterButton
+                  mode={mode}
+                  isRecording={recorder.isRecording}
+                  onPress={handleShutterPress}
+                />
+              </div>
+              <div />
+            </div>
+
+            {isSaving && (
+              <span className="font-mono text-[11px] text-white/60">
+                salvando…
+              </span>
+            )}
+            {captureError && (
+              <span className="max-w-[85%] text-center font-mono text-[11px] text-danger">
+                {captureError}
+              </span>
+            )}
+            {mode === "video" && !recorder.isSupported && (
+              <span className="max-w-[80%] text-center font-mono text-[11px] text-warn">
+                Gravação de vídeo não é suportada neste navegador.
+              </span>
+            )}
+          </div>
+        </>
+      )}
 
       {viewerOpen && lastCapture && (
         <CaptureViewer

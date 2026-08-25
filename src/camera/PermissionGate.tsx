@@ -21,7 +21,7 @@ export function PermissionGate({
   const isError = status === "unsupported" || status === "error";
 
   return (
-    <div className="flex h-dvh flex-col items-center justify-center gap-5 bg-canvas px-8 text-center">
+    <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-5 bg-canvas px-8 text-center">
       <div className="flex size-16 items-center justify-center rounded-full bg-accent-soft text-accent">
         <CameraIcon />
       </div>
