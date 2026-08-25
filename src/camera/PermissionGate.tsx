@@ -48,7 +48,11 @@ export function PermissionGate({
         onClick={onRequest}
         className="rounded-full bg-accent px-6 py-3 text-sm font-medium text-accent-ink active:opacity-80"
       >
-        {status === "requesting" ? "Solicitando…" : "Permitir câmera"}
+        {status === "requesting"
+          ? "Solicitando…"
+          : isDenied || isError
+            ? "Tentar novamente"
+            : "Permitir câmera"}
       </button>
     </div>
   );
