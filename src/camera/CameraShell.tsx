@@ -58,6 +58,7 @@ export function CameraShell({
   const [viewerOpen, setViewerOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [captureError, setCaptureError] = useState<string | null>(null);
+  const [savedClass, setSavedClass] = useState<string | null>(null);
 
   const isSlid = mode.id === "slid";
   const slid = useSlidSession({
@@ -203,6 +204,7 @@ export function CameraShell({
           captures={slid.captures}
           lastMoment={slid.lastMoment}
           elapsedMs={slid.elapsedMs}
+          onMarkMoment={() => void slid.captureManually()}
           onPause={slid.pause}
           onResume={slid.resume}
           onFinish={slid.finish}
@@ -231,6 +233,9 @@ export function CameraShell({
             onCaptureSaved();
             slid.reset();
             onSelectMode("photo");
+            // The class disappearing without a word reads as "did that work?".
+            setSavedClass(subject);
+            setTimeout(() => setSavedClass(null), 3200);
           }}
           onDiscard={() => {
             slid.reset();
@@ -239,7 +244,7 @@ export function CameraShell({
         />
       )}
 
-      {isReady && (
+      {isReady && !isSlid && (
         <>
           <TopBar
             canSwitchFacing={canSwitchFacing}
@@ -295,6 +300,14 @@ export function CameraShell({
             )}
           </div>
         </>
+      )}
+
+      {savedClass && (
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-40 flex justify-center pt-[max(70px,calc(env(safe-area-inset-top)+54px))]">
+          <span className="animate-[slid-rise_240ms_ease-out] rounded-full bg-accent px-4 py-2 text-[12.5px] font-medium text-accent-ink">
+            {savedClass} guardada na galeria
+          </span>
+        </div>
       )}
 
       {viewerOpen && lastCapture && (

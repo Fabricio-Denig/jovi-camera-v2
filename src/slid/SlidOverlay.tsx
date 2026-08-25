@@ -8,6 +8,7 @@ interface SlidOverlayProps {
   captures: SlidCapture[];
   lastMoment: SlidCapture | null;
   elapsedMs: number;
+  onMarkMoment: () => void;
   onPause: () => void;
   onResume: () => void;
   onFinish: () => void;
@@ -16,15 +17,17 @@ interface SlidOverlayProps {
 /**
  * The live session.
  *
- * The screen has one job: make it believable that the camera is following the
- * class, so the student can stop thinking about saving anything. It shows what
- * was just noticed and why — not a viewfinder full of controls.
+ * This screen owns the whole viewfinder while a class is being followed: the
+ * camera bar, the shutter and the thumbnail are all hidden behind it. A big
+ * white shutter in the middle of the screen tells a first-time viewer they are
+ * supposed to be taking pictures, which is the exact opposite of the promise.
  */
 export function SlidOverlay({
   status,
   captures,
   lastMoment,
   elapsedMs,
+  onMarkMoment,
   onPause,
   onResume,
   onFinish,
@@ -38,7 +41,7 @@ export function SlidOverlay({
           <span
             className={
               running
-                ? "size-2 rounded-full bg-accent animate-pulse"
+                ? "size-2 animate-pulse rounded-full bg-accent"
                 : "size-2 rounded-full bg-warn"
             }
           />
@@ -68,31 +71,52 @@ export function SlidOverlay({
         </div>
       )}
 
-      {/* The count is the reassurance: proof the session is working without
-          the student having to check anything. */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-[196px] z-20 flex justify-center">
-        <span className="rounded-full bg-black/45 px-3 py-1 text-[11.5px] text-white/90 backdrop-blur">
-          {captures.length === 0
-            ? "Pode deixar o celular apoiado — o SliD avisa quando algo importar"
-            : `${captures.length} ${captures.length === 1 ? "momento importante" : "momentos importantes"}`}
-        </span>
-      </div>
+      {/* The camera chrome is hidden during a session, and its scrim went with
+          it — white controls over a lit whiteboard are unreadable without one. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 bottom-0 z-[15] h-48 bg-gradient-to-t from-black/75 via-black/40 to-transparent"
+      />
 
-      <div className="pointer-events-auto absolute inset-x-0 bottom-[142px] z-20 flex items-center justify-center gap-3 px-6">
-        <button
-          type="button"
-          onClick={running ? onPause : onResume}
-          className="min-h-11 rounded-full bg-canvas/85 px-5 py-2.5 text-[13px] font-medium text-ink backdrop-blur active:opacity-70"
-        >
-          {running ? "Pausar" : "Continuar"}
-        </button>
-        <button
-          type="button"
-          onClick={onFinish}
-          className="min-h-11 rounded-full bg-accent px-5 py-2.5 text-[13px] font-medium text-accent-ink active:opacity-80"
-        >
-          Encerrar aula
-        </button>
+      <div className="absolute inset-x-0 bottom-0 z-20 flex flex-col items-center gap-4 pb-7">
+        {/* Says the quiet part out loud: nothing is expected of the student. */}
+        <p className="mx-8 rounded-full bg-black/45 px-3.5 py-1.5 text-center text-[11.5px] leading-snug text-white/90 backdrop-blur">
+          {captures.length === 0
+            ? running
+              ? "Pode apoiar o celular e assistir — o SliD guarda o que for importante"
+              : "Sessão pausada. Nada está sendo guardado."
+            : `${captures.length} ${captures.length === 1 ? "momento guardado" : "momentos guardados"} até agora`}
+        </p>
+
+        <div className="flex items-center gap-2.5 px-5">
+          <button
+            type="button"
+            onClick={running ? onPause : onResume}
+            className="min-h-11 rounded-full bg-canvas/85 px-4 py-2.5 text-[13px] font-medium text-ink backdrop-blur active:opacity-70"
+          >
+            {running ? "Pausar" : "Continuar"}
+          </button>
+
+          {/* Optional by design, and shaped like a note rather than a shutter:
+              marking a moment is the exception, not the way the mode is used. */}
+          <button
+            type="button"
+            onClick={onMarkMoment}
+            disabled={!running}
+            aria-label="Marcar este momento"
+            className="min-h-11 rounded-full border border-white/40 bg-black/35 px-4 py-2.5 text-[13px] font-medium text-white backdrop-blur active:opacity-70 disabled:opacity-30"
+          >
+            Marcar momento
+          </button>
+
+          <button
+            type="button"
+            onClick={onFinish}
+            className="min-h-11 rounded-full bg-accent px-4 py-2.5 text-[13px] font-medium text-accent-ink active:opacity-80"
+          >
+            Encerrar
+          </button>
+        </div>
       </div>
     </>
   );
@@ -114,7 +138,7 @@ function MomentToast({ moment }: { moment: SlidCapture }) {
   if (!visible) return null;
 
   return (
-    <div className="pointer-events-auto flex items-center gap-2 rounded-full bg-accent px-3.5 py-2 text-accent-ink">
+    <div className="pointer-events-auto flex animate-[slid-rise_240ms_ease-out] items-center gap-2 rounded-full bg-accent px-3.5 py-2 text-accent-ink">
       <CheckIcon />
       <span className="text-[12.5px] font-medium">
         {REASON_LABELS[moment.reason]}
@@ -126,7 +150,7 @@ function MomentToast({ moment }: { moment: SlidCapture }) {
 function MomentChip({ capture }: { capture: SlidCapture }) {
   const url = useObjectUrl(capture.blob);
   return (
-    <div className="relative size-16 overflow-hidden rounded-lg border border-white/40">
+    <div className="relative size-16 animate-[slid-rise_260ms_ease-out] overflow-hidden rounded-lg border border-white/40">
       {url && <img src={url} alt="" className="size-full object-cover" />}
       <span className="absolute inset-x-0 bottom-0 bg-black/65 text-center font-mono text-[9px] text-white">
         {formatClock(capture.atMs)}
