@@ -29,6 +29,7 @@ interface CameraShellProps {
   onCaptureSaved: () => void;
   /** Lets the shell surface the same suggestion inside the mode catalog. */
   onBoardDetected: (detected: boolean) => void;
+  onOpenClass: (classId: string) => void;
 }
 
 /** The camera screen: permission, preview, capture and local persistence. */
@@ -38,6 +39,7 @@ export function CameraShell({
   onOpenModes,
   onCaptureSaved,
   onBoardDetected,
+  onOpenClass,
 }: CameraShellProps) {
   const {
     videoRef,
@@ -59,7 +61,10 @@ export function CameraShell({
   const [viewerOpen, setViewerOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [captureError, setCaptureError] = useState<string | null>(null);
-  const [savedClass, setSavedClass] = useState<string | null>(null);
+  const [savedClass, setSavedClass] = useState<{
+    id: string;
+    subject: string;
+  } | null>(null);
 
   const isSlid = mode.id === "slid";
   const slid = useSlidSession({
@@ -227,26 +232,39 @@ export function CameraShell({
           captures={slid.captures}
           stats={slid.stats}
           elapsedMs={slid.elapsedMs}
-          onSave={async (subject) => {
+          onSave={async ({ subject, moments }) => {
             const sessionId = crypto.randomUUID();
+            const savedAt = Date.now();
+            const described = new Map(moments.map((m) => [m.id, m]));
             for (const capture of slid.captures) {
               await saveCapture({
                 id: capture.id,
                 kind: "photo",
                 blob: capture.blob,
                 mimeType: capture.blob.type,
-                createdAt: Date.now(),
+                createdAt: savedAt,
                 width: videoRef.current?.videoWidth ?? 0,
                 height: videoRef.current?.videoHeight ?? 0,
-                session: { id: sessionId, subject, atMs: capture.atMs },
+                session: {
+                  id: sessionId,
+                  subject,
+                  atMs: capture.atMs,
+                  // Stored so the class reads the same months later, without
+                  // ever going back to the images.
+                  label: described.get(capture.id)?.label,
+                  detail: described.get(capture.id)?.detail ?? null,
+                  durationMs: slid.elapsedMs,
+                  skippedDuplicates: slid.stats.skippedDuplicates,
+                  savedAt,
+                },
               });
             }
             onCaptureSaved();
             slid.reset();
             onSelectMode("photo");
             // The class disappearing without a word reads as "did that work?".
-            setSavedClass(subject);
-            setTimeout(() => setSavedClass(null), 3200);
+            setSavedClass({ id: sessionId, subject });
+            setTimeout(() => setSavedClass(null), 5000);
           }}
           onDiscard={() => {
             slid.reset();
@@ -314,10 +332,20 @@ export function CameraShell({
       )}
 
       {savedClass && (
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-40 flex justify-center pt-[max(70px,calc(env(safe-area-inset-top)+54px))]">
-          <span className="animate-[slid-rise_240ms_ease-out] rounded-full bg-accent px-4 py-2 text-[12.5px] font-medium text-accent-ink">
-            {savedClass} guardada na galeria
-          </span>
+        <div className="absolute inset-x-0 top-0 z-40 flex justify-center pt-[max(70px,calc(env(safe-area-inset-top)+54px))]">
+          {/* Saving a class and then hiding it is the moment a student decides
+              the app forgot. The way in is the confirmation itself. */}
+          <button
+            type="button"
+            onClick={() => {
+              onOpenClass(savedClass.id);
+              setSavedClass(null);
+            }}
+            className="flex min-h-11 animate-[slid-rise_240ms_ease-out] items-center gap-2 rounded-full bg-accent px-4 py-2 text-[12.5px] font-medium text-accent-ink active:opacity-80"
+          >
+            <span>{savedClass.subject} guardada</span>
+            <span className="opacity-70">Ver aula</span>
+          </button>
         </div>
       )}
 

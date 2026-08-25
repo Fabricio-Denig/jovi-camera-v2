@@ -2,14 +2,20 @@ import { useEffect, useMemo, useState } from "react";
 import { describeMoment, suggestSubject } from "./readContent";
 import { useOcr } from "./useOcr";
 import type { SlidCapture, SlidStats } from "./useSlidSession";
-import { useObjectUrl } from "../shared/hooks/useObjectUrl";
+import { MomentRow } from "./MomentRow";
 import { formatClock } from "../shared/lib/time";
+
+/** What the session understood, ready to be stored as the class itself. */
+export interface SavedClass {
+  subject: string;
+  moments: { id: string; label: string; detail: string | null }[];
+}
 
 interface SlidSummaryProps {
   captures: SlidCapture[];
   stats: SlidStats;
   elapsedMs: number;
-  onSave: (subject: string) => void;
+  onSave: (aula: SavedClass) => void;
   onDiscard: () => void;
 }
 
@@ -48,6 +54,22 @@ export function SlidSummary({
 
   const suggested = useMemo(() => suggestSubject(ocr.pages), [ocr.pages]);
   const subjectValue = edited ? subject : subject || suggested;
+
+  // Described once, here, and then stored: reopening the class must never
+  // depend on reading the board again.
+  const described = useMemo(
+    () =>
+      captures.map((capture, index) => ({
+        capture,
+        ...describeMoment(capture.reason, {
+          text: textByCapture.get(capture.id),
+          previousText:
+            index > 0 ? textByCapture.get(captures[index - 1].id) : undefined,
+          ink: capture.ink,
+        }),
+      })),
+    [captures, textByCapture],
+  );
 
   return (
     <div className="absolute inset-0 z-50 flex flex-col bg-canvas">
@@ -104,17 +126,14 @@ export function SlidSummary({
               aria-hidden="true"
               className="absolute bottom-4 left-[5px] top-3 w-px bg-line"
             />
-            {captures.map((capture, index) => (
+            {described.map(({ capture, label, detail }) => (
               <li key={capture.id}>
-                <MomentEntry
-                  capture={capture}
-                  text={textByCapture.get(capture.id)}
-                  previousText={
-                    index > 0
-                      ? textByCapture.get(captures[index - 1].id)
-                      : undefined
-                  }
-                  reading={ocr.status === "running"}
+                <MomentRow
+                  atMs={capture.atMs}
+                  label={label}
+                  detail={detail}
+                  blob={capture.blob}
+                  pending={ocr.status === "running"}
                 />
               </li>
             ))}
@@ -125,7 +144,16 @@ export function SlidSummary({
       <footer className="border-t border-line px-5 pb-[max(16px,env(safe-area-inset-bottom))] pt-3">
         <button
           type="button"
-          onClick={() => onSave(subjectValue.trim() || "Aula sem título")}
+          onClick={() =>
+            onSave({
+              subject: subjectValue.trim() || "Aula sem título",
+              moments: described.map(({ capture, label, detail }) => ({
+                id: capture.id,
+                label,
+                detail,
+              })),
+            })
+          }
           className="min-h-11 w-full rounded-xl bg-accent py-3 text-sm font-medium text-accent-ink active:opacity-80"
         >
           Salvar aula
@@ -154,54 +182,5 @@ function CurationNote({ stats, kept }: { stats: SlidStats; kept: number }) {
         </>
       )}
     </p>
-  );
-}
-
-function MomentEntry({
-  capture,
-  text,
-  previousText,
-  reading,
-}: {
-  capture: SlidCapture;
-  text: string | undefined;
-  previousText: string | undefined;
-  reading: boolean;
-}) {
-  const url = useObjectUrl(capture.blob);
-  const { label, detail } = describeMoment(capture.reason, {
-    text,
-    previousText,
-    ink: capture.ink,
-  });
-
-  return (
-    <article className="relative flex gap-3 pb-6 pl-6">
-      <span
-        aria-hidden="true"
-        className="absolute left-0 top-2.5 size-[11px] rounded-full border-2 border-accent bg-canvas"
-      />
-
-      <div className="min-w-0 flex-1">
-        <div className="font-mono text-[12px] tabular-nums text-accent">
-          {formatClock(capture.atMs)}
-        </div>
-        <h3 className="mt-0.5 text-[15px] font-medium text-ink">{label}</h3>
-        {detail ? (
-          <p className="mt-0.5 line-clamp-2 text-[13px] leading-snug text-ink-muted">
-            {detail}
-          </p>
-        ) : reading ? (
-          <p className="mt-0.5 text-[12.5px] text-ink-muted/60">
-            identificando…
-          </p>
-        ) : null}
-      </div>
-
-      {/* The frame is evidence for the moment, not the subject of the row. */}
-      <div className="size-16 shrink-0 overflow-hidden rounded-xl bg-surface-2">
-        {url && <img src={url} alt="" className="size-full object-cover" />}
-      </div>
-    </article>
   );
 }

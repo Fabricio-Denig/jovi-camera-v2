@@ -2,6 +2,7 @@ import { useReducer, useState } from "react";
 import { BottomNav } from "./BottomNav";
 import { CameraShell } from "../camera/CameraShell";
 import { GalleryPage } from "../gallery/GalleryPage";
+import { ClassPage } from "../slid/ClassPage";
 import { ModesSheet } from "../modes/ModesSheet";
 import { cameraReducer, initialCameraState } from "../state/cameraState";
 
@@ -18,6 +19,7 @@ export function AppShell() {
   const [state, dispatch] = useReducer(cameraReducer, initialCameraState);
   const [galleryRefresh, setGalleryRefresh] = useState(0);
   const [boardDetected, setBoardDetected] = useState(false);
+  const [openClassId, setOpenClassId] = useState<string | null>(null);
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-canvas">
@@ -29,13 +31,28 @@ export function AppShell() {
             onOpenModes={() => dispatch({ type: "open-sheet", sheet: "modes" })}
             onCaptureSaved={() => setGalleryRefresh((n) => n + 1)}
             onBoardDetected={setBoardDetected}
+            onOpenClass={setOpenClassId}
           />
         </div>
 
         {/* Drawn over the live camera rather than replacing it. */}
         {state.tab === "gallery" && (
           <div className="absolute inset-0 z-30">
-            <GalleryPage refreshKey={galleryRefresh} />
+            <GalleryPage
+              refreshKey={galleryRefresh}
+              onOpenClass={setOpenClassId}
+            />
+          </div>
+        )}
+
+        {/* Drawn over the camera like every other surface: reopening a class
+            must never cost a re-acquisition of the stream. */}
+        {openClassId && (
+          <div className="absolute inset-0 z-40">
+            <ClassPage
+              classId={openClassId}
+              onClose={() => setOpenClassId(null)}
+            />
           </div>
         )}
 

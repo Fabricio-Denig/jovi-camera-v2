@@ -7,6 +7,7 @@ import type { CapturedMedia } from "../types/camera";
 interface GalleryPageProps {
   /** Bumped by the shell after each capture so the grid refetches. */
   refreshKey: number;
+  onOpenClass: (classId: string) => void;
 }
 
 /**
@@ -14,7 +15,7 @@ interface GalleryPageProps {
  * with the full gallery; this already reads real persisted media rather than
  * standing in for it.
  */
-export function GalleryPage({ refreshKey }: GalleryPageProps) {
+export function GalleryPage({ refreshKey, onOpenClass }: GalleryPageProps) {
   const [items, setItems] = useState<CapturedMedia[] | null>(null);
   const [selected, setSelected] = useState<CapturedMedia | null>(null);
 
@@ -56,17 +57,35 @@ export function GalleryPage({ refreshKey }: GalleryPageProps) {
         <div className="pb-6">
           {groupBySession(items).map((group) => (
             <section key={group.key} className="mb-5">
-              {group.subject && (
-                <header className="flex items-baseline justify-between px-4 pb-2">
-                  <h2 className="text-[15px] font-medium text-ink">
-                    {group.subject}
-                  </h2>
-                  <span className="font-mono text-[11px] text-ink-muted">
-                    {group.items.length}{" "}
-                    {group.items.length === 1 ? "momento" : "momentos"}
-                  </span>
-                </header>
-              )}
+              {group.subject &&
+                (group.key === "__loose" ? (
+                  <header className="flex items-baseline justify-between px-4 pb-2">
+                    <h2 className="text-[15px] font-medium text-ink">
+                      {group.subject}
+                    </h2>
+                    <span className="font-mono text-[11px] text-ink-muted">
+                      {group.items.length}{" "}
+                      {group.items.length === 1 ? "item" : "itens"}
+                    </span>
+                  </header>
+                ) : (
+                  // A class is a thing you open, not a heading over a grid.
+                  <button
+                    type="button"
+                    onClick={() => onOpenClass(group.key)}
+                    className="flex min-h-11 w-full items-baseline justify-between px-4 pb-2 text-left active:opacity-70"
+                  >
+                    <h2 className="text-[15px] font-medium text-ink">
+                      {group.subject}
+                    </h2>
+                    <span className="shrink-0 pl-3 text-[12px] font-medium text-accent">
+                      Ver aula ·{" "}
+                      {group.items.length === 1
+                        ? "1 momento"
+                        : `${group.items.length} momentos`}
+                    </span>
+                  </button>
+                ))}
               <ul className="grid grid-cols-3 gap-1 px-1">
                 {group.items.map((media) => (
                   <li key={media.id}>
