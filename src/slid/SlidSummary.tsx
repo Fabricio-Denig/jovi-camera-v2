@@ -46,7 +46,7 @@ export function SlidSummary({
             type="button"
             onClick={onDiscard}
             aria-label="Descartar sessão"
-            className="flex size-9 shrink-0 items-center justify-center rounded-full bg-surface-2 text-ink-muted active:opacity-70"
+            className="flex size-11 shrink-0 items-center justify-center rounded-full bg-surface-2 text-ink-muted active:opacity-70"
           >
             ✕
           </button>
@@ -58,7 +58,7 @@ export function SlidSummary({
               key={id}
               type="button"
               onClick={() => setTab(id)}
-              className={`flex-1 rounded-lg py-1.5 text-[13px] capitalize ${
+              className={`min-h-10 flex-1 rounded-lg py-2 text-[13px] capitalize ${
                 tab === id
                   ? "bg-accent text-accent-ink font-medium"
                   : "text-ink-muted"

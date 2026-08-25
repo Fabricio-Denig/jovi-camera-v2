@@ -62,7 +62,7 @@ export function BottomSheet({
             <button
               type="button"
               onClick={onClose}
-              className="-mr-1 -mt-1 flex size-9 shrink-0 items-center justify-center rounded-full bg-surface-2 text-ink-muted active:opacity-70"
+              className="-mr-1 -mt-1 flex size-11 shrink-0 items-center justify-center rounded-full bg-surface-2 text-ink-muted active:opacity-70"
               aria-label="Fechar painel"
             >
               ✕

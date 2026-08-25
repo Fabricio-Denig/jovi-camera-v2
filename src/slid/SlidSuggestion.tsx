@@ -32,7 +32,7 @@ export function SlidSuggestion({ onAccept, onDismiss }: SlidSuggestionProps) {
             type="button"
             onClick={onDismiss}
             aria-label="Dispensar sugestão"
-            className="-mr-1 -mt-1 flex size-7 shrink-0 items-center justify-center rounded-full text-ink-muted active:opacity-60"
+            className="-mr-2 -mt-2 flex size-11 shrink-0 items-center justify-center rounded-full text-ink-muted active:opacity-60"
           >
             ✕
           </button>
@@ -41,7 +41,7 @@ export function SlidSuggestion({ onAccept, onDismiss }: SlidSuggestionProps) {
         <button
           type="button"
           onClick={onAccept}
-          className="mt-3 w-full rounded-xl bg-accent py-2.5 text-[13px] font-medium text-accent-ink active:opacity-80"
+          className="mt-3 min-h-11 w-full rounded-xl bg-accent py-3 text-[13px] font-medium text-accent-ink active:opacity-80"
         >
           Iniciar sessão SliD
         </button>

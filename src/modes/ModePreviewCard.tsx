@@ -57,7 +57,7 @@ export function ModePreviewCard({ mode, onBack }: ModePreviewCardProps) {
         <button
           type="button"
           onClick={onBack}
-          className="mt-3 w-full rounded-xl bg-surface-2 py-2.5 text-[13px] font-medium text-ink active:opacity-70"
+          className="mt-3 min-h-11 w-full rounded-xl bg-surface-2 py-3 text-[13px] font-medium text-ink active:opacity-70"
         >
           Voltar para Foto
         </button>

@@ -37,7 +37,7 @@ export function TopBar({
           onClick={onSwitchFacing}
           disabled={isRecording || isSwitching}
           aria-label="Trocar câmera"
-          className="flex size-10 items-center justify-center rounded-full bg-black/40 text-white active:opacity-70 disabled:opacity-30"
+          className="flex size-11 items-center justify-center rounded-full bg-black/40 text-white active:opacity-70 disabled:opacity-30"
         >
           <span className={isSwitching ? "animate-spin" : undefined}>
             <FlipIcon />

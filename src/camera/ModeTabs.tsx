@@ -18,8 +18,12 @@ export function ModeTabs({
   onOpenCatalog,
   disabled,
 }: ModeTabsProps) {
+  // Generous padding rather than bare text: these are the most used controls in
+  // the app and a label-sized tap target is a miss waiting to happen on a phone.
+  const tapArea = "min-h-11 min-w-11 px-3 py-2.5 disabled:opacity-40";
+
   return (
-    <div className="flex items-center justify-center gap-6 text-sm font-medium">
+    <div className="flex items-center justify-center gap-2 text-sm font-medium">
       {PINNED_MODES.map((mode) => (
         <button
           key={mode.id}
@@ -27,11 +31,9 @@ export function ModeTabs({
           disabled={disabled}
           onClick={() => onSelect(mode.id)}
           aria-current={modeId === mode.id ? "true" : undefined}
-          className={
-            modeId === mode.id
-              ? "text-white disabled:opacity-40"
-              : "text-white/50 disabled:opacity-40"
-          }
+          className={`${tapArea} ${
+            modeId === mode.id ? "text-white" : "text-white/55"
+          }`}
         >
           {mode.label}
         </button>
@@ -42,7 +44,7 @@ export function ModeTabs({
         disabled={disabled}
         onClick={onOpenCatalog}
         aria-label="Todos os modos"
-        className="text-white/50 disabled:opacity-40"
+        className={`${tapArea} text-white/55`}
       >
         •••
       </button>
