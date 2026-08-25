@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+/**
+ * Design tokens — derived from the Jovi Camera V2 Figma (page "Wireframe", frames *v2).
+ * The camera UI is intentionally dark-only: a viewfinder needs consistent contrast against
+ * a live video feed regardless of the device's system theme, matching every frame in Figma.
+ * Exact hex values are an approximation (Figma variable export hit the plan's rate limit) —
+ * revisit against real Figma variables before the final visual pass.
+ */
+@theme {
+  --color-canvas: #0b0d12;
+  --color-surface: #171a21;
+  --color-surface-2: #20242e;
+  --color-line: #2a2f3a;
+
+  --color-ink: #eceef2;
+  --color-ink-muted: #9aa1af;
+
+  --color-accent: #4c6ef5;
+  --color-accent-ink: #ffffff;
+  --color-accent-soft: rgba(76, 110, 245, 0.16);
+
+  --color-danger: #ef4444;
+  --color-warn: #e2a75c;
+
+  --font-sans:
+    "Roboto", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#root {
+  min-height: 100dvh;
+}
