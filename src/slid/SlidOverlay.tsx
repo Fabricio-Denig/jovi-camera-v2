@@ -10,6 +10,9 @@ interface SlidOverlayProps {
   captures: SlidCapture[];
   lastMoment: SlidCapture | null;
   elapsedMs: number;
+  canSwitchFacing: boolean;
+  isSwitching: boolean;
+  onSwitchFacing: () => void;
   onMarkMoment: () => void;
   onPause: () => void;
   onResume: () => void;
@@ -30,6 +33,9 @@ export function SlidOverlay({
   captures,
   lastMoment,
   elapsedMs,
+  canSwitchFacing,
+  isSwitching,
+  onSwitchFacing,
   onMarkMoment,
   onPause,
   onResume,
@@ -63,6 +69,22 @@ export function SlidOverlay({
           <span className="font-mono text-[12px] tabular-nums text-ink-muted">
             {formatClock(elapsedMs)}
           </span>
+
+          {/* The session hides the camera bar, and the flip control went with
+              it — leaving no way back from a camera pointing the wrong way. */}
+          {canSwitchFacing && (
+            <button
+              type="button"
+              onClick={onSwitchFacing}
+              disabled={isSwitching}
+              aria-label="Trocar câmera"
+              className="-my-1.5 -mr-1.5 ml-0.5 flex size-11 items-center justify-center rounded-full text-ink-muted active:opacity-60 disabled:opacity-30"
+            >
+              <span className={isSwitching ? "animate-spin" : undefined}>
+                <FlipIcon />
+              </span>
+            </button>
+          )}
         </div>
 
         {running && lastMoment && (
@@ -187,6 +209,27 @@ function CheckIcon() {
       aria-hidden="true"
     >
       <path d="m5 13 4 4L19 7" />
+    </svg>
+  );
+}
+
+function FlipIcon() {
+  return (
+    <svg
+      width="17"
+      height="17"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M17 2.1 21 6l-4 3.9" />
+      <path d="M3 12v-1a4 4 0 0 1 4-4h14" />
+      <path d="M7 21.9 3 18l4-3.9" />
+      <path d="M21 12v1a4 4 0 0 1-4 4H3" />
     </svg>
   );
 }

@@ -47,6 +47,7 @@ export function CameraShell({
     stream,
     requestCamera,
     switchFacing,
+    selectFacing,
     canSwitchFacing,
     isSwitching,
     diagnostics,
@@ -74,7 +75,13 @@ export function CameraShell({
   // Entering SliD from the mode bar starts the session directly, so the mode
   // and the session never disagree about what is happening.
   useEffect(() => {
-    if (isSlid && slid.status === "idle") slid.start();
+    if (isSlid && slid.status === "idle") {
+      // SliD is used with the phone propped up facing the class. Inheriting the
+      // selfie camera from whichever mode came before points it at the student,
+      // which is the one thing this mode must never do.
+      selectFacing("environment");
+      slid.start();
+    }
     if (!isSlid && slid.status !== "idle" && slid.status !== "finished") {
       slid.finish();
     }
@@ -205,6 +212,9 @@ export function CameraShell({
           captures={slid.captures}
           lastMoment={slid.lastMoment}
           elapsedMs={slid.elapsedMs}
+          canSwitchFacing={canSwitchFacing}
+          isSwitching={isSwitching}
+          onSwitchFacing={switchFacing}
           onMarkMoment={() => void slid.captureManually()}
           onPause={slid.pause}
           onResume={slid.resume}
