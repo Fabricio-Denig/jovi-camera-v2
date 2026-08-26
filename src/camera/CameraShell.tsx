@@ -217,6 +217,17 @@ export function CameraShell({
         />
       )}
 
+      {/* The camera showing its work before it has anything to offer: without
+          it, the first seconds of the demo are an ordinary viewfinder. */}
+      {isReady && slid.weighing && !isSlid && (
+        <ContentFrame
+          bounds={slid.contentBounds}
+          videoRef={videoRef}
+          facing={facing}
+          tentative
+        />
+      )}
+
       {/* The detection is drawn on the thing it detected, so the claim can be
           checked instead of believed. */}
       {isReady && slid.boardDetected && !isSlid && (

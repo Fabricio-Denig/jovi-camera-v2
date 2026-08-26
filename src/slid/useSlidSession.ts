@@ -109,6 +109,12 @@ export interface SlidSession {
   /** Where the recognised content sits in the frame, so it can be shown. */
   contentBounds: ContentBounds | null;
   /**
+   * The camera has seen study material but not yet enough of it to offer
+   * anything. Shown, because three and a half seconds of a plain viewfinder
+   * before the suggestion arrives reads as a camera that did not notice.
+   */
+  weighing: boolean;
+  /**
    * Whether the running session is actually looking at study material. The
    * session says so out loud rather than implying it is guarding a class while
    * the camera faces a wall.
@@ -145,6 +151,7 @@ export function useSlidSession({
   const [boardDetected, setBoardDetected] = useState(false);
   const [sceneReady, setSceneReady] = useState(false);
   const [contentBounds, setContentBounds] = useState<ContentBounds | null>(null);
+  const [weighing, setWeighing] = useState(false);
 
   const startedAtRef = useRef(0);
   const pausedTotalRef = useRef(0);
@@ -206,13 +213,16 @@ export function useSlidSession({
       const scene = readScene(sample);
       if (scene.isStudy) {
         detectionCountRef.current++;
-        if (detectionCountRef.current >= DETECTION_TICKS) {
-          setBoardDetected(true);
-          setContentBounds(scene.bounds);
-        }
+        // The bounds go up from the first positive read: what the camera is
+        // weighing is worth seeing, not only what it concluded.
+        setContentBounds(scene.bounds);
+        const confirmed = detectionCountRef.current >= DETECTION_TICKS;
+        setBoardDetected(confirmed);
+        setWeighing(!confirmed);
       } else {
         detectionCountRef.current = 0;
         setBoardDetected(false);
+        setWeighing(false);
         setContentBounds(null);
       }
     }, TICK_MS);
@@ -360,6 +370,7 @@ export function useSlidSession({
     setElapsedMs(0);
     suggestionDismissedRef.current = false;
     detectionCountRef.current = 0;
+    setWeighing(false);
     sceneArmedRef.current = false;
     sceneOkRef.current = 0;
     sceneMissRef.current = 0;
@@ -383,6 +394,7 @@ export function useSlidSession({
     elapsedMs,
     boardDetected,
     contentBounds,
+    weighing,
     sceneReady,
     start,
     pause,

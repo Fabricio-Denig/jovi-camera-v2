@@ -13,6 +13,13 @@ interface ContentFrameProps {
    * what turns an automatic capture into something the student can see happen.
    */
   capturedKey?: string | null;
+  /**
+   * The camera is still making up its mind. Drawn fainter and without a label:
+   * an outline settling into place is "I am looking at this", which is true,
+   * while a spinner would be processing — the wrong word for a camera that is
+   * simply paying attention.
+   */
+  tentative?: boolean;
 }
 
 /**
@@ -34,6 +41,7 @@ export function ContentFrame({
   facing,
   label,
   capturedKey,
+  tentative,
 }: ContentFrameProps) {
   const rect = useCoverRect(bounds, videoRef, facing);
   if (!rect) return null;
@@ -44,13 +52,17 @@ export function ContentFrame({
       className="pointer-events-none absolute inset-0 z-[12] overflow-hidden"
     >
       <div
-        className="absolute animate-[slid-settle_420ms_cubic-bezier(0.16,1,0.3,1)] rounded-xl border border-accent/80"
+        className={
+          tentative
+            ? "absolute animate-[slid-settle_420ms_cubic-bezier(0.16,1,0.3,1)] rounded-xl border border-dashed border-accent/45 transition-all duration-300"
+            : "absolute animate-[slid-settle_420ms_cubic-bezier(0.16,1,0.3,1)] rounded-xl border border-accent/80 transition-all duration-300"
+        }
         style={{
           left: `${rect.left}px`,
           top: `${rect.top}px`,
           width: `${rect.width}px`,
           height: `${rect.height}px`,
-          boxShadow: "0 0 0 9999px rgba(0,0,0,0.14)",
+          boxShadow: tentative ? undefined : "0 0 0 9999px rgba(0,0,0,0.14)",
         }}
       >
         {/* Keyed by the moment, so each capture mounts its own flash and replays
