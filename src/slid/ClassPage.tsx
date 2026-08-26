@@ -105,6 +105,13 @@ export function ClassPage({ classId, onClose }: ClassPageProps) {
           </p>
         ) : (
           <div className="flex flex-col gap-6">
+            {/* A aula reaberta abre com a mesma frase que o resumo abriu. */}
+            {record.overview && (
+              <p className="text-[15px] leading-relaxed text-ink">
+                {record.overview}
+              </p>
+            )}
+
             {record.kinds.length > 0 && (
               <section>
                 <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
