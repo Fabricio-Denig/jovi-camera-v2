@@ -139,6 +139,38 @@ export interface SceneSignals {
   gapRatio: number;
   /** Whether this frame holds study material. */
   isStudy: boolean;
+  /**
+   * Where the content sits, as fractions of the frame. Drawn on screen so the
+   * detection can be checked rather than believed: this is the actual extent
+   * of the marks the classifier found, so when it is wrong the student sees it
+   * is wrong.
+   */
+  bounds: ContentBounds | null;
+}
+
+export interface ContentBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Share of the marks trimmed from each edge before the box closes. A single
+ * stray pixel in a corner would otherwise stretch the frame across the whole
+ * view, which reads as a camera that has no idea what it is looking at.
+ */
+const BOUNDS_TRIM = 0.02;
+
+function spanOf(counts: Float64Array, total: number, size: number): [number, number] {
+  const cut = total * BOUNDS_TRIM;
+  let seen = 0;
+  let start = 0;
+  while (start < size && seen + counts[start] <= cut) seen += counts[start++];
+  seen = 0;
+  let end = size - 1;
+  while (end > start && seen + counts[end] <= cut) seen += counts[end--];
+  return [start, end];
 }
 
 /*
@@ -173,24 +205,42 @@ const MIN_GAP = 0.45;
 export function readScene(gray: Uint8Array): SceneSignals {
   const mask = markMask(gray);
 
+  const rowCounts = new Float64Array(SAMPLE_H);
+  const colCounts = new Float64Array(SAMPLE_W);
   let marks = 0;
-  for (const pixel of mask) marks += pixel;
+  for (let y = 0; y < SAMPLE_H; y++) {
+    for (let x = 0; x < SAMPLE_W; x++) {
+      if (mask[y * SAMPLE_W + x]) {
+        rowCounts[y]++;
+        colCounts[x]++;
+        marks++;
+      }
+    }
+  }
   const markShare = marks / mask.length;
 
   let inkedRows = 0;
   for (let y = 0; y < SAMPLE_H; y++) {
-    let count = 0;
-    for (let x = 0; x < SAMPLE_W; x++) count += mask[y * SAMPLE_W + x];
-    if (count / SAMPLE_W >= ROW_INKED) inkedRows++;
+    if (rowCounts[y] / SAMPLE_W >= ROW_INKED) inkedRows++;
   }
   const gapRatio = 1 - inkedRows / SAMPLE_H;
 
-  return {
-    markShare,
-    gapRatio,
-    isStudy:
-      markShare >= MIN_MARKS && markShare <= MAX_MARKS && gapRatio >= MIN_GAP,
-  };
+  const isStudy =
+    markShare >= MIN_MARKS && markShare <= MAX_MARKS && gapRatio >= MIN_GAP;
+
+  let bounds: ContentBounds | null = null;
+  if (isStudy && marks > 0) {
+    const [x0, x1] = spanOf(colCounts, marks, SAMPLE_W);
+    const [y0, y1] = spanOf(rowCounts, marks, SAMPLE_H);
+    bounds = {
+      x: x0 / SAMPLE_W,
+      y: y0 / SAMPLE_H,
+      width: (x1 - x0 + 1) / SAMPLE_W,
+      height: (y1 - y0 + 1) / SAMPLE_H,
+    };
+  }
+
+  return { markShare, gapRatio, isStudy, bounds };
 }
 
 export interface ContentDelta {

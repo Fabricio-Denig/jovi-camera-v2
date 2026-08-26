@@ -12,6 +12,7 @@ import { useVideoRecorder } from "./useVideoRecorder";
 import { Viewfinder } from "./Viewfinder";
 import { ModePreviewCard } from "../modes/ModePreviewCard";
 import { getMode } from "../modes/modes";
+import { ContentFrame } from "../slid/ContentFrame";
 import { SlidOverlay } from "../slid/SlidOverlay";
 import { SlidSuggestion } from "../slid/SlidSuggestion";
 import { SlidSummary } from "../slid/SlidSummary";
@@ -198,6 +199,25 @@ export function CameraShell({
           facing={facing}
           diagnostics={diagnostics}
           lastError={captureError ?? errorMessage}
+        />
+      )}
+
+      {/* The detection is drawn on the thing it detected, so the claim can be
+          checked instead of believed. */}
+      {isReady && slid.boardDetected && !isSlid && (
+        <ContentFrame
+          bounds={slid.contentBounds}
+          videoRef={videoRef}
+          facing={facing}
+          label="Conteúdo identificado"
+        />
+      )}
+
+      {isReady && isSlid && slid.status === "running" && (
+        <ContentFrame
+          bounds={slid.contentBounds}
+          videoRef={videoRef}
+          facing={facing}
         />
       )}
 

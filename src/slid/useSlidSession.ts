@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  type ContentBounds,
   type ContentDelta,
   contentDelta,
   frameDifference,
@@ -105,6 +106,8 @@ export interface SlidSession {
   elapsedMs: number;
   /** True once the frame has looked like a board for long enough to suggest SliD. */
   boardDetected: boolean;
+  /** Where the recognised content sits in the frame, so it can be shown. */
+  contentBounds: ContentBounds | null;
   /**
    * Whether the running session is actually looking at study material. The
    * session says so out loud rather than implying it is guarding a class while
@@ -141,6 +144,7 @@ export function useSlidSession({
   const [elapsedMs, setElapsedMs] = useState(0);
   const [boardDetected, setBoardDetected] = useState(false);
   const [sceneReady, setSceneReady] = useState(false);
+  const [contentBounds, setContentBounds] = useState<ContentBounds | null>(null);
 
   const startedAtRef = useRef(0);
   const pausedTotalRef = useRef(0);
@@ -199,12 +203,17 @@ export function useSlidSession({
       const sample = sampleFrame(video);
       if (!sample) return;
 
-      if (readScene(sample).isStudy) {
+      const scene = readScene(sample);
+      if (scene.isStudy) {
         detectionCountRef.current++;
-        if (detectionCountRef.current >= DETECTION_TICKS) setBoardDetected(true);
+        if (detectionCountRef.current >= DETECTION_TICKS) {
+          setBoardDetected(true);
+          setContentBounds(scene.bounds);
+        }
       } else {
         detectionCountRef.current = 0;
         setBoardDetected(false);
+        setContentBounds(null);
       }
     }, TICK_MS);
 
@@ -228,9 +237,11 @@ export function useSlidSession({
       // Gate 1 — scene context. Hysteresis on both sides: a single good frame
       // does not arm the session, and a hand passing over the board does not
       // disarm it.
-      if (readScene(sample).isStudy) {
+      const scene = readScene(sample);
+      if (scene.isStudy) {
         sceneMissRef.current = 0;
         sceneOkRef.current++;
+        setContentBounds(scene.bounds);
         if (sceneOkRef.current >= SCENE_ARM_TICKS && !sceneArmedRef.current) {
           sceneArmedRef.current = true;
           setSceneReady(true);
@@ -241,6 +252,7 @@ export function useSlidSession({
         if (sceneMissRef.current >= SCENE_LOST_TICKS && sceneArmedRef.current) {
           sceneArmedRef.current = false;
           setSceneReady(false);
+          setContentBounds(null);
         }
       }
 
@@ -365,6 +377,7 @@ export function useSlidSession({
     lastMoment,
     elapsedMs,
     boardDetected,
+    contentBounds,
     sceneReady,
     start,
     pause,

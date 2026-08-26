@@ -10,6 +10,13 @@ import {
 import { useOcr } from "./useOcr";
 import type { SlidCapture, SlidStats } from "./useSlidSession";
 
+/**
+ * A class always has a usable name. An empty field waiting on a reading that
+ * may never come is a screen that looks broken; this one looks finished and
+ * invites a correction.
+ */
+const UNTITLED = "Aula sem título";
+
 /** What the session understood, ready to be stored as the class itself. */
 export interface SavedClass {
   subject: string;
@@ -46,7 +53,7 @@ export function SlidSummary({
   onSave,
   onDiscard,
 }: SlidSummaryProps) {
-  const [subject, setSubject] = useState("");
+  const [subject, setSubject] = useState(UNTITLED);
   const [edited, setEdited] = useState(false);
   const ocr = useOcr();
 
@@ -63,8 +70,11 @@ export function SlidSummary({
     return map;
   }, [ocr.pages]);
 
+  // The class opens with a name it can keep. A reading that lands later fills
+  // it in, but only while the student has not written their own — a title that
+  // rewrites itself under the cursor is worse than one that never arrives.
   const suggested = useMemo(() => suggestSubject(ocr.pages), [ocr.pages]);
-  const subjectValue = edited ? subject : subject || suggested;
+  const subjectValue = edited ? subject : suggested || subject;
   const topics = useMemo(() => summariseTopics(ocr.pages), [ocr.pages]);
 
   // Described once, here, and then stored: reopening the class must never
@@ -91,7 +101,6 @@ export function SlidSummary({
     return [...counts.entries()].sort((a, b) => b[1] - a[1]);
   }, [described]);
 
-  const reading = ocr.status === "running";
   const minutes = Math.max(1, Math.round(elapsedMs / 60000));
 
   return (
@@ -110,7 +119,7 @@ export function SlidSummary({
                 setEdited(true);
                 setSubject(event.target.value);
               }}
-              placeholder={reading ? "Identificando…" : "Nomear esta aula"}
+              placeholder="Nomear esta aula"
               aria-label="Nome da aula"
               className="-ml-1 mt-0.5 w-full rounded-lg bg-transparent px-1 text-[22px] font-semibold text-ink placeholder:text-ink-muted/60 focus:bg-surface-2 focus:outline-none"
             />
@@ -198,10 +207,6 @@ export function SlidSummary({
               </section>
             )}
 
-            {reading && topics.length === 0 && (
-              <p className="text-[13px] text-ink-muted/70">Identificando…</p>
-            )}
-
             {/* 4. Os momentos, na ordem em que a aula aconteceu. */}
             <section>
               <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
@@ -220,7 +225,6 @@ export function SlidSummary({
                       label={label}
                       detail={detail}
                       blob={capture.blob}
-                      pending={reading}
                     />
                   </li>
                 ))}
@@ -235,7 +239,7 @@ export function SlidSummary({
           type="button"
           onClick={() =>
             onSave({
-              subject: subjectValue.trim() || "Aula sem título",
+              subject: subjectValue.trim() || UNTITLED,
               moments: described.map(({ capture, label, detail }) => ({
                 id: capture.id,
                 label,

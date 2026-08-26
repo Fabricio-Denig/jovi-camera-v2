@@ -13,7 +13,10 @@ interface SlidSuggestionProps {
  */
 export function SlidSuggestion({ onAccept, onDismiss }: SlidSuggestionProps) {
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-center px-4 pt-[max(72px,calc(env(safe-area-inset-top)+56px))]">
+    // Anchored above the camera controls rather than over the viewfinder: a
+    // card that covers the board it just recognised argues against itself, and
+    // now it would also hide the frame drawn around that board.
+    <div className="pointer-events-none absolute inset-x-0 bottom-[max(164px,calc(env(safe-area-inset-bottom)+164px))] z-20 flex justify-center px-4">
       <div className="pointer-events-auto w-full max-w-sm rounded-2xl border border-accent/40 bg-canvas/95 p-4 shadow-lg backdrop-blur">
         <div className="flex items-start gap-3">
           <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent">
