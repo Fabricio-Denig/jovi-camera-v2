@@ -15,6 +15,8 @@ export interface MomentDescription {
   label: string;
   /** The one piece of content worth showing, when it reads cleanly. */
   detail: string | null;
+  /** The structure recognised, so the class can say what kinds of content it holds. */
+  kind: ContentKind | null;
 }
 
 /**
@@ -31,14 +33,13 @@ export type ContentKind =
   | "lista"
   | "tabela"
   | "definicao"
-  | "esquema"
   | "texto";
 
 interface DescribeOptions {
   text?: string;
   previousText?: string;
-  /** Fraction of the frame covered in ink, used when nothing reads as text. */
-  ink?: number;
+  /** How well this page read. Below the bar, the moment shows its label alone. */
+  confidence?: number;
 }
 
 const FALLBACK_LABELS: Record<MomentReason, string> = {
@@ -48,9 +49,6 @@ const FALLBACK_LABELS: Record<MomentReason, string> = {
   manual: "Você marcou este momento",
 };
 
-/** Ink covering this much of the frame with nothing readable is a drawing. */
-const DIAGRAM_INK = 0.006;
-
 const KIND_LABELS: Record<ContentKind, { first: string; added: string }> = {
   formula: { first: "Fórmula no quadro", added: "Nova fórmula" },
   codigo: { first: "Código no quadro", added: "Novo trecho de código" },
@@ -58,24 +56,19 @@ const KIND_LABELS: Record<ContentKind, { first: string; added: string }> = {
   lista: { first: "Lista de tópicos", added: "Itens novos na lista" },
   tabela: { first: "Tabela no quadro", added: "Tabela atualizada" },
   definicao: { first: "Definição no quadro", added: "Nova definição" },
-  esquema: { first: "Esquema no quadro", added: "Esquema acrescentado" },
   texto: { first: "Início do tópico", added: "Novo conceito" },
 };
 
 export function describeMoment(
   reason: MomentReason,
-  { text, previousText, ink }: DescribeOptions = {},
+  { text, previousText, confidence }: DescribeOptions = {},
 ): MomentDescription {
   const lines = text ? toLines(text) : [];
 
-  if (lines.length === 0) {
-    // Nothing readable. Plenty of ink still means something was drawn — a
-    // diagram, a graph, a circuit — and saying so beats a generic label.
-    if (reason !== "manual" && (ink ?? 0) >= DIAGRAM_INK) {
-      return { label: KIND_LABELS.esquema.first, detail: null };
-    }
-    return { label: FALLBACK_LABELS[reason], detail: null };
-  }
+  // Nothing read cleanly. Handwriting defeats OCR routinely, so the honest
+  // answer is the reason the moment was kept — never a guess at what it was.
+  if (lines.length === 0)
+    return { label: FALLBACK_LABELS[reason], detail: null, kind: null };
 
   // What this moment added, rather than everything the surface still carries.
   const previousLines = previousText ? toLines(previousText) : [];
@@ -86,18 +79,45 @@ export function describeMoment(
 
   const focus = added.length > 0 ? added : lines;
   const kind = classifyContent(focus);
-  const detail = clean(pickLine(focus, kind));
+
+  // The label comes from structure and survives a shaky reading; the line
+  // itself does not. Showing "(x) =axr2 + bx + c k" under a moment is the same
+  // failure as a garbled topic, one level down — the student sees a camera
+  // that misread their class rather than one that understood it.
+  // The structure survives a shaky reading and the exact characters do not: a
+  // formula misread character by character still carries "=" and digits, so
+  // calling it a formula stays right where quoting it would be wrong. The gate
+  // belongs on the line, not on the label.
+  const picked = clean(
+    kind === "formula" ? trimStrayToken(pickLine(focus, kind)) : pickLine(focus, kind),
+  );
+  const detail =
+    (confidence ?? 100) >= DETAIL_CONFIDENCE && picked && readsAsDetail(picked)
+      ? picked
+      : null;
 
   if (reason === "manual") {
-    return { label: FALLBACK_LABELS.manual, detail };
+    return { label: FALLBACK_LABELS.manual, detail, kind };
   }
 
   const labels = KIND_LABELS[kind];
   return {
     label: previousLines.length > 0 ? labels.added : labels.first,
     detail,
+    kind,
   };
 }
+
+/** How a recognised structure is named when the class counts them up. */
+export const KIND_NAMES: Record<ContentKind, [one: string, many: string]> = {
+  formula: ["fórmula", "fórmulas"],
+  codigo: ["trecho de código", "trechos de código"],
+  datas: ["marco no tempo", "marcos no tempo"],
+  lista: ["lista", "listas"],
+  tabela: ["tabela", "tabelas"],
+  definicao: ["definição", "definições"],
+  texto: ["anotação", "anotações"],
+};
 
 /**
  * Structure detectors, ordered by how specific they are. Code carries `=` and
@@ -137,7 +157,7 @@ function pickLine(lines: string[], kind: ContentKind): string | undefined {
 
 function isFormula(line: string): boolean {
   return (
-    /[=≠≤≥±√∑∫∆Δπ∞]/.test(line) ||
+    /[=<>≠≤≥±√∑∫∆Δπ∞]/.test(line) ||
     /\d\s*[a-z]\s*[²³^]/i.test(line) ||
     /\b\d+\s*[+\-*/×÷]\s*\d+/.test(line)
   );
@@ -173,6 +193,134 @@ function isDefinition(line: string): boolean {
     /^[\p{Lu}][\p{L} ]{2,28}\s*[:—–]\s+\S/u.test(line) ||
     /\b(é|são|significa|chama-se|define-se|consiste em|trata-se)\b/i.test(line)
   );
+}
+
+/**
+ * What the class was about, as a handful of topics.
+ *
+ * These are lines the lecturer actually wrote — never a synthesis written on
+ * their behalf. The bar to appear here is deliberately high: OCR on handwriting
+ * garbles routinely, and a bullet reading "Ás. NTE OR PR" does more damage than
+ * an empty section ever could. A misread line does not merely look sloppy, it
+ * tells the student the camera did not understand their class.
+ *
+ * So a line has to survive three questions: was the page read confidently, does
+ * the line read as language, and is it something new. Whatever fails is
+ * dropped, and an empty list is a perfectly good answer.
+ */
+export function summariseTopics(pages: OcrPage[], limit = 5): string[] {
+  const kept: { text: string; tokens: Set<string> }[] = [];
+
+  for (const page of pages) {
+    if (page.confidence < TOPIC_CONFIDENCE) continue;
+
+    for (const raw of page.text.split("\n")) {
+      const line = raw.trim();
+      if (line.length < 10 || line.length > 52) continue;
+      // Formulas, code and table rows are content, and belong to the moment
+      // that captured them rather than to the list of what the class covered.
+      if (isFormula(line) || isCode(line) || isTableRow(line)) continue;
+
+      const tidied = clean(line);
+      if (!tidied || !readsAsLanguage(tidied)) continue;
+
+      // OCR re-reads the same line differently on every frame, so exact
+      // matching lets the same topic through twice, garbled two ways.
+      const tokens = wordSet(tidied);
+      if (kept.some((k) => overlap(k.tokens, tokens) >= TOPIC_SAME)) continue;
+
+      kept.push({ text: capitalise(tidied), tokens });
+      if (kept.length >= limit) return kept.map((k) => k.text);
+    }
+  }
+  return kept.map((k) => k.text);
+}
+
+/** A page read below this is not allowed to name anything on the screen. */
+const TOPIC_CONFIDENCE = 78;
+/** Below this, a moment shows what it recognised but not the line it read. */
+const DETAIL_CONFIDENCE = 76;
+/** Word overlap at which two readings are the same line, read twice. */
+const TOPIC_SAME = 0.5;
+
+/**
+ * Does this read like something a person wrote, or like OCR debris?
+ *
+ * Garbled readings share a shape: stray single letters, punctuation where
+ * letters should be, capitals scattered mid-line. Real writing does not.
+ */
+function readsAsLanguage(line: string): boolean {
+  const letters = (line.match(/\p{L}/gu) ?? []).length;
+  if (letters / line.length < 0.62) return false;
+
+  const words = line.split(/\s+/).filter(Boolean);
+  const solid = words.filter((w) => (w.match(/\p{L}/gu) ?? []).length >= 3);
+  // Two real words is the shortest thing that reads as a topic.
+  if (solid.length < 2) return false;
+  // More debris than words: "Ás. NTE OR PR" fails here.
+  if (solid.length < words.length / 2) return false;
+
+  // Capitals scattered after the first word are the signature of a bad read.
+  const shouty = words
+    .slice(1)
+    .filter((w) => w.length >= 2 && w === w.toUpperCase() && /\p{L}/u.test(w));
+  return shouty.length <= 1;
+}
+
+/**
+ * A formula that has already closed does not pick up a lone letter afterwards:
+ * "f(x) = ax2 + bx + c s" is a clean reading with one character of debris stuck
+ * to the end. Prose is left alone — "concavidade depende de a" ends in a lone
+ * letter and means it.
+ */
+function trimStrayToken(line: string | undefined): string | undefined {
+  if (!line || !line.includes("=")) return line;
+  // Only when the expression has already closed: a lone letter after "+" is a
+  // term of the formula, a lone letter after "c" or ")" is debris.
+  return line.replace(/(?<=[\p{L}\p{N})])\s+[\p{L}\p{N}]\s*$/u, "");
+}
+
+/**
+ * Is this line safe to put on the screen as what was written?
+ *
+ * Prose has to read as prose; a formula has to read as a formula. Anything
+ * else — "ao do 20 grau LÁ" — is a reading that fell apart, and showing it
+ * tells the student the camera misread their class rather than understood it.
+ */
+function readsAsDetail(line: string): boolean {
+  if (readsAsLanguage(line)) return true;
+  if (!isFormula(line) && !isCode(line)) return false;
+
+  // A formula that lost a bracket lost more than a bracket.
+  let depth = 0;
+  for (const ch of line) {
+    if (ch === "(") depth++;
+    else if (ch === ")" && --depth < 0) return false;
+  }
+  if (depth !== 0) return false;
+
+  // Shouty fragments mid-line are the signature of a bad read, in a formula
+  // just as much as in a sentence.
+  return !line
+    .split(/\s+/)
+    .slice(1)
+    .some((w) => w.length >= 2 && /^\p{Lu}+$/u.test(w));
+}
+
+function wordSet(line: string): Set<string> {
+  return new Set(
+    line
+      .toLowerCase()
+      .split(/[^\p{L}\p{N}]+/u)
+      .filter((w) => w.length >= 3),
+  );
+}
+
+function overlap(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 || b.size === 0) return 0;
+  let shared = 0;
+  for (const word of b) if (a.has(word)) shared++;
+  return shared / Math.min(a.size, b.size);
 }
 
 /** Below this, a reading is too shaky to put in the largest text on the screen. */

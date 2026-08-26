@@ -17,15 +17,26 @@ interface SlidOverlayProps {
   onPause: () => void;
   onResume: () => void;
   onFinish: () => void;
+  /** The confirmation owns the whole screen, navigation included. */
+  onConfirmingChange: (confirming: boolean) => void;
 }
+
+/** How long the controls stay up after a tap before the screen goes quiet again. */
+const CONTROLS_MS = 5000;
+/** How long the hint that explains the tap stays on screen at the start. */
+const HINT_MS = 4200;
 
 /**
  * The live session.
  *
- * This screen owns the whole viewfinder while a class is being followed: the
- * camera bar, the shutter and the thumbnail are all hidden behind it. A big
- * white shutter in the middle of the screen tells a first-time viewer they are
- * supposed to be taking pictures, which is the exact opposite of the promise.
+ * At rest this screen has no controls at all — only what the camera is doing,
+ * how long it has been doing it, and what it kept. That is the product's whole
+ * claim: the student props up the phone and stops interacting. A row of
+ * buttons under the words "pode apoiar o celular" argues the opposite, and the
+ * interface wins that argument every time.
+ *
+ * The controls are one tap away, and a hint says so while the session settles.
+ * Hiding a way out entirely would be worse than the contradiction it fixes.
  */
 export function SlidOverlay({
   status,
@@ -40,16 +51,60 @@ export function SlidOverlay({
   onPause,
   onResume,
   onFinish,
+  onConfirmingChange,
 }: SlidOverlayProps) {
   const running = status === "running";
   // Saying "acompanhando a aula" while the camera faces a wall is the kind of
   // small lie that costs the whole demo. The session says what it is doing.
   const searching = running && !sceneReady;
 
+  const [controlsOpen, setControlsOpen] = useState(false);
+  const [hintVisible, setHintVisible] = useState(true);
+  const [confirming, setConfirming] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setHintVisible(false), HINT_MS);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    onConfirmingChange(confirming);
+  }, [confirming, onConfirmingChange]);
+
+  // Confirming ends the session, which unmounts this overlay in the same
+  // commit — the effect above never gets to report the dialog closing, and the
+  // app's navigation stayed hidden for good. Releasing it on unmount is the
+  // only place that always runs.
+  useEffect(() => () => onConfirmingChange(false), [onConfirmingChange]);
+
+  // The controls retire on their own, so the screen returns to the state the
+  // product is arguing for without the student having to dismiss anything.
+  useEffect(() => {
+    if (!controlsOpen || confirming) return;
+    const timer = setTimeout(() => setControlsOpen(false), CONTROLS_MS);
+    return () => clearTimeout(timer);
+  }, [controlsOpen, confirming]);
+
+  // A paused session must never look like one that is quietly working. Keyed on
+  // "paused" and not on "not running": the overlay mounts while the session is
+  // still idle, and treating that as paused opened the controls on every
+  // single session — the exact thing this screen exists to avoid.
+  useEffect(() => {
+    if (status === "paused") setControlsOpen(true);
+  }, [status]);
+
   return (
     <>
+      {/* The tap target is the viewfinder itself. */}
+      <button
+        type="button"
+        aria-label={controlsOpen ? "Esconder controles" : "Mostrar controles"}
+        onClick={() => setControlsOpen((open) => !open)}
+        className="absolute inset-0 z-[14] cursor-default"
+      />
+
       <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex flex-col items-center gap-2 pt-[max(70px,calc(env(safe-area-inset-top)+54px))]">
-        <div className="pointer-events-auto flex items-center gap-2 rounded-full bg-canvas/90 px-3.5 py-2 backdrop-blur">
+        <div className="flex items-center gap-2 rounded-full bg-canvas/90 px-3.5 py-2 backdrop-blur">
           <span
             className={
               !running
@@ -69,22 +124,6 @@ export function SlidOverlay({
           <span className="font-mono text-[12px] tabular-nums text-ink-muted">
             {formatClock(elapsedMs)}
           </span>
-
-          {/* The session hides the camera bar, and the flip control went with
-              it — leaving no way back from a camera pointing the wrong way. */}
-          {canSwitchFacing && (
-            <button
-              type="button"
-              onClick={onSwitchFacing}
-              disabled={isSwitching}
-              aria-label="Trocar câmera"
-              className="-my-1.5 -mr-1.5 ml-0.5 flex size-11 items-center justify-center rounded-full text-ink-muted active:opacity-60 disabled:opacity-30"
-            >
-              <span className={isSwitching ? "animate-spin" : undefined}>
-                <FlipIcon />
-              </span>
-            </button>
-          )}
         </div>
 
         {running && lastMoment && (
@@ -105,56 +144,141 @@ export function SlidOverlay({
         </div>
       )}
 
-      {/* The camera chrome is hidden during a session, and its scrim went with
-          it — white controls over a lit whiteboard are unreadable without one. */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 bottom-0 z-[15] h-48 bg-gradient-to-t from-black/75 via-black/40 to-transparent"
-      />
-
-      <div className="absolute inset-x-0 bottom-0 z-20 flex flex-col items-center gap-4 pb-7">
-        {/* Says the quiet part out loud: nothing is expected of the student. */}
-        <p className="mx-8 rounded-full bg-black/45 px-3.5 py-1.5 text-center text-[11.5px] leading-snug text-white/90 backdrop-blur">
-          {!running
-            ? "Sessão pausada. Nada está sendo guardado."
-            : searching
-              ? "Aponte para o quadro, o slide ou o caderno — o SliD só guarda conteúdo de estudo"
+      {/* At rest: one line, and it is a reassurance rather than an instruction. */}
+      {!controlsOpen && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col items-center gap-2 pb-8">
+          <p className="mx-8 rounded-full bg-black/45 px-3.5 py-1.5 text-center text-[11.5px] leading-snug text-white/90 backdrop-blur">
+            {searching
+              ? "Aponte para o quadro, o slide ou o caderno"
               : captures.length === 0
-                ? "Pode apoiar o celular e assistir — o SliD guarda o que for importante"
-                : `${captures.length} ${captures.length === 1 ? "momento guardado" : "momentos guardados"} até agora`}
+                ? "Pode apoiar o celular e assistir"
+                : `${captures.length} ${captures.length === 1 ? "momento guardado" : "momentos guardados"}`}
+          </p>
+          {hintVisible && (
+            <p className="animate-[slid-rise_240ms_ease-out] text-[10.5px] text-white/55">
+              toque na tela para ver os controles
+            </p>
+          )}
+        </div>
+      )}
+
+      {controlsOpen && (
+        <>
+          {/* White controls over a lit page are unreadable without a scrim. */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-0 bottom-0 z-[15] h-48 bg-gradient-to-t from-black/75 via-black/40 to-transparent"
+          />
+          <div className="absolute inset-x-0 bottom-0 z-20 flex animate-[slid-rise_200ms_ease-out] flex-col items-center gap-3 pb-7">
+            <div className="flex items-center gap-2.5 px-5">
+              <button
+                type="button"
+                onClick={running ? onPause : onResume}
+                className="min-h-11 rounded-full bg-canvas/85 px-4 py-2.5 text-[13px] font-medium text-ink backdrop-blur active:opacity-70"
+              >
+                {running ? "Pausar" : "Continuar"}
+              </button>
+
+              <button
+                type="button"
+                onClick={onMarkMoment}
+                disabled={!running}
+                aria-label="Marcar este momento"
+                className="min-h-11 rounded-full border border-white/40 bg-black/35 px-4 py-2.5 text-[13px] font-medium text-white backdrop-blur active:opacity-70 disabled:opacity-30"
+              >
+                Marcar momento
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setConfirming(true)}
+                className="min-h-11 rounded-full bg-accent px-4 py-2.5 text-[13px] font-medium text-accent-ink active:opacity-80"
+              >
+                Encerrar
+              </button>
+            </div>
+
+            {canSwitchFacing && (
+              <button
+                type="button"
+                onClick={onSwitchFacing}
+                disabled={isSwitching}
+                aria-label="Trocar câmera"
+                className="flex min-h-11 items-center gap-1.5 rounded-full px-4 text-[12px] text-white/75 active:opacity-60 disabled:opacity-30"
+              >
+                <span className={isSwitching ? "animate-spin" : undefined}>
+                  <FlipIcon />
+                </span>
+                Trocar câmera
+              </button>
+            )}
+          </div>
+        </>
+      )}
+
+      {confirming && (
+        <FinishConfirm
+          count={captures.length}
+          onKeep={() => setConfirming(false)}
+          onFinish={() => {
+            setConfirming(false);
+            onFinish();
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+/**
+ * Ending a class is not undoable, and during a live demonstration one stray tap
+ * would take the whole session with it.
+ */
+function FinishConfirm({
+  count,
+  onKeep,
+  onFinish,
+}: {
+  count: number;
+  onKeep: () => void;
+  onFinish: () => void;
+}) {
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Encerrar a aula"
+      className="absolute inset-0 z-40 flex items-end justify-center bg-black/60 px-4 pb-8 backdrop-blur-sm"
+    >
+      <div className="w-full max-w-sm animate-[slid-rise_220ms_ease-out] rounded-2xl bg-canvas p-5">
+        <h2 className="text-[16px] font-semibold text-ink">
+          {count === 0
+            ? "Encerrar sem nenhum momento?"
+            : `Salvar esta aula com ${count} ${count === 1 ? "momento" : "momentos"}?`}
+        </h2>
+        <p className="mt-1 text-[13px] leading-snug text-ink-muted">
+          {count === 0
+            ? "A câmera ainda não encontrou conteúdo de estudo. Continuando, ela segue procurando."
+            : "Você revisa a aula antes de guardar."}
         </p>
-
-        <div className="flex items-center gap-2.5 px-5">
+        <div className="mt-4 flex gap-2.5">
           <button
             type="button"
-            onClick={running ? onPause : onResume}
-            className="min-h-11 rounded-full bg-canvas/85 px-4 py-2.5 text-[13px] font-medium text-ink backdrop-blur active:opacity-70"
+            onClick={onKeep}
+            className="min-h-11 flex-1 rounded-xl bg-surface-2 text-[13.5px] font-medium text-ink active:opacity-70"
           >
-            {running ? "Pausar" : "Continuar"}
+            Continuar aula
           </button>
-
-          {/* Optional by design, and shaped like a note rather than a shutter:
-              marking a moment is the exception, not the way the mode is used. */}
-          <button
-            type="button"
-            onClick={onMarkMoment}
-            disabled={!running}
-            aria-label="Marcar este momento"
-            className="min-h-11 rounded-full border border-white/40 bg-black/35 px-4 py-2.5 text-[13px] font-medium text-white backdrop-blur active:opacity-70 disabled:opacity-30"
-          >
-            Marcar momento
-          </button>
-
           <button
             type="button"
             onClick={onFinish}
-            className="min-h-11 rounded-full bg-accent px-4 py-2.5 text-[13px] font-medium text-accent-ink active:opacity-80"
+            className="min-h-11 flex-1 rounded-xl bg-accent text-[13.5px] font-medium text-accent-ink active:opacity-80"
           >
-            Encerrar
+            {count === 0 ? "Encerrar" : "Salvar aula"}
           </button>
         </div>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -174,7 +298,7 @@ function MomentToast({ moment }: { moment: SlidCapture }) {
   if (!visible) return null;
 
   return (
-    <div className="pointer-events-auto flex animate-[slid-rise_240ms_ease-out] items-center gap-2 rounded-full bg-accent px-3.5 py-2 text-accent-ink">
+    <div className="flex animate-[slid-rise_240ms_ease-out] items-center gap-2 rounded-full bg-accent px-3.5 py-2 text-accent-ink">
       <CheckIcon />
       <span className="text-[12.5px] font-medium">
         {REASON_LABELS[moment.reason]}
@@ -216,8 +340,8 @@ function CheckIcon() {
 function FlipIcon() {
   return (
     <svg
-      width="17"
-      height="17"
+      width="15"
+      height="15"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"

@@ -12,6 +12,7 @@ import { useVideoRecorder } from "./useVideoRecorder";
 import { Viewfinder } from "./Viewfinder";
 import { ModePreviewCard } from "../modes/ModePreviewCard";
 import { getMode } from "../modes/modes";
+import { ContentFrame } from "../slid/ContentFrame";
 import { SlidOverlay } from "../slid/SlidOverlay";
 import { SlidSuggestion } from "../slid/SlidSuggestion";
 import { SlidSummary } from "../slid/SlidSummary";
@@ -30,6 +31,9 @@ interface CameraShellProps {
   /** Lets the shell surface the same suggestion inside the mode catalog. */
   onBoardDetected: (detected: boolean) => void;
   onOpenClass: (classId: string) => void;
+  onOpenGallery: () => void;
+  /** The summary takes over the screen, navigation included. */
+  onReviewOpenChange: (open: boolean) => void;
 }
 
 /** The camera screen: permission, preview, capture and local persistence. */
@@ -40,6 +44,8 @@ export function CameraShell({
   onCaptureSaved,
   onBoardDetected,
   onOpenClass,
+  onOpenGallery,
+  onReviewOpenChange,
 }: CameraShellProps) {
   const {
     videoRef,
@@ -76,6 +82,18 @@ export function CameraShell({
   useEffect(() => {
     onBoardDetected(slid.boardDetected);
   }, [slid.boardDetected, onBoardDetected]);
+
+  const [confirmingFinish, setConfirmingFinish] = useState(false);
+  // Two ways out, two answers. Ending the class on purpose always earns its
+  // review, even an empty one — landing back on the viewfinder with no word
+  // reads as a bug. Wandering off to another mode only interrupts the student
+  // when there is something to lose; before this, it dropped the whole class
+  // in silence.
+  const summaryOpen =
+    slid.status === "finished" && (isSlid || slid.captures.length > 0);
+  useEffect(() => {
+    onReviewOpenChange(summaryOpen || confirmingFinish);
+  }, [summaryOpen, confirmingFinish, onReviewOpenChange]);
 
   // Entering SliD from the mode bar starts the session directly, so the mode
   // and the session never disagree about what is happening.
@@ -199,6 +217,37 @@ export function CameraShell({
         />
       )}
 
+      {/* The camera showing its work before it has anything to offer: without
+          it, the first seconds of the demo are an ordinary viewfinder. */}
+      {isReady && slid.weighing && !isSlid && (
+        <ContentFrame
+          bounds={slid.contentBounds}
+          videoRef={videoRef}
+          facing={facing}
+          tentative
+        />
+      )}
+
+      {/* The detection is drawn on the thing it detected, so the claim can be
+          checked instead of believed. */}
+      {isReady && slid.boardDetected && !isSlid && (
+        <ContentFrame
+          bounds={slid.contentBounds}
+          videoRef={videoRef}
+          facing={facing}
+          label="Aula detectada"
+        />
+      )}
+
+      {isReady && isSlid && slid.status === "running" && (
+        <ContentFrame
+          bounds={slid.contentBounds}
+          videoRef={videoRef}
+          facing={facing}
+          capturedKey={slid.lastMoment?.id ?? null}
+        />
+      )}
+
       {isReady && slid.boardDetected && !isSlid && (
         <SlidSuggestion
           onAccept={() => onSelectMode("slid")}
@@ -224,15 +273,16 @@ export function CameraShell({
           onPause={slid.pause}
           onResume={slid.resume}
           onFinish={slid.finish}
+          onConfirmingChange={setConfirmingFinish}
         />
       )}
 
-      {isSlid && slid.status === "finished" && (
+      {summaryOpen && (
         <SlidSummary
           captures={slid.captures}
           stats={slid.stats}
           elapsedMs={slid.elapsedMs}
-          onSave={async ({ subject, moments }) => {
+          onSave={async ({ subject, moments, topics, kinds }) => {
             const sessionId = crypto.randomUUID();
             const savedAt = Date.now();
             const described = new Map(moments.map((m) => [m.id, m]));
@@ -256,13 +306,17 @@ export function CameraShell({
                   durationMs: slid.elapsedMs,
                   skippedDuplicates: slid.stats.skippedDuplicates,
                   savedAt,
+                  topics,
+                  kinds,
                 },
               });
             }
             onCaptureSaved();
             slid.reset();
             onSelectMode("photo");
-            // The class disappearing without a word reads as "did that work?".
+            // Saving a class ends in the place classes live. The confirmation
+            // still points at this one, so it is never lost in the grid.
+            onOpenGallery();
             setSavedClass({ id: sessionId, subject });
             setTimeout(() => setSavedClass(null), 5000);
           }}
@@ -286,7 +340,7 @@ export function CameraShell({
           {/* Scrim behind the controls: white text over a bright scene — a
               whiteboard, a sunlit wall — is otherwise unreadable, and the
               whiteboard is exactly where SliD is used. */}
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[5] h-56 bg-gradient-to-t from-black/75 via-black/35 to-transparent" />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[5] h-64 bg-gradient-to-t from-black/80 via-black/55 to-transparent" />
 
           <div className="absolute inset-x-0 bottom-0 z-10 flex flex-col items-center gap-5 pb-6">
             <ModeTabs
@@ -332,7 +386,9 @@ export function CameraShell({
       )}
 
       {savedClass && (
-        <div className="absolute inset-x-0 top-0 z-40 flex justify-center pt-[max(70px,calc(env(safe-area-inset-top)+54px))]">
+        // Anchored to the bottom: at the top it landed on the first class card
+        // in the library and covered the very thing it was confirming.
+        <div className="absolute inset-x-0 bottom-4 z-40 flex justify-center px-4">
           {/* Saving a class and then hiding it is the moment a student decides
               the app forgot. The way in is the confirmation itself. */}
           <button
@@ -341,10 +397,12 @@ export function CameraShell({
               onOpenClass(savedClass.id);
               setSavedClass(null);
             }}
-            className="flex min-h-11 animate-[slid-rise_240ms_ease-out] items-center gap-2 rounded-full bg-accent px-4 py-2 text-[12.5px] font-medium text-accent-ink active:opacity-80"
+            className="flex min-h-11 max-w-full animate-[slid-rise_240ms_ease-out] items-center gap-2 rounded-full bg-accent px-4 py-2 text-[12.5px] font-medium text-accent-ink active:opacity-80"
           >
-            <span>{savedClass.subject} guardada</span>
-            <span className="opacity-70">Ver aula</span>
+            {/* The name is confirmation, not the message: a real class title
+                ran to three lines and turned a toast into a paragraph. */}
+            <span className="truncate">{savedClass.subject}</span>
+            <span className="shrink-0 opacity-70">guardada · Ver aula</span>
           </button>
         </div>
       )}

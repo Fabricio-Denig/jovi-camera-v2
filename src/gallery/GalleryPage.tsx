@@ -1,104 +1,96 @@
 import { useEffect, useState } from "react";
 import { CaptureViewer } from "../camera/CaptureViewer";
+import { getClasses, type ClassRecord } from "../slid/classes";
 import { getAllCaptures } from "../shared/lib/mediaStore";
 import { useObjectUrl } from "../shared/hooks/useObjectUrl";
 import type { CapturedMedia } from "../types/camera";
 
 interface GalleryPageProps {
-  /** Bumped by the shell after each capture so the grid refetches. */
+  /** Bumped by the shell after each capture so the page refetches. */
   refreshKey: number;
   onOpenClass: (classId: string) => void;
 }
 
 /**
- * Grid of everything captured on this device. Albums, tabs and deletion come
- * with the full gallery; this already reads real persisted media rather than
- * standing in for it.
+ * Minhas aulas — the archive, and only that.
+ *
+ * The unit of this product is a class, not a photograph. A grid of thumbnails
+ * says the opposite: it turns a followed lecture back into a camera roll, which
+ * is the reading the whole session works to avoid. So classes are what this
+ * screen lists, and the frames live inside them.
+ *
+ * Loose photos and videos still have to go somewhere, so they keep a grid at
+ * the bottom — below the classes, where they belong.
  */
 export function GalleryPage({ refreshKey, onOpenClass }: GalleryPageProps) {
-  const [items, setItems] = useState<CapturedMedia[] | null>(null);
+  const [classes, setClasses] = useState<ClassRecord[] | null>(null);
+  const [loose, setLoose] = useState<CapturedMedia[]>([]);
   const [selected, setSelected] = useState<CapturedMedia | null>(null);
 
   useEffect(() => {
     let active = true;
-    void getAllCaptures().then((media) => {
-      if (active) setItems(media);
-    });
+    void Promise.all([getClasses(), getAllCaptures()]).then(
+      ([records, media]) => {
+        if (!active) return;
+        setClasses(records);
+        setLoose(media.filter((item) => !item.session));
+      },
+    );
     return () => {
       active = false;
     };
   }, [refreshKey]);
 
+  const count = classes?.length ?? 0;
+  const empty = classes !== null && count === 0 && loose.length === 0;
+
   return (
     <div className="flex h-full flex-col overflow-y-auto bg-canvas">
-      <header className="px-5 pb-3 pt-[max(20px,env(safe-area-inset-top))]">
-        <h1 className="text-2xl font-semibold text-ink">Galeria</h1>
+      <header className="px-5 pb-4 pt-[max(20px,env(safe-area-inset-top))]">
+        <h1 className="text-2xl font-semibold text-ink">Minhas aulas</h1>
         <p className="mt-0.5 text-[13px] text-ink-muted">
-          {items === null
+          {classes === null
             ? "Carregando…"
-            : items.length === 0
-              ? "Nada guardado ainda"
-              : `${items.length} ${items.length === 1 ? "item" : "itens"}`}
+            : count === 0
+              ? "Nenhuma aula guardada ainda"
+              : `${count} ${count === 1 ? "aula acompanhada" : "aulas acompanhadas"}`}
         </p>
       </header>
 
-      {items !== null && items.length === 0 && (
+      {empty && (
         <div className="flex flex-1 flex-col items-center justify-center gap-2 px-8 text-center">
           <div className="flex size-14 items-center justify-center rounded-full bg-surface-2 text-2xl">
-            📷
+            📚
           </div>
           <p className="text-sm text-ink-muted">
-            Suas fotos e vídeos aparecem aqui assim que você capturar o primeiro.
+            Abra o SliD durante uma aula e ela aparece aqui, organizada sozinha.
           </p>
         </div>
       )}
 
-      {items && items.length > 0 && (
-        <div className="pb-6">
-          {groupBySession(items).map((group) => (
-            <section key={group.key} className="mb-5">
-              {group.subject &&
-                (group.key === "__loose" ? (
-                  <header className="flex items-baseline justify-between px-4 pb-2">
-                    <h2 className="text-[15px] font-medium text-ink">
-                      {group.subject}
-                    </h2>
-                    <span className="font-mono text-[11px] text-ink-muted">
-                      {group.items.length}{" "}
-                      {group.items.length === 1 ? "item" : "itens"}
-                    </span>
-                  </header>
-                ) : (
-                  // A class is a thing you open, not a heading over a grid.
-                  <button
-                    type="button"
-                    onClick={() => onOpenClass(group.key)}
-                    className="flex min-h-11 w-full items-baseline justify-between px-4 pb-2 text-left active:opacity-70"
-                  >
-                    <h2 className="text-[15px] font-medium text-ink">
-                      {group.subject}
-                    </h2>
-                    <span className="shrink-0 pl-3 text-[12px] font-medium text-accent">
-                      Ver aula ·{" "}
-                      {group.items.length === 1
-                        ? "1 momento"
-                        : `${group.items.length} momentos`}
-                    </span>
-                  </button>
-                ))}
-              <ul className="grid grid-cols-3 gap-1 px-1">
-                {group.items.map((media) => (
-                  <li key={media.id}>
-                    <GalleryThumb
-                      media={media}
-                      onOpen={() => setSelected(media)}
-                    />
-                  </li>
-                ))}
-              </ul>
-            </section>
+      {classes && count > 0 && (
+        <ul className="flex flex-col gap-2 px-4 pb-2">
+          {classes.map((record) => (
+            <li key={record.id}>
+              <ClassCard record={record} onOpen={() => onOpenClass(record.id)} />
+            </li>
           ))}
-        </div>
+        </ul>
+      )}
+
+      {loose.length > 0 && (
+        <section className="mt-4 pb-6">
+          <h2 className="px-5 pb-2 text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
+            Outras capturas
+          </h2>
+          <ul className="grid grid-cols-3 gap-1 px-1">
+            {loose.map((media) => (
+              <li key={media.id}>
+                <GalleryThumb media={media} onOpen={() => setSelected(media)} />
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       {selected && (
@@ -108,49 +100,57 @@ export function GalleryPage({ refreshKey, onOpenClass }: GalleryPageProps) {
   );
 }
 
-interface Group {
-  key: string;
-  subject: string | null;
-  items: CapturedMedia[];
+/**
+ * A class as it is remembered: the frame it opened with, what it was called,
+ * and what the camera found in it.
+ */
+function ClassCard({
+  record,
+  onOpen,
+}: {
+  record: ClassRecord;
+  onOpen: () => void;
+}) {
+  const cover = record.moments[0]?.media.blob;
+  const url = useObjectUrl(cover);
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label={`Abrir a aula ${record.subject}`}
+      className="flex w-full items-center gap-3.5 rounded-2xl bg-surface-2 p-3 text-left active:opacity-70"
+    >
+      <div className="size-16 shrink-0 overflow-hidden rounded-xl bg-canvas">
+        {url && <img src={url} alt="" className="size-full object-cover" />}
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <h2 className="truncate text-[15.5px] font-medium text-ink">
+          {record.subject}
+        </h2>
+        <p className="mt-0.5 text-[12.5px] text-ink-muted">
+          {record.moments.length === 1
+            ? "1 momento capturado"
+            : `${record.moments.length} momentos capturados`}
+        </p>
+        <p className="mt-0.5 text-[11.5px] text-ink-muted/70">
+          {formatDate(record.savedAt)}
+        </p>
+      </div>
+
+      <span aria-hidden="true" className="shrink-0 pr-1 text-ink-muted">
+        <ChevronIcon />
+      </span>
+    </button>
+  );
 }
 
-/**
- * SliD captures stay grouped under the class they came from, in the order the
- * class happened. Loose photos and videos fall into a single "Outras" group —
- * keeping a session together is the point, not sorting everything else.
- */
-function groupBySession(items: CapturedMedia[]): Group[] {
-  const sessions = new Map<string, Group>();
-  const loose: CapturedMedia[] = [];
-
-  for (const media of items) {
-    if (!media.session) {
-      loose.push(media);
-      continue;
-    }
-    const existing = sessions.get(media.session.id);
-    if (existing) existing.items.push(media);
-    else
-      sessions.set(media.session.id, {
-        key: media.session.id,
-        subject: media.session.subject,
-        items: [media],
-      });
-  }
-
-  for (const group of sessions.values()) {
-    group.items.sort((a, b) => (a.session!.atMs ?? 0) - (b.session!.atMs ?? 0));
-  }
-
-  const groups = [...sessions.values()];
-  if (loose.length > 0) {
-    groups.push({
-      key: "__loose",
-      subject: groups.length > 0 ? "Outras capturas" : null,
-      items: loose,
-    });
-  }
-  return groups;
+function formatDate(at: number): string {
+  return new Date(at).toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "short",
+  });
 }
 
 function GalleryThumb({
@@ -181,5 +181,23 @@ function GalleryThumb({
         </span>
       )}
     </button>
+  );
+}
+
+function ChevronIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="m9 18 6-6-6-6" />
+    </svg>
   );
 }

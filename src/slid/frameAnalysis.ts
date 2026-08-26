@@ -1,17 +1,31 @@
 /**
- * Lightweight frame analysis for the contextual engine and for SliD's automatic
- * capture. Everything runs on a downscaled copy of the frame, keeping the cost
- * far away from the live preview.
+ * "Isso parece uma aula?"
  *
- * These are heuristics, not a trained classifier. That is deliberate: a
- * suggestion that occasionally stays quiet is fine, because every path it
- * offers is also reachable by hand. A heavy model that stutters the viewfinder
- * during a live demo is not.
+ * The question this file answers, and the one it deliberately does not answer,
+ * are the whole design. An earlier version asked "does this look like a
+ * professional whiteboard?" — it scored a frame on absolute brightness, on how
+ * sparse the writing was, and on how uniform the panel was. Measured against
+ * real study material, that classifier rejected every single one:
+ *
+ *   folha A4 escrita     score 0.038   (escrita densa demais, página não uniforme)
+ *   caderno aberto       score 0.000   (sombra da lombada)
+ *   slide escuro         score 0.000   (fundo escuro)
+ *   lousa verde com giz  score 0.000   (fundo escuro)
+ *
+ * Every one of those thresholds encoded the same wrong assumption. What study
+ * material actually has in common is not brightness and not sparsity: it is a
+ * clean surface with marks arranged on it, with space left between them.
+ * Paper, a chalkboard and a projected slide all share that; a face, a room and
+ * an empty table do not.
+ *
+ * These are heuristics, not a trained classifier — deliberately, because a
+ * heavy model that stutters the viewfinder during a live demo is worse than a
+ * suggestion that occasionally stays quiet.
  */
 
 /**
  * 128×96 rather than something smaller: at 64×48 the downscale blurs thin
- * handwriting into the board itself — measured on a test board, the darkest
+ * handwriting into the page itself — measured on a test board, the darkest
  * pixel went from 26 to 123 and the ink signal all but vanished. This is the
  * smallest sample that still preserves writing.
  */
@@ -49,162 +63,207 @@ export function sampleFrame(video: HTMLVideoElement): Uint8Array | null {
   return gray;
 }
 
-export interface FrameSignals {
-  brightness: number;
-  /** Local contrast energy: the fingerprint of writing on a flat surface. */
-  edgeEnergy: number;
-  /** Spread across the surface itself; low means one even panel. */
-  surfaceSd: number;
-}
-
-export interface BoardSignals extends FrameSignals {
-  /** 0..1 — how strongly this frame looks like a board or projected slide. */
-  score: number;
-}
-
-/*
- * Thresholds below come from measuring the reference scenes at 128×96:
- *
- *   lecture board      brightness 0.86   edge 3.7 – 8.2   sd  2.9 – 4.7
- *   blank wall         brightness 0.84   edge 0.00        sd  0.0
- *   face, 60 s         brightness 0.45   edge 2.40        sd 30.2
- *   busy scene         brightness 0.49   edge 6.10        sd 36.8
- *
- * Each signal alone confuses at least one pair; together they separate cleanly.
- * Edge energy is what distinguishes a written board from a bare wall, and the
- * surface spread is what rules out a face: skin and background never settle
- * into one even panel, whatever the lighting does.
+/**
+ * Radius of the local background estimate, in sample pixels — roughly the
+ * height of a line of writing at this scale. Large enough that a stroke never
+ * becomes its own background, small enough to follow a shadow across a page.
  */
-const MIN_BRIGHTNESS = 0.62;
-const BRIGHTNESS_RAMP = 0.12;
-/** Below this there is nothing written; a bare wall is not worth suggesting. */
-const MIN_EDGE = 0.8;
-/** Above this the frame is a busy scene rather than a surface with writing. */
-const MAX_EDGE = 6.5;
-/** Spread across the surface; a real board stays close to uniform. */
-const MAX_SURFACE_SD = 18;
+const BACKGROUND_RADIUS = 6;
 
-/*
- * The capture gate is deliberately more forgiving than the suggestion. Offering
- * to follow a class uninvited should require confidence; deciding whether the
- * student who already opened SliD is pointing at study material should still
- * work on a notebook page in a badly lit room. Only the brightness floor and
- * the evenness tolerance move — the two signals that reject a face are exactly
- * the ones kept intact, and measured faces sit 37 % above the wider limit.
+/**
+ * How far a pixel must depart from the surface behind it to count as a mark.
+ * Compared against a *local* background, never a global one: a vignette, a
+ * shadow falling across the page or a lamp being switched on all move the
+ * background and the pixel together, so the mask does not move at all.
  */
-const SCENE_MIN_BRIGHTNESS = 0.45;
-const SCENE_BRIGHTNESS_RAMP = 0.15;
-const SCENE_MAX_SURFACE_SD = 22;
+const MARK_DELTA = 22;
 
-/** The three raw signals, measured once and scored twice. */
-export function measureFrame(gray: Uint8Array): FrameSignals {
-  let sum = 0;
-  for (const value of gray) sum += value;
-  const mean = sum / gray.length;
-  const brightness = mean / 255;
+/** Below this share of a row's width, marks are a vertical object crossing the
+ *  frame — a notebook spine, a table edge — and not a line of writing. */
+const ROW_INKED = 0.06;
 
-  // Local contrast energy — writing produces many short, sharp transitions.
-  let edge = 0;
-  for (let y = 1; y < SAMPLE_H; y++) {
-    for (let x = 1; x < SAMPLE_W; x++) {
-      const i = y * SAMPLE_W + x;
-      edge +=
-        Math.abs(gray[i] - gray[i - 1]) + Math.abs(gray[i] - gray[i - SAMPLE_W]);
+/** Local mean via an integral image: O(n) whatever the radius. */
+function localBackground(gray: Uint8Array, radius: number): Float64Array {
+  const stride = SAMPLE_W + 1;
+  const sums = new Float64Array(stride * (SAMPLE_H + 1));
+  for (let y = 0; y < SAMPLE_H; y++) {
+    for (let x = 0; x < SAMPLE_W; x++) {
+      sums[(y + 1) * stride + x + 1] =
+        gray[y * SAMPLE_W + x] +
+        sums[y * stride + x + 1] +
+        sums[(y + 1) * stride + x] -
+        sums[y * stride + x];
     }
   }
-  const edgeEnergy = edge / gray.length;
 
-  // Evenness measured over the lit surface only, ignoring the writing itself.
-  const cutoff = mean * 0.8;
-  let brightSum = 0;
-  let brightCount = 0;
-  for (const value of gray) {
-    if (value >= cutoff) {
-      brightSum += value;
-      brightCount++;
+  const out = new Float64Array(SAMPLE_W * SAMPLE_H);
+  for (let y = 0; y < SAMPLE_H; y++) {
+    const y0 = Math.max(0, y - radius);
+    const y1 = Math.min(SAMPLE_H - 1, y + radius);
+    for (let x = 0; x < SAMPLE_W; x++) {
+      const x0 = Math.max(0, x - radius);
+      const x1 = Math.min(SAMPLE_W - 1, x + radius);
+      const area = (y1 - y0 + 1) * (x1 - x0 + 1);
+      out[y * SAMPLE_W + x] =
+        (sums[(y1 + 1) * stride + x1 + 1] -
+          sums[y0 * stride + x1 + 1] -
+          sums[(y1 + 1) * stride + x0] +
+          sums[y0 * stride + x0]) /
+        area;
     }
   }
-  const brightMean = brightCount ? brightSum / brightCount : 0;
-  let variance = 0;
-  for (const value of gray) {
-    if (value >= cutoff) variance += (value - brightMean) ** 2;
-  }
-  const surfaceSd = brightCount ? Math.sqrt(variance / brightCount) : 999;
-
-  return { brightness, edgeEnergy, surfaceSd };
-}
-
-function score(
-  { brightness, edgeEnergy, surfaceSd }: FrameSignals,
-  minBrightness: number,
-  ramp: number,
-  maxSd: number,
-): number {
-  const brightScore = clamp01((brightness - minBrightness) / ramp);
-  const writingScore =
-    edgeEnergy < MIN_EDGE
-      ? 0
-      : edgeEnergy > MAX_EDGE
-        ? clamp01(1 - (edgeEnergy - MAX_EDGE) / MAX_EDGE)
-        : 1;
-  const evennessScore = clamp01(1 - surfaceSd / maxSd);
-  return brightScore * writingScore * evennessScore;
-}
-
-/** Does this frame look enough like a board to offer following the class? */
-export function analyzeBoard(gray: Uint8Array): BoardSignals {
-  const signals = measureFrame(gray);
-  return {
-    ...signals,
-    score: score(signals, MIN_BRIGHTNESS, BRIGHTNESS_RAMP, MAX_SURFACE_SD),
-  };
+  return out;
 }
 
 /**
- * Is there study material in front of the camera at all?
+ * The marks on the surface: writing, print, chalk, projected text.
  *
- * Every automatic capture passes through this. Without it the session is a
- * motion detector: pointed at a person for a minute it kept saving frames,
- * because pixels had moved. Pixels moving is not a reason to keep anything.
+ * Departure from the local background in *either* direction, so dark ink on
+ * paper and white chalk on a green board are the same thing to the rest of the
+ * pipeline. This is what makes one classifier work for a notebook and for a
+ * dark slide.
  */
-export function studySceneScore(gray: Uint8Array): number {
-  return score(
-    measureFrame(gray),
-    SCENE_MIN_BRIGHTNESS,
-    SCENE_BRIGHTNESS_RAMP,
-    SCENE_MAX_SURFACE_SD,
-  );
-}
-
-/*
- * Content, not pixels.
- *
- * Ink is measured against the frame's own mean, so a light being switched on
- * moves every pixel and the mask not at all. Measured on the reference board,
- * each new line the lecturer writes adds 0.6 – 1.0 % of the frame in ink and
- * removes none; a person moving through a scene adds 1.3 % and removes 1.7 –
- * 4.7 %. That asymmetry — not the amount of change — is what tells writing
- * apart from movement.
- */
-const INK_CUTOFF = 0.82;
-
-/** Pixels meaningfully darker than the lit surface: the writing itself. */
-export function inkMask(gray: Uint8Array): Uint8Array {
-  let sum = 0;
-  for (const value of gray) sum += value;
-  const cutoff = (sum / gray.length) * INK_CUTOFF;
+export function markMask(gray: Uint8Array): Uint8Array {
+  const background = localBackground(gray, BACKGROUND_RADIUS);
   const mask = new Uint8Array(gray.length);
-  for (let i = 0; i < gray.length; i++) mask[i] = gray[i] < cutoff ? 1 : 0;
+  for (let i = 0; i < gray.length; i++) {
+    if (Math.abs(gray[i] - background[i]) > MARK_DELTA) mask[i] = 1;
+  }
   return mask;
 }
 
+export interface SceneSignals {
+  /** Share of the frame covered in marks. */
+  markShare: number;
+  /** Share of rows with no writing in them — the clean surface around it. */
+  gapRatio: number;
+  /** Whether this frame holds study material. */
+  isStudy: boolean;
+  /**
+   * Where the content sits, as fractions of the frame. Drawn on screen so the
+   * detection can be checked rather than believed: this is the actual extent
+   * of the marks the classifier found, so when it is wrong the student sees it
+   * is wrong.
+   */
+  bounds: ContentBounds | null;
+}
+
+export interface ContentBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Share of the marks trimmed from each edge before the box closes. A single
+ * stray pixel in a corner would otherwise stretch the frame across the whole
+ * view, which reads as a camera that has no idea what it is looking at.
+ */
+const BOUNDS_TRIM = 0.02;
+
+function spanOf(counts: Float64Array, total: number, size: number): [number, number] {
+  const cut = total * BOUNDS_TRIM;
+  let seen = 0;
+  let start = 0;
+  while (start < size && seen + counts[start] <= cut) seen += counts[start++];
+  seen = 0;
+  let end = size - 1;
+  while (end > start && seen + counts[end] <= cut) seen += counts[end--];
+  return [start, end];
+}
+
+/*
+ * Thresholds measured across the reference scenes at 128×96:
+ *
+ *                          marcas   vãos
+ *   folha, só o título      0.010   0.96
+ *   folha, título+fórmula   0.015   0.93
+ *   folha A4 densa          0.056   0.72
+ *   caderno aberto          0.066   0.81
+ *   slide escuro            0.082   0.64
+ *   lousa verde com giz     0.023   0.84
+ *   lousa branca escrita    0.039   0.82
+ *   ─────────────────────────────────────
+ *   pessoa                  0.090   0.25
+ *   ambiente movimentado    0.198   0.00
+ *   folha vazia / parede    0.000   1.00
+ *
+ * The gap ratio is what does the work: study material leaves clean surface
+ * between its lines, and a face or a room does not. The worst study case (0.64)
+ * and the worst non-study case (0.25) sit either side of the threshold with
+ * almost equal margin.
+ */
+
+/** Something has to be written; an empty page is not a class. */
+const MIN_MARKS = 0.005;
+/** Marks over this share of the frame are a scene, not writing on a surface. */
+const MAX_MARKS = 0.14;
+/** Clean surface between the lines — the signature of anything written down. */
+const MIN_GAP = 0.45;
+
+export function readScene(gray: Uint8Array): SceneSignals {
+  const mask = markMask(gray);
+
+  const rowCounts = new Float64Array(SAMPLE_H);
+  const colCounts = new Float64Array(SAMPLE_W);
+  let marks = 0;
+  for (let y = 0; y < SAMPLE_H; y++) {
+    for (let x = 0; x < SAMPLE_W; x++) {
+      if (mask[y * SAMPLE_W + x]) {
+        rowCounts[y]++;
+        colCounts[x]++;
+        marks++;
+      }
+    }
+  }
+  const markShare = marks / mask.length;
+
+  let inkedRows = 0;
+  for (let y = 0; y < SAMPLE_H; y++) {
+    if (rowCounts[y] / SAMPLE_W >= ROW_INKED) inkedRows++;
+  }
+  const gapRatio = 1 - inkedRows / SAMPLE_H;
+
+  const isStudy =
+    markShare >= MIN_MARKS && markShare <= MAX_MARKS && gapRatio >= MIN_GAP;
+
+  let bounds: ContentBounds | null = null;
+  if (isStudy && marks > 0) {
+    const [x0, x1] = spanOf(colCounts, marks, SAMPLE_W);
+    const [y0, y1] = spanOf(rowCounts, marks, SAMPLE_H);
+    bounds = {
+      x: x0 / SAMPLE_W,
+      y: y0 / SAMPLE_H,
+      width: (x1 - x0 + 1) / SAMPLE_W,
+      height: (y1 - y0 + 1) / SAMPLE_H,
+    };
+  }
+
+  return { markShare, gapRatio, isStudy, bounds };
+}
+
 export interface ContentDelta {
-  /** Fraction of the frame that gained ink — something was written or shown. */
+  /** Share of the frame that gained marks — something was written or shown. */
   added: number;
-  /** Fraction that lost ink — the board was wiped or the slide moved on. */
+  /** Share that lost them — erased, or the slide moved on. */
   removed: number;
 }
 
+/*
+ * Measured across the reference sequence:
+ *
+ *   escreveu o título        +1.034%   −0.000%
+ *   acrescentou a fórmula    +0.505%   −0.000%
+ *   apagou uma parte         +0.000%   −1.383%
+ *   ─────────────────────────────────────────
+ *   luz mais fraca / forte   +0.000%   −0.000%   (a máscara é local)
+ *   enquadramento deslocado  +2.295%   −2.189%   (grande, mas simétrico)
+ *   ruído do sensor          +0.008%   −0.008%
+ *
+ * Writing is asymmetric and moving the camera is not. Testing the direction of
+ * the change rather than its size is the whole trick.
+ */
 export function contentDelta(before: Uint8Array, after: Uint8Array): ContentDelta {
   if (before.length !== after.length) return { added: 1, removed: 1 };
   let added = 0;
@@ -216,14 +275,10 @@ export function contentDelta(before: Uint8Array, after: Uint8Array): ContentDelt
   return { added: added / before.length, removed: removed / before.length };
 }
 
-/** Mean absolute difference between two samples, 0..1. */
+/** Mean absolute difference between two samples, 0..1. Used to spot movement. */
 export function frameDifference(a: Uint8Array, b: Uint8Array): number {
   if (a.length !== b.length) return 1;
   let diff = 0;
   for (let i = 0; i < a.length; i++) diff += Math.abs(a[i] - b[i]);
   return diff / a.length / 255;
-}
-
-function clamp01(value: number): number {
-  return Math.max(0, Math.min(1, value));
 }

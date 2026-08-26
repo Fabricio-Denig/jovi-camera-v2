@@ -6,8 +6,6 @@ interface MomentRowProps {
   label: string;
   detail: string | null;
   blob: Blob;
-  /** The board is still being read; the label may still sharpen. */
-  pending?: boolean;
   onOpen?: () => void;
 }
 
@@ -23,7 +21,6 @@ export function MomentRow({
   label,
   detail,
   blob,
-  pending,
   onOpen,
 }: MomentRowProps) {
   const url = useObjectUrl(blob);
@@ -40,13 +37,11 @@ export function MomentRow({
           {formatClock(atMs)}
         </div>
         <h3 className="mt-0.5 text-[15px] font-medium text-ink">{label}</h3>
-        {detail ? (
+        {detail && (
           <p className="mt-0.5 line-clamp-2 text-[13px] leading-snug text-ink-muted">
             {detail}
           </p>
-        ) : pending ? (
-          <p className="mt-0.5 text-[12.5px] text-ink-muted/60">identificando…</p>
-        ) : null}
+        )}
       </div>
 
       {/* The frame is evidence for the moment, not the subject of the row. */}

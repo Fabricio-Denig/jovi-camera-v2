@@ -40,5 +40,9 @@ export interface CapturedMedia {
     durationMs?: number;
     skippedDuplicates?: number;
     savedAt?: number;
+    /** What the class was about, as lines the lecturer actually wrote. */
+    topics?: string[];
+    /** Structures the camera recognised, as [kind, count] — the class reopens saying what the summary said. */
+    kinds?: [string, number][];
   };
 }

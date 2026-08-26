@@ -50,6 +50,33 @@ body {
  * Short and single-purpose: it should read as the camera reacting, never as
  * decoration competing with the lecture behind it.
  */
+/* The frame does not sweep or scan: it settles, the way a camera confirms
+   something it already recognised. */
+@keyframes slid-settle {
+  from {
+    opacity: 0;
+    transform: scale(1.04);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* The frame acknowledging a capture. It brightens and releases — the camera
+   nodding, not a shutter firing. */
+@keyframes slid-confirm {
+  0% {
+    opacity: 0;
+  }
+  35% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
 @keyframes slid-rise {
   from {
     opacity: 0;
