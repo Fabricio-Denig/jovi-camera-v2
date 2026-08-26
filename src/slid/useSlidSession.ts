@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  analyzeBoard,
   type ContentDelta,
   contentDelta,
   frameDifference,
-  inkMask,
+  markMask,
+  readScene,
   sampleFrame,
-  studySceneScore,
 } from "./frameAnalysis";
 import { capturePhotoFromVideo } from "../camera/capturePhoto";
 
@@ -37,8 +36,9 @@ export interface SlidCapture {
   atMs: number;
   auto: boolean;
   reason: MomentReason;
-  /** Fraction of the frame covered in ink — how a drawing is told from a blank surface. */
-  ink: number;
+  /** Share of the frame covered in marks, kept so a moment can say whether
+   *  there was content even when nothing could be read from it. */
+  marks: number;
 }
 
 /** What the session watched but chose not to keep — the curation made visible. */
@@ -55,19 +55,17 @@ const TICK_MS = 1200;
 /*
  * A moment is kept only when both questions answer yes:
  *
- *   1. Is there study material in front of the camera?   studySceneScore
+ *   1. Is there study material in front of the camera?   readScene
  *   2. Did the content itself change?                    contentDelta
  *
  * Neither alone is enough. Question 2 on its own is a motion detector — that
- * is what shipped, and pointed at a person for a minute it produced moments.
- * Question 1 on its own would photograph a static board forever.
+ * is what shipped first, and pointed at a person for a minute it produced
+ * moments. Question 1 on its own would photograph a static page forever.
  */
 
-/** Below this the camera is not looking at study material, so nothing is kept. */
-const SCENE_THRESHOLD = 0.25;
 /** Ticks of study material before capture arms — one lucky frame is not a class. */
 const SCENE_ARM_TICKS = 2;
-/** Ticks without it before capture disarms; a hand over the board is not a room change. */
+/** Ticks without it before capture disarms; a hand over the page is not a room change. */
 const SCENE_LOST_TICKS = 3;
 
 /** Frame-to-frame change that means something is moving — a hand, a person. */
@@ -76,22 +74,20 @@ const MOTION_THRESHOLD = 0.03;
 const STABLE_TICKS = 2;
 
 /*
- * Content thresholds, measured on the reference board sampled once a tick:
- * each line the lecturer adds gains 0.6 – 1.0 % of the frame in ink and loses
- * none. Movement, framing tremor and a person crossing the scene all gain and
- * lose in similar amounts — so it is the asymmetry that is tested, never the
- * size of the change.
+ * Content thresholds, measured across the reference sequence. The smallest
+ * real change — one line of a formula added — moves 0.5 % of the frame; sensor
+ * noise moves 0.008 %; a lamp switched on moves nothing at all, because the
+ * mark mask is measured against a local background.
  */
-/** Ink gained that counts as something written or shown. */
-const INK_ADDED_MIN = 0.002;
-/** Ink lost that counts as the board being wiped or the slide moving on. */
-const INK_REMOVED_MIN = 0.01;
-/** How far one direction must outweigh the other before it means anything. */
-const DIRECTION_DOMINANCE = 1.5;
-/** Gained and lost together at this scale: the whole surface was replaced. */
-const SURFACE_REPLACED = 0.02;
+/** Marks gained or lost that count as a change worth keeping. */
+const MIN_CHANGE = 0.0025;
+/** How far one direction must outweigh the other before it means anything.
+ *  Writing measures ∞; nudging the camera measures 1.05. */
+const DIRECTION_DOMINANCE = 2;
+/** A symmetric change this large is the camera having moved, not the content. */
+const REFRAMED = 0.01;
 
-/** Consecutive positive readings before the board suggestion appears. */
+/** Consecutive positive readings before the class suggestion appears. */
 const DETECTION_TICKS = 3;
 
 interface UseSlidSessionOptions {
@@ -149,7 +145,7 @@ export function useSlidSession({
   const startedAtRef = useRef(0);
   const pausedTotalRef = useRef(0);
   const pausedAtRef = useRef(0);
-  const lastCapturedInkRef = useRef<Uint8Array | null>(null);
+  const lastCapturedMarksRef = useRef<Uint8Array | null>(null);
   const lastSampleRef = useRef<Uint8Array | null>(null);
   const stableCountRef = useRef(0);
   const sceneArmedRef = useRef(false);
@@ -167,12 +163,12 @@ export function useSlidSession({
       try {
         const { blob } = await capturePhotoFromVideo(video);
         const reference = sample ?? sampleFrame(video);
-        let ink = 0;
+        let marks = 0;
         if (reference) {
-          const mask = inkMask(reference);
-          lastCapturedInkRef.current = mask;
-          for (const pixel of mask) ink += pixel;
-          ink /= mask.length;
+          const mask = markMask(reference);
+          lastCapturedMarksRef.current = mask;
+          for (const pixel of mask) marks += pixel;
+          marks /= mask.length;
         }
         const moment: SlidCapture = {
           id: crypto.randomUUID(),
@@ -180,7 +176,7 @@ export function useSlidSession({
           atMs: Date.now() - startedAtRef.current - pausedTotalRef.current,
           auto: reason !== "manual",
           reason,
-          ink,
+          marks,
         };
         setCaptures((prev) => [...prev, moment]);
         setLastMoment(moment);
@@ -203,8 +199,7 @@ export function useSlidSession({
       const sample = sampleFrame(video);
       if (!sample) return;
 
-      const { score } = analyzeBoard(sample);
-      if (score > 0.5) {
+      if (readScene(sample).isStudy) {
         detectionCountRef.current++;
         if (detectionCountRef.current >= DETECTION_TICKS) setBoardDetected(true);
       } else {
@@ -233,7 +228,7 @@ export function useSlidSession({
       // Gate 1 — scene context. Hysteresis on both sides: a single good frame
       // does not arm the session, and a hand passing over the board does not
       // disarm it.
-      if (studySceneScore(sample) >= SCENE_THRESHOLD) {
+      if (readScene(sample).isStudy) {
         sceneMissRef.current = 0;
         sceneOkRef.current++;
         if (sceneOkRef.current >= SCENE_ARM_TICKS && !sceneArmedRef.current) {
@@ -269,15 +264,30 @@ export function useSlidSession({
 
       // Gate 2 — content. The first steady frame of study material is the
       // starting state of the lesson and is always worth keeping.
-      const ink = inkMask(sample);
-      const reference = lastCapturedInkRef.current;
+      const marks = markMask(sample);
+      const reference = lastCapturedMarksRef.current;
       if (!reference) {
         stableCountRef.current = 0;
         void takeCapture("novo-topico", sample);
         return;
       }
 
-      const reason = classifyChange(contentDelta(reference, ink));
+      const change = contentDelta(reference, marks);
+
+      // The camera was nudged: everything shifted by a pixel, so marks appear
+      // and disappear in equal measure. Re-anchor quietly instead of staying
+      // blocked against a reference that no longer lines up.
+      if (
+        change.added > REFRAMED &&
+        change.removed > REFRAMED &&
+        change.added < change.removed * DIRECTION_DOMINANCE &&
+        change.removed < change.added * DIRECTION_DOMINANCE
+      ) {
+        lastCapturedMarksRef.current = marks;
+        return;
+      }
+
+      const reason = classifyChange(change);
       if (!reason) {
         // Same content as the last moment: skip it and count the noise the
         // student was spared from reviewing later.
@@ -299,7 +309,7 @@ export function useSlidSession({
     startedAtRef.current = Date.now();
     pausedTotalRef.current = 0;
     lastSampleRef.current = null;
-    lastCapturedInkRef.current = null;
+    lastCapturedMarksRef.current = null;
     stableCountRef.current = 0;
     sceneArmedRef.current = false;
     sceneOkRef.current = 0;
@@ -369,25 +379,17 @@ export function useSlidSession({
 /**
  * What kind of change this is — or none, which is the answer most of the time.
  *
- * A lecturer writing adds ink and removes none. A person moving, a framing
- * tremor or a shifting shadow add and remove in comparable amounts. Testing the
+ * Someone writing adds marks and removes none. Nudging the camera, a shifting
+ * shadow or sensor noise add and remove in comparable amounts. Testing the
  * direction of the change rather than its size is what separates the two.
  */
 function classifyChange({ added, removed }: ContentDelta): MomentReason | null {
-  if (
-    added > INK_ADDED_MIN &&
-    removed > INK_REMOVED_MIN &&
-    added + removed > SURFACE_REPLACED
-  ) {
-    // Everything was replaced at once: the slide advanced.
-    return "novo-slide";
-  }
-  if (removed > INK_REMOVED_MIN && removed > added * DIRECTION_DOMINANCE) {
-    // The board was wiped to start something else.
-    return "novo-topico";
-  }
-  if (added > INK_ADDED_MIN && added > removed * DIRECTION_DOMINANCE) {
-    return "novo-conteudo";
-  }
+  const gained = added >= MIN_CHANGE && added > removed * DIRECTION_DOMINANCE;
+  const lost = removed >= MIN_CHANGE && removed > added * DIRECTION_DOMINANCE;
+
+  // Replaced wholesale while staying one-directional: the slide advanced.
+  if (lost && added >= MIN_CHANGE) return "novo-slide";
+  if (lost) return "novo-topico";
+  if (gained) return "novo-conteudo";
   return null;
 }

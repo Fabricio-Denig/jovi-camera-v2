@@ -65,7 +65,6 @@ export function SlidSummary({
           text: textByCapture.get(capture.id),
           previousText:
             index > 0 ? textByCapture.get(captures[index - 1].id) : undefined,
-          ink: capture.ink,
         }),
       })),
     [captures, textByCapture],

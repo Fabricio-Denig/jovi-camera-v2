@@ -31,14 +31,11 @@ export type ContentKind =
   | "lista"
   | "tabela"
   | "definicao"
-  | "esquema"
   | "texto";
 
 interface DescribeOptions {
   text?: string;
   previousText?: string;
-  /** Fraction of the frame covered in ink, used when nothing reads as text. */
-  ink?: number;
 }
 
 const FALLBACK_LABELS: Record<MomentReason, string> = {
@@ -48,9 +45,6 @@ const FALLBACK_LABELS: Record<MomentReason, string> = {
   manual: "Você marcou este momento",
 };
 
-/** Ink covering this much of the frame with nothing readable is a drawing. */
-const DIAGRAM_INK = 0.006;
-
 const KIND_LABELS: Record<ContentKind, { first: string; added: string }> = {
   formula: { first: "Fórmula no quadro", added: "Nova fórmula" },
   codigo: { first: "Código no quadro", added: "Novo trecho de código" },
@@ -58,24 +52,18 @@ const KIND_LABELS: Record<ContentKind, { first: string; added: string }> = {
   lista: { first: "Lista de tópicos", added: "Itens novos na lista" },
   tabela: { first: "Tabela no quadro", added: "Tabela atualizada" },
   definicao: { first: "Definição no quadro", added: "Nova definição" },
-  esquema: { first: "Esquema no quadro", added: "Esquema acrescentado" },
   texto: { first: "Início do tópico", added: "Novo conceito" },
 };
 
 export function describeMoment(
   reason: MomentReason,
-  { text, previousText, ink }: DescribeOptions = {},
+  { text, previousText }: DescribeOptions = {},
 ): MomentDescription {
   const lines = text ? toLines(text) : [];
 
-  if (lines.length === 0) {
-    // Nothing readable. Plenty of ink still means something was drawn — a
-    // diagram, a graph, a circuit — and saying so beats a generic label.
-    if (reason !== "manual" && (ink ?? 0) >= DIAGRAM_INK) {
-      return { label: KIND_LABELS.esquema.first, detail: null };
-    }
-    return { label: FALLBACK_LABELS[reason], detail: null };
-  }
+  // Nothing read cleanly. Handwriting defeats OCR routinely, so the honest
+  // answer is the reason the moment was kept — never a guess at what it was.
+  if (lines.length === 0) return { label: FALLBACK_LABELS[reason], detail: null };
 
   // What this moment added, rather than everything the surface still carries.
   const previousLines = previousText ? toLines(previousText) : [];
