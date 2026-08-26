@@ -3,6 +3,7 @@ import { ClassTitle } from "./ClassTitle";
 import { MomentRow } from "./MomentRow";
 import {
   KIND_NAMES,
+  KIND_TAGS,
   describeMoment,
   suggestSubject,
   summariseTopics,
@@ -21,7 +22,13 @@ const UNTITLED = "Aula sem título";
 /** What the session understood, ready to be stored as the class itself. */
 export interface SavedClass {
   subject: string;
-  moments: { id: string; label: string; detail: string | null }[];
+  moments: {
+    id: string;
+    label: string;
+    detail: string | null;
+    category: string | null;
+    spanMs: number;
+  }[];
   topics: string[];
   kinds: [string, number][];
 }
@@ -217,12 +224,14 @@ export function SlidSummary({
                   aria-hidden="true"
                   className="absolute bottom-4 left-[5px] top-3 w-px bg-line"
                 />
-                {described.map(({ capture, label, detail }) => (
+                {described.map(({ capture, label, detail, kind }) => (
                   <li key={capture.id}>
                     <MomentRow
                       atMs={capture.atMs}
                       label={label}
                       detail={detail}
+                      category={kind ? KIND_TAGS[kind] : null}
+                      spanMs={capture.completedAtMs - capture.atMs}
                       blob={capture.blob}
                     />
                   </li>
@@ -258,10 +267,12 @@ export function SlidSummary({
           onClick={() =>
             onSave({
               subject: subjectValue.trim() || UNTITLED,
-              moments: described.map(({ capture, label, detail }) => ({
+              moments: described.map(({ capture, label, detail, kind }) => ({
                 id: capture.id,
                 label,
                 detail,
+                category: kind ? KIND_TAGS[kind] : null,
+                spanMs: capture.completedAtMs - capture.atMs,
               })),
               topics,
               kinds: kinds.map(([kind, count]) => [kind, count]),

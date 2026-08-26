@@ -49,14 +49,30 @@ const FALLBACK_LABELS: Record<MomentReason, string> = {
   manual: "Você marcou este momento",
 };
 
+/**
+ * What happened in the class, not what changed on the screen. "Novo slide"
+ * describes the camera's experience; "Conceito apresentado" describes the
+ * student's, and it is just as true.
+ */
 const KIND_LABELS: Record<ContentKind, { first: string; added: string }> = {
-  formula: { first: "Fórmula no quadro", added: "Nova fórmula" },
-  codigo: { first: "Código no quadro", added: "Novo trecho de código" },
-  datas: { first: "Datas no quadro", added: "Novas datas" },
+  formula: { first: "Fórmula apresentada", added: "Nova fórmula" },
+  codigo: { first: "Código apresentado", added: "Novo trecho de código" },
+  datas: { first: "Datas apresentadas", added: "Novas datas" },
   lista: { first: "Lista de tópicos", added: "Itens novos na lista" },
-  tabela: { first: "Tabela no quadro", added: "Tabela atualizada" },
-  definicao: { first: "Definição no quadro", added: "Nova definição" },
-  texto: { first: "Início do tópico", added: "Novo conceito" },
+  tabela: { first: "Tabela apresentada", added: "Tabela atualizada" },
+  definicao: { first: "Definição apresentada", added: "Nova definição" },
+  texto: { first: "Conceito apresentado", added: "Novo conceito" },
+};
+
+/** The category shown beside a moment, in one word. */
+export const KIND_TAGS: Record<ContentKind, string> = {
+  formula: "Fórmula",
+  codigo: "Código",
+  datas: "Datas",
+  lista: "Lista",
+  tabela: "Tabela",
+  definicao: "Definição",
+  texto: "Conceito",
 };
 
 export function describeMoment(

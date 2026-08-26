@@ -161,6 +161,8 @@ export function ClassPage({ classId, onClose }: ClassPageProps) {
                   atMs={moment.atMs}
                   label={moment.label}
                   detail={moment.detail}
+                  category={moment.category}
+                  spanMs={moment.spanMs}
                   blob={moment.media.blob}
                   onOpen={() => setReviewing(index)}
                 />
