@@ -40,5 +40,7 @@ export interface CapturedMedia {
     durationMs?: number;
     skippedDuplicates?: number;
     savedAt?: number;
+    /** What the class was about, as lines the lecturer actually wrote. */
+    topics?: string[];
   };
 }

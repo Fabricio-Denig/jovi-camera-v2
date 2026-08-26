@@ -30,6 +30,7 @@ interface CameraShellProps {
   /** Lets the shell surface the same suggestion inside the mode catalog. */
   onBoardDetected: (detected: boolean) => void;
   onOpenClass: (classId: string) => void;
+  onOpenGallery: () => void;
 }
 
 /** The camera screen: permission, preview, capture and local persistence. */
@@ -40,6 +41,7 @@ export function CameraShell({
   onCaptureSaved,
   onBoardDetected,
   onOpenClass,
+  onOpenGallery,
 }: CameraShellProps) {
   const {
     videoRef,
@@ -232,7 +234,7 @@ export function CameraShell({
           captures={slid.captures}
           stats={slid.stats}
           elapsedMs={slid.elapsedMs}
-          onSave={async ({ subject, moments }) => {
+          onSave={async ({ subject, moments, topics }) => {
             const sessionId = crypto.randomUUID();
             const savedAt = Date.now();
             const described = new Map(moments.map((m) => [m.id, m]));
@@ -256,13 +258,16 @@ export function CameraShell({
                   durationMs: slid.elapsedMs,
                   skippedDuplicates: slid.stats.skippedDuplicates,
                   savedAt,
+                  topics,
                 },
               });
             }
             onCaptureSaved();
             slid.reset();
             onSelectMode("photo");
-            // The class disappearing without a word reads as "did that work?".
+            // Saving a class ends in the place classes live. The confirmation
+            // still points at this one, so it is never lost in the grid.
+            onOpenGallery();
             setSavedClass({ id: sessionId, subject });
             setTimeout(() => setSavedClass(null), 5000);
           }}

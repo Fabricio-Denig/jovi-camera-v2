@@ -1,14 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
-import { describeMoment, suggestSubject } from "./readContent";
+import { MomentRow } from "./MomentRow";
+import {
+  KIND_NAMES,
+  describeMoment,
+  suggestSubject,
+  summariseTopics,
+  type ContentKind,
+} from "./readContent";
 import { useOcr } from "./useOcr";
 import type { SlidCapture, SlidStats } from "./useSlidSession";
-import { MomentRow } from "./MomentRow";
-import { formatClock } from "../shared/lib/time";
 
 /** What the session understood, ready to be stored as the class itself. */
 export interface SavedClass {
   subject: string;
   moments: { id: string; label: string; detail: string | null }[];
+  topics: string[];
 }
 
 interface SlidSummaryProps {
@@ -20,14 +26,18 @@ interface SlidSummaryProps {
 }
 
 /**
- * The class, as the camera followed it.
+ * Resumo da aula — the screen the whole product argues for.
  *
- * A timeline, not a photo grid: what a student comes back for is the sequence
- * of the lecture, and each point on it says what the camera recognised. The
- * board is read quietly in the background and never shown as a transcript —
- * showing extracted text, OCR slips and all, is what makes a product read as a
- * scanner. The feeling to protect is "I didn't have to remember to save
- * anything".
+ * It has to answer one question: did my class become study material? So it
+ * leads with what the class was about and what was in it, and only then shows
+ * the moments. A grid of photographs answers a different question, and answers
+ * it worse.
+ *
+ * Nothing here is invented. The topics are lines the lecturer actually wrote;
+ * the counts are structures the camera actually recognised. When the reading
+ * comes back empty the sections disappear rather than filling with plausible
+ * text that was never on the page — a convincing summary of a class that did
+ * not happen is the worst thing this screen could do.
  */
 export function SlidSummary({
   captures,
@@ -40,35 +50,49 @@ export function SlidSummary({
   const [edited, setEdited] = useState(false);
   const ocr = useOcr();
 
-  // Reading starts on its own: the labels it produces are part of the result,
-  // not a feature the student has to ask for.
+  // Reading starts on its own: what it produces is part of the result, not a
+  // feature the student has to ask for.
   useEffect(() => {
     if (ocr.status === "idle" && captures.length > 0) void ocr.run(captures);
   }, [ocr, captures]);
 
-  const textByCapture = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const page of ocr.pages) map.set(page.captureId, page.text);
+  const readByCapture = useMemo(() => {
+    const map = new Map<string, { text: string; confidence: number }>();
+    for (const page of ocr.pages)
+      map.set(page.captureId, { text: page.text, confidence: page.confidence });
     return map;
   }, [ocr.pages]);
 
   const suggested = useMemo(() => suggestSubject(ocr.pages), [ocr.pages]);
   const subjectValue = edited ? subject : subject || suggested;
+  const topics = useMemo(() => summariseTopics(ocr.pages), [ocr.pages]);
 
   // Described once, here, and then stored: reopening the class must never
-  // depend on reading the board again.
+  // depend on reading the page again.
   const described = useMemo(
     () =>
       captures.map((capture, index) => ({
         capture,
         ...describeMoment(capture.reason, {
-          text: textByCapture.get(capture.id),
+          text: readByCapture.get(capture.id)?.text,
           previousText:
-            index > 0 ? textByCapture.get(captures[index - 1].id) : undefined,
+            index > 0 ? readByCapture.get(captures[index - 1].id)?.text : undefined,
+          confidence: readByCapture.get(capture.id)?.confidence,
         }),
       })),
-    [captures, textByCapture],
+    [captures, readByCapture],
   );
+
+  const kinds = useMemo(() => {
+    const counts = new Map<ContentKind, number>();
+    for (const { kind } of described) {
+      if (kind) counts.set(kind, (counts.get(kind) ?? 0) + 1);
+    }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  }, [described]);
+
+  const reading = ocr.status === "running";
+  const minutes = Math.max(1, Math.round(elapsedMs / 60000));
 
   return (
     <div className="absolute inset-0 z-50 flex flex-col bg-canvas">
@@ -76,7 +100,7 @@ export function SlidSummary({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-accent">
-              Aula acompanhada
+              Resumo da aula
             </p>
             {/* The title is the class itself, not a form field waiting at the
                 bottom of the screen. */}
@@ -86,18 +110,10 @@ export function SlidSummary({
                 setEdited(true);
                 setSubject(event.target.value);
               }}
-              placeholder={
-                ocr.status === "running" ? "Identificando…" : "Nomear esta aula"
-              }
+              placeholder={reading ? "Identificando…" : "Nomear esta aula"}
               aria-label="Nome da aula"
               className="-ml-1 mt-0.5 w-full rounded-lg bg-transparent px-1 text-[22px] font-semibold text-ink placeholder:text-ink-muted/60 focus:bg-surface-2 focus:outline-none"
             />
-            <p className="mt-1 px-1 text-[13px] text-ink-muted">
-              {formatClock(elapsedMs)} de aula ·{" "}
-              {captures.length === 1
-                ? "1 momento importante"
-                : `${captures.length} momentos importantes`}
-            </p>
           </div>
           <button
             type="button"
@@ -108,35 +124,109 @@ export function SlidSummary({
             ✕
           </button>
         </div>
-
-        <CurationNote stats={stats} kept={captures.length} />
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
         {captures.length === 0 ? (
           <p className="pt-8 text-center text-sm text-ink-muted">
             A aula terminou sem momentos relevantes. Deixe o celular apoiado
-            apontando para o quadro e o SliD registra sozinho o que mudar.
+            apontando para o quadro ou o caderno e o SliD registra sozinho o que
+            mudar.
           </p>
         ) : (
-          <ol className="relative">
-            {/* The spine is what turns a list into a lecture. */}
-            <span
-              aria-hidden="true"
-              className="absolute bottom-4 left-[5px] top-3 w-px bg-line"
-            />
-            {described.map(({ capture, label, detail }) => (
-              <li key={capture.id}>
-                <MomentRow
-                  atMs={capture.atMs}
-                  label={label}
-                  detail={detail}
-                  blob={capture.blob}
-                  pending={ocr.status === "running"}
+          <div className="flex flex-col gap-6">
+            {/* 1. O que aconteceu, em uma frase de fatos. */}
+            <p className="text-[15px] leading-relaxed text-ink">
+              {minutes} {minutes === 1 ? "minuto" : "minutos"} de aula{" "}
+              {minutes === 1 ? "virou" : "viraram"}{" "}
+              <span className="font-semibold">
+                {captures.length}{" "}
+                {captures.length === 1
+                  ? "momento importante"
+                  : "momentos importantes"}
+              </span>
+              {stats.skippedDuplicates > 0 && (
+                <>
+                  , enquanto {stats.skippedDuplicates}{" "}
+                  {stats.skippedDuplicates === 1 ? "vez" : "vezes"} em que nada
+                  mudou {stats.skippedDuplicates === 1 ? "foi" : "foram"}{" "}
+                  ignorad
+                  {stats.skippedDuplicates === 1 ? "a" : "as"}
+                </>
+              )}
+              .
+            </p>
+
+            {/* 2. Do que a aula tratou — linhas que o professor escreveu. */}
+            {topics.length > 0 && (
+              <section className="rounded-2xl bg-surface-2 px-4 py-4">
+                <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
+                  Nesta aula
+                </h2>
+                <ul className="mt-2.5 flex flex-col gap-1.5">
+                  {topics.map((topic) => (
+                    <li
+                      key={topic}
+                      className="flex gap-2 text-[14.5px] leading-snug text-ink"
+                    >
+                      <span aria-hidden="true" className="text-accent">
+                        •
+                      </span>
+                      <span className="min-w-0 flex-1">{topic}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {/* 3. O que a câmera reconheceu, por estrutura. */}
+            {kinds.length > 0 && (
+              <section>
+                <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
+                  Conteúdo reconhecido
+                </h2>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {kinds.map(([kind, count]) => (
+                    <span
+                      key={kind}
+                      className="rounded-full bg-accent/12 px-3 py-1.5 text-[12.5px] font-medium text-accent"
+                    >
+                      {count} {KIND_NAMES[kind][count === 1 ? 0 : 1]}
+                    </span>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {reading && topics.length === 0 && (
+              <p className="text-[13px] text-ink-muted/70">Identificando…</p>
+            )}
+
+            {/* 4. Os momentos, na ordem em que a aula aconteceu. */}
+            <section>
+              <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
+                Momentos capturados
+              </h2>
+              <ol className="relative">
+                {/* The spine is what turns a list into a lecture. */}
+                <span
+                  aria-hidden="true"
+                  className="absolute bottom-4 left-[5px] top-3 w-px bg-line"
                 />
-              </li>
-            ))}
-          </ol>
+                {described.map(({ capture, label, detail }) => (
+                  <li key={capture.id}>
+                    <MomentRow
+                      atMs={capture.atMs}
+                      label={label}
+                      detail={detail}
+                      blob={capture.blob}
+                      pending={reading}
+                    />
+                  </li>
+                ))}
+              </ol>
+            </section>
+          </div>
         )}
       </div>
 
@@ -151,6 +241,7 @@ export function SlidSummary({
                 label,
                 detail,
               })),
+              topics,
             })
           }
           className="min-h-11 w-full rounded-xl bg-accent py-3 text-sm font-medium text-accent-ink active:opacity-80"
@@ -159,27 +250,5 @@ export function SlidSummary({
         </button>
       </footer>
     </div>
-  );
-}
-
-/**
- * The curation, stated plainly. What makes the session valuable is not how much
- * it captured but how much it decided not to keep.
- */
-function CurationNote({ stats, kept }: { stats: SlidStats; kept: number }) {
-  if (stats.analysed === 0) return null;
-  return (
-    <p className="mt-3 rounded-xl bg-surface-2 px-3.5 py-2.5 text-[12.5px] leading-snug text-ink-muted">
-      A câmera acompanhou a aula inteira e guardou{" "}
-      <span className="text-ink">{kept}</span>{" "}
-      {kept === 1 ? "momento" : "momentos"}.
-      {stats.skippedDuplicates > 0 && (
-        <>
-          {" "}
-          Ignorou {stats.skippedDuplicates} vezes em que nada mudou, para você
-          não revisar a mesma coisa duas vezes.
-        </>
-      )}
-    </p>
   );
 }

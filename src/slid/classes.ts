@@ -21,6 +21,7 @@ export interface ClassRecord {
   savedAt: number;
   durationMs: number;
   skippedDuplicates: number;
+  topics: string[];
   moments: ClassMoment[];
 }
 
@@ -44,6 +45,7 @@ function toRecord(id: string, items: CapturedMedia[]): ClassRecord {
     savedAt: first?.savedAt ?? items[0].createdAt,
     durationMs: first?.durationMs ?? moments.at(-1)?.atMs ?? 0,
     skippedDuplicates: first?.skippedDuplicates ?? 0,
+    topics: first?.topics ?? [],
     moments,
   };
 }

@@ -32,6 +32,7 @@ export function AppShell() {
             onCaptureSaved={() => setGalleryRefresh((n) => n + 1)}
             onBoardDetected={setBoardDetected}
             onOpenClass={setOpenClassId}
+            onOpenGallery={() => dispatch({ type: "select-tab", tab: "gallery" })}
           />
         </div>
 

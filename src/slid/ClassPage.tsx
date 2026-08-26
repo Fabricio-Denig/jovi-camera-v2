@@ -83,13 +83,6 @@ export function ClassPage({ classId, onClose }: ClassPageProps) {
               placeholder="Nomear esta aula"
               className="-ml-1 mt-0.5 w-full rounded-lg bg-transparent px-1 text-[22px] font-semibold text-ink placeholder:text-ink-muted/60 focus:bg-surface-2 focus:outline-none"
             />
-            <p className="mt-1 px-1 text-[13px] text-ink-muted">
-              {formatDate(record.savedAt)} · {formatClock(record.durationMs)} de
-              aula ·{" "}
-              {record.moments.length === 1
-                ? "1 momento"
-                : `${record.moments.length} momentos`}
-            </p>
           </div>
           <button
             type="button"
@@ -100,6 +93,10 @@ export function ClassPage({ classId, onClose }: ClassPageProps) {
             ✕
           </button>
         </div>
+
+        <p className="mt-2 px-1 text-[13px] text-ink-muted">
+          {formatDate(record.savedAt)} · {formatClock(record.durationMs)} de aula
+        </p>
 
         {record.skippedDuplicates > 0 && (
           <p className="mt-3 rounded-xl bg-surface-2 px-3.5 py-2.5 text-[12.5px] leading-snug text-ink-muted">
@@ -116,7 +113,35 @@ export function ClassPage({ classId, onClose }: ClassPageProps) {
             Esta aula não guardou nenhum momento.
           </p>
         ) : (
-          <ol className="relative">
+          <div className="flex flex-col gap-6">
+            {record.topics.length > 0 && (
+              <section className="rounded-2xl bg-surface-2 px-4 py-4">
+                <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
+                  Nesta aula
+                </h2>
+                <ul className="mt-2.5 flex flex-col gap-1.5">
+                  {record.topics.map((topic) => (
+                    <li
+                      key={topic}
+                      className="flex gap-2 text-[14.5px] leading-snug text-ink"
+                    >
+                      <span aria-hidden="true" className="text-accent">
+                        •
+                      </span>
+                      <span className="min-w-0 flex-1">{topic}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            <section>
+              <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
+                {record.moments.length === 1
+                  ? "1 momento capturado"
+                  : `${record.moments.length} momentos capturados`}
+              </h2>
+              <ol className="relative">
             <span
               aria-hidden="true"
               className="absolute bottom-4 left-[5px] top-3 w-px bg-line"
@@ -131,8 +156,10 @@ export function ClassPage({ classId, onClose }: ClassPageProps) {
                   onOpen={() => setReviewing(index)}
                 />
               </li>
-            ))}
-          </ol>
+                ))}
+              </ol>
+            </section>
+          </div>
         )}
       </div>
 
