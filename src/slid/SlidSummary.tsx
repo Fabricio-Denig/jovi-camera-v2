@@ -56,6 +56,7 @@ export function SlidSummary({
 }: SlidSummaryProps) {
   const [subject, setSubject] = useState(UNTITLED);
   const [edited, setEdited] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
   const ocr = useOcr();
 
   // Reading starts on its own: what it produces is part of the result, not a
@@ -127,7 +128,9 @@ export function SlidSummary({
           </div>
           <button
             type="button"
-            onClick={onDiscard}
+            onClick={() =>
+              captures.length > 0 ? setDiscarding(true) : onDiscard()
+            }
             aria-label="Descartar aula"
             className="flex size-11 shrink-0 items-center justify-center rounded-full bg-surface-2 text-ink-muted active:opacity-70"
           >
@@ -157,7 +160,8 @@ export function SlidSummary({
               {stats.skippedDuplicates > 0 && (
                 <span className="text-ink-muted">
                   {" "}
-                  O resto a câmera deixou passar.
+                  A câmera olhou {stats.skippedDuplicates} vezes em que nada
+                  tinha mudado e deixou passar.
                 </span>
               )}
             </p>
@@ -230,6 +234,14 @@ export function SlidSummary({
         )}
       </div>
 
+      {discarding && (
+        <DiscardConfirm
+          count={captures.length}
+          onKeep={() => setDiscarding(false)}
+          onDiscard={onDiscard}
+        />
+      )}
+
       <footer className="border-t border-line px-5 pb-[max(16px,env(safe-area-inset-bottom))] pt-3">
         {captures.length === 0 ? (
           // Saving nothing announced a class that does not exist. The only
@@ -262,6 +274,58 @@ export function SlidSummary({
         </button>
         )}
       </footer>
+    </div>
+  );
+}
+
+/**
+ * Throwing away a class has no undo, and the control that does it is a small ✕
+ * in the corner of the screen the student just watched fill up. During a live
+ * demonstration one stray tap took every moment of the lesson with it.
+ */
+function DiscardConfirm({
+  count,
+  onKeep,
+  onDiscard,
+}: {
+  count: number;
+  onKeep: () => void;
+  onDiscard: () => void;
+}) {
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Descartar a aula"
+      className="absolute inset-0 z-50 flex items-end justify-center bg-black/60 px-4 pb-8 backdrop-blur-sm"
+    >
+      <div className="w-full max-w-sm animate-[slid-rise_220ms_ease-out] rounded-2xl bg-canvas p-5">
+        <h2 className="text-[16px] font-semibold text-ink">
+          Descartar esta aula?
+        </h2>
+        <p className="mt-1 text-[13px] leading-snug text-ink-muted">
+          {count === 1
+            ? "O momento guardado será perdido."
+            : `Os ${count} momentos guardados serão perdidos.`}{" "}
+          Não dá para desfazer.
+        </p>
+        <div className="mt-4 flex gap-2.5">
+          <button
+            type="button"
+            onClick={onKeep}
+            className="min-h-11 flex-1 rounded-xl bg-accent text-[13.5px] font-medium text-accent-ink active:opacity-80"
+          >
+            Manter a aula
+          </button>
+          <button
+            type="button"
+            onClick={onDiscard}
+            className="min-h-11 flex-1 rounded-xl bg-surface-2 text-[13.5px] font-medium text-danger active:opacity-70"
+          >
+            Descartar
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -63,6 +63,20 @@ body {
   }
 }
 
+/* The frame acknowledging a capture. It brightens and releases — the camera
+   nodding, not a shutter firing. */
+@keyframes slid-confirm {
+  0% {
+    opacity: 0;
+  }
+  35% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
 @keyframes slid-rise {
   from {
     opacity: 0;

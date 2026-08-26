@@ -84,7 +84,13 @@ export function CameraShell({
   }, [slid.boardDetected, onBoardDetected]);
 
   const [confirmingFinish, setConfirmingFinish] = useState(false);
-  const summaryOpen = isSlid && slid.status === "finished";
+  // Two ways out, two answers. Ending the class on purpose always earns its
+  // review, even an empty one — landing back on the viewfinder with no word
+  // reads as a bug. Wandering off to another mode only interrupts the student
+  // when there is something to lose; before this, it dropped the whole class
+  // in silence.
+  const summaryOpen =
+    slid.status === "finished" && (isSlid || slid.captures.length > 0);
   useEffect(() => {
     onReviewOpenChange(summaryOpen || confirmingFinish);
   }, [summaryOpen, confirmingFinish, onReviewOpenChange]);
@@ -227,6 +233,7 @@ export function CameraShell({
           bounds={slid.contentBounds}
           videoRef={videoRef}
           facing={facing}
+          capturedKey={slid.lastMoment?.id ?? null}
         />
       )}
 

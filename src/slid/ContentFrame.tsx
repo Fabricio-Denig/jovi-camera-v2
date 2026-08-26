@@ -8,6 +8,11 @@ interface ContentFrameProps {
   facing: CameraFacing;
   /** Shown beside the frame while the suggestion is on screen. */
   label?: string;
+  /**
+   * Changes each time a moment is kept. The frame acknowledges it, which is
+   * what turns an automatic capture into something the student can see happen.
+   */
+  capturedKey?: string | null;
 }
 
 /**
@@ -28,6 +33,7 @@ export function ContentFrame({
   videoRef,
   facing,
   label,
+  capturedKey,
 }: ContentFrameProps) {
   const rect = useCoverRect(bounds, videoRef, facing);
   if (!rect) return null;
@@ -47,6 +53,15 @@ export function ContentFrame({
           boxShadow: "0 0 0 9999px rgba(0,0,0,0.14)",
         }}
       >
+        {/* Keyed by the moment, so each capture mounts its own flash and replays
+            the animation instead of fighting a shared timer. */}
+        {capturedKey && (
+          <span
+            key={capturedKey}
+            className="pointer-events-none absolute -inset-px animate-[slid-confirm_700ms_ease-out] rounded-xl bg-accent/10 ring-2 ring-accent/90"
+          />
+        )}
+
         {/* Inside the frame, not above it: content that reaches the top of the
             view would push a label outside the screen. */}
         {label && (

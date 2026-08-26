@@ -84,10 +84,16 @@ export function describeMoment(
   // itself does not. Showing "(x) =axr2 + bx + c k" under a moment is the same
   // failure as a garbled topic, one level down — the student sees a camera
   // that misread their class rather than one that understood it.
-  const picked = pickLine(focus, kind);
+  // The structure survives a shaky reading and the exact characters do not: a
+  // formula misread character by character still carries "=" and digits, so
+  // calling it a formula stays right where quoting it would be wrong. The gate
+  // belongs on the line, not on the label.
+  const picked = clean(
+    kind === "formula" ? trimStrayToken(pickLine(focus, kind)) : pickLine(focus, kind),
+  );
   const detail =
-    (confidence ?? 100) >= DETAIL_CONFIDENCE
-      ? clean(kind === "formula" ? trimStrayToken(picked) : picked)
+    (confidence ?? 100) >= DETAIL_CONFIDENCE && picked && readsAsDetail(picked)
+      ? picked
       : null;
 
   if (reason === "manual") {
@@ -151,7 +157,7 @@ function pickLine(lines: string[], kind: ContentKind): string | undefined {
 
 function isFormula(line: string): boolean {
   return (
-    /[=≠≤≥±√∑∫∆Δπ∞]/.test(line) ||
+    /[=<>≠≤≥±√∑∫∆Δπ∞]/.test(line) ||
     /\d\s*[a-z]\s*[²³^]/i.test(line) ||
     /\b\d+\s*[+\-*/×÷]\s*\d+/.test(line)
   );
@@ -271,7 +277,34 @@ function trimStrayToken(line: string | undefined): string | undefined {
   if (!line || !line.includes("=")) return line;
   // Only when the expression has already closed: a lone letter after "+" is a
   // term of the formula, a lone letter after "c" or ")" is debris.
-  return line.replace(/(?<=[\p{L}\p{N})])\s+\p{L}\s*$/u, "");
+  return line.replace(/(?<=[\p{L}\p{N})])\s+[\p{L}\p{N}]\s*$/u, "");
+}
+
+/**
+ * Is this line safe to put on the screen as what was written?
+ *
+ * Prose has to read as prose; a formula has to read as a formula. Anything
+ * else — "ao do 20 grau LÁ" — is a reading that fell apart, and showing it
+ * tells the student the camera misread their class rather than understood it.
+ */
+function readsAsDetail(line: string): boolean {
+  if (readsAsLanguage(line)) return true;
+  if (!isFormula(line) && !isCode(line)) return false;
+
+  // A formula that lost a bracket lost more than a bracket.
+  let depth = 0;
+  for (const ch of line) {
+    if (ch === "(") depth++;
+    else if (ch === ")" && --depth < 0) return false;
+  }
+  if (depth !== 0) return false;
+
+  // Shouty fragments mid-line are the signature of a bad read, in a formula
+  // just as much as in a sentence.
+  return !line
+    .split(/\s+/)
+    .slice(1)
+    .some((w) => w.length >= 2 && /^\p{Lu}+$/u.test(w));
 }
 
 function wordSet(line: string): Set<string> {
