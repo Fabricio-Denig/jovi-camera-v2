@@ -4,8 +4,10 @@ import {
   type ContentDelta,
   contentDelta,
   frameDifference,
+  markArea,
   markMask,
   readScene,
+  unionBounds,
   sampleFrame,
 } from "./frameAnalysis";
 import { capturePhotoFromVideo } from "../camera/capturePhoto";
@@ -40,6 +42,10 @@ export interface SlidCapture {
   /** Share of the frame covered in marks, kept so a moment can say whether
    *  there was content even when nothing could be read from it. */
   marks: number;
+  /** How many times the surface grew while this stayed the same topic. */
+  refinements: number;
+  /** When the topic stopped growing — the moment holds its fullest state. */
+  completedAtMs: number;
 }
 
 /** What the session watched but chose not to keep — the curation made visible. */
@@ -75,20 +81,37 @@ const MOTION_THRESHOLD = 0.03;
 const STABLE_TICKS = 2;
 
 /*
- * Content thresholds, measured across the reference sequence. The smallest
- * real change — one line of a formula added — moves 0.5 % of the frame; sensor
- * noise moves 0.008 %; a lamp switched on moves nothing at all, because the
- * mark mask is measured against a local background.
+ * A moment is a topic, not a frame.
+ *
+ * Measured on a four-minute presentation with three slides and seven build
+ * steps, the previous rule kept seven moments: every bullet that appeared was
+ * a moment of its own. Extrapolated to a one-hour lecture that is around a
+ * hundred captures, which is a camera roll, not a class.
+ *
+ * So change is weighed against the content already on the surface rather than
+ * against the frame. A mouse cursor is 7 % of a slide's content; a new slide
+ * is 100 % of it. One threshold then means the same thing on a dense slide and
+ * on a board with two lines.
  */
-/** Marks gained or lost that count as a change worth keeping. */
+
+/*
+ * Measured across a presentation with three slides and seven build steps:
+ *
+ *                              cresceu   perdeu
+ *   bullet aparecendo           0.05–0.18   ~0.00
+ *   troca de slide              0.09        0.27–0.30
+ *
+ * What separates a new topic from the same topic growing is not how much
+ * changed but whether anything was taken away.
+ */
+/** Content lost, as a share of what was there: the surface was replaced. */
+const REPLACED_RATIO = 0.15;
+/** Content gained, as a share of what was there: the same topic, more complete. */
+const GROWTH_RATIO = 0.1;
+/** Absolute floor, so a nearly empty surface cannot make ratios explode. */
 const MIN_CHANGE = 0.0025;
-/** How far one direction must outweigh the other before it means anything.
- *  Writing measures ∞; nudging the camera measures 1.05. */
-const DIRECTION_DOMINANCE = 2;
 /** Change outside the content at this scale means the camera moved, not the class. */
 const REFRAMED = 0.006;
-/** Marks leaving and arriving together at this scale: the surface was replaced. */
-const SURFACE_REPLACED = 0.008;
 
 /** Consecutive positive readings before the class suggestion appears. */
 const DETECTION_TICKS = 3;
@@ -163,6 +186,7 @@ export function useSlidSession({
   const stableCountRef = useRef(0);
   const sceneArmedRef = useRef(false);
   const boundsRef = useRef<ContentBounds | null>(null);
+  const referenceBoundsRef = useRef<ContentBounds | null>(null);
   const sceneOkRef = useRef(0);
   const sceneMissRef = useRef(0);
   const detectionCountRef = useRef(0);
@@ -181,8 +205,8 @@ export function useSlidSession({
         if (reference) {
           const mask = markMask(reference);
           lastCapturedMarksRef.current = mask;
-          for (const pixel of mask) marks += pixel;
-          marks /= mask.length;
+          marks = markArea(mask);
+          referenceBoundsRef.current = boundsRef.current;
         }
         const moment: SlidCapture = {
           id: crypto.randomUUID(),
@@ -191,9 +215,53 @@ export function useSlidSession({
           auto: reason !== "manual",
           reason,
           marks,
+          refinements: 0,
+          completedAtMs: Date.now() - startedAtRef.current - pausedTotalRef.current,
         };
         setCaptures((prev) => [...prev, moment]);
         setLastMoment(moment);
+      } catch {
+        // A failed frame must never end the session — the next tick tries again.
+      } finally {
+        capturingRef.current = false;
+      }
+    },
+    [videoRef],
+  );
+
+  /**
+   * The same topic, more complete. The moment already on the timeline keeps its
+   * place and its starting time, and takes the fuller picture — which is what
+   * the student actually wants from a slide that built up over a minute.
+   */
+  const refineCapture = useCallback(
+    async (sample: Uint8Array | null) => {
+      const video = videoRef.current;
+      if (!video || capturingRef.current) return;
+      capturingRef.current = true;
+      try {
+        const { blob } = await capturePhotoFromVideo(video);
+        const reference = sample ?? sampleFrame(video);
+        let marks = 0;
+        if (reference) {
+          const mask = markMask(reference);
+          lastCapturedMarksRef.current = mask;
+          marks = markArea(mask);
+          referenceBoundsRef.current = boundsRef.current;
+        }
+        setCaptures((previous) => {
+          if (previous.length === 0) return previous;
+          const last = previous[previous.length - 1];
+          const refined: SlidCapture = {
+            ...last,
+            blob,
+            marks,
+            refinements: last.refinements + 1,
+            completedAtMs:
+              Date.now() - startedAtRef.current - pausedTotalRef.current,
+          };
+          return [...previous.slice(0, -1), refined];
+        });
       } catch {
         // A failed frame must never end the session — the next tick tries again.
       } finally {
@@ -303,15 +371,27 @@ export function useSlidSession({
       // leaving and arriving in equal measure. They differ everywhere else:
       // moving the camera also moves the bezel, the desk and the wall, and a
       // new slide leaves all of that exactly where it was.
-      const region = boundsRef.current;
-      const outside = contentDelta(reference, marks, region, "outside");
+      // The region tracks the content, so it moves when the content does. A
+      // slide advancing shrinks or grows the box, and measuring "outside" from
+      // the new box alone counted the old content as periphery — every slide
+      // change looked like the camera had been moved, and was swallowed. The
+      // union of both boxes is the part that genuinely belongs to the room.
+      // Everything is measured over the same region: the box holding both the
+      // old content and the new. A slide with fewer lines than the one before
+      // shrinks the box, and measuring only the new box hid the lines that had
+      // gone — a slide change registered a 7 % loss instead of 27 %.
+      const content = unionBounds(referenceBoundsRef.current, boundsRef.current);
+      const outside = contentDelta(reference, marks, content, "outside");
       if (outside.added + outside.removed > REFRAMED) {
         lastCapturedMarksRef.current = marks;
         return;
       }
 
-      const reason = classifyChange(contentDelta(reference, marks, region));
-      if (!reason) {
+      const decision = decideMoment(
+        contentDelta(reference, marks, content),
+        markArea(reference, content),
+      );
+      if (!decision) {
         // Same content as the last moment: skip it and count the noise the
         // student was spared from reviewing later.
         setStats((prev) => ({
@@ -322,7 +402,8 @@ export function useSlidSession({
       }
 
       stableCountRef.current = 0;
-      void takeCapture(reason, sample);
+      if (decision.refine) void refineCapture(sample);
+      else void takeCapture(decision.reason, sample);
     }, TICK_MS);
 
     return () => clearInterval(interval);
@@ -338,6 +419,7 @@ export function useSlidSession({
     pausedTotalRef.current = 0;
     lastSampleRef.current = null;
     lastCapturedMarksRef.current = null;
+    referenceBoundsRef.current = null;
     stableCountRef.current = 0;
     sceneArmedRef.current = alreadyConfirmed;
     sceneOkRef.current = alreadyConfirmed ? SCENE_ARM_TICKS : 0;
@@ -408,29 +490,42 @@ export function useSlidSession({
 }
 
 /**
- * What kind of change this is — or none, which is the answer most of the time.
+ * What this change means for the class, or nothing, which is the answer most
+ * of the time.
  *
- * Someone writing adds marks and removes none. Nudging the camera, a shifting
- * shadow or sensor noise add and remove in comparable amounts. Testing the
- * direction of the change rather than its size is what separates the two.
+ * Three outcomes, and the middle one is the whole point. Content replaced is a
+ * new topic. Content *added* to what is already kept is the same topic getting
+ * more complete — the bullets of a slide arriving one by one, the lecturer
+ * writing the second line under the first — and the moment already saved is
+ * refined rather than duplicated. Everything else is a cursor, an animation,
+ * a flicker: not a learning event.
  */
-function classifyChange({ added, removed }: ContentDelta): MomentReason | null {
-  // Measured inside the content only, so marks leaving and arriving together
-  // can mean what it usually means in a lecture: the surface was replaced.
-  // This is the primary case — a student watching a projector — and it was
-  // being discarded as camera shake.
-  if (
-    added >= MIN_CHANGE &&
-    removed >= MIN_CHANGE &&
-    added + removed >= SURFACE_REPLACED
-  ) {
-    return "novo-slide";
+interface MomentDecision {
+  refine: boolean;
+  reason: MomentReason;
+}
+
+function decideMoment(
+  { added, removed }: ContentDelta,
+  contentArea: number,
+): MomentDecision | null {
+  // Nothing kept yet: the first steady surface is the starting state.
+  if (contentArea <= 0) return { refine: false, reason: "novo-topico" };
+
+  const growth = added / contentArea;
+  const loss = removed / contentArea;
+
+  if (removed >= MIN_CHANGE && loss >= REPLACED_RATIO) {
+    // Wiped and rewritten, or the slide moved on.
+    return {
+      refine: false,
+      reason: added >= MIN_CHANGE ? "novo-slide" : "novo-topico",
+    };
   }
-  if (removed >= MIN_CHANGE && removed > added * DIRECTION_DOMINANCE) {
-    return "novo-topico";
+
+  if (added >= MIN_CHANGE && growth >= GROWTH_RATIO) {
+    return { refine: true, reason: "novo-conteudo" };
   }
-  if (added >= MIN_CHANGE && added > removed * DIRECTION_DOMINANCE) {
-    return "novo-conteudo";
-  }
+
   return null;
 }

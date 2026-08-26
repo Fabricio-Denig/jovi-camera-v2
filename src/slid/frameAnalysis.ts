@@ -276,6 +276,56 @@ export function readScene(gray: Uint8Array): SceneSignals {
   return { writtenRows, runDensity, isStudy, bounds };
 }
 
+/**
+ * The box covering both, so a region that moved with its content is not
+ * mistaken for the camera having moved.
+ */
+export function unionBounds(
+  a: ContentBounds | null,
+  b: ContentBounds | null,
+): ContentBounds | null {
+  if (!a) return b;
+  if (!b) return a;
+  const x = Math.min(a.x, b.x);
+  const y = Math.min(a.y, b.y);
+  return {
+    x,
+    y,
+    width: Math.max(a.x + a.width, b.x + b.width) - x,
+    height: Math.max(a.y + a.height, b.y + b.height) - y,
+  };
+}
+
+/**
+ * How much content sits on the surface, as a share of the frame.
+ *
+ * Measured inside the content region, never over the whole frame: a laptop's
+ * keyboard, bezel and the edge of its screen are all marks too, and counting
+ * them made a slide's text 0.6 % of a 19 % total. Every ratio built on that
+ * came out near zero, and a whole slide changing read as nothing happening.
+ */
+export function markArea(
+  mask: Uint8Array,
+  region?: ContentBounds | null,
+): number {
+  if (!region) {
+    let marks = 0;
+    for (const pixel of mask) marks += pixel;
+    return marks / mask.length;
+  }
+
+  const x0 = Math.max(0, Math.round(region.x * SAMPLE_W));
+  const x1 = Math.min(SAMPLE_W, Math.round((region.x + region.width) * SAMPLE_W));
+  const y0 = Math.max(0, Math.round(region.y * SAMPLE_H));
+  const y1 = Math.min(SAMPLE_H, Math.round((region.y + region.height) * SAMPLE_H));
+
+  let marks = 0;
+  for (let y = y0; y < y1; y++) {
+    for (let x = x0; x < x1; x++) marks += mask[y * SAMPLE_W + x];
+  }
+  return marks / mask.length;
+}
+
 export interface ContentDelta {
   /** Share of the frame that gained marks — something was written or shown. */
   added: number;

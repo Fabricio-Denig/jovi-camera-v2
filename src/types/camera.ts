@@ -32,6 +32,10 @@ export interface CapturedMedia {
      */
     label?: string;
     detail?: string | null;
+    /** The kind of content, in one word. */
+    category?: string | null;
+    /** How long the topic kept growing before it settled. */
+    spanMs?: number;
     /*
      * Class-level facts, repeated on every moment. Denormalised on purpose: a
      * class is then one query and no second object store, and the subject was

@@ -13,6 +13,8 @@ export interface ClassMoment {
   atMs: number;
   label: string;
   detail: string | null;
+  category: string | null;
+  spanMs: number;
 }
 
 export interface ClassRecord {
@@ -36,6 +38,8 @@ function toRecord(id: string, items: CapturedMedia[]): ClassRecord {
       atMs: media.session?.atMs ?? 0,
       label: media.session?.label || LEGACY_LABEL,
       detail: media.session?.detail ?? null,
+      category: media.session?.category ?? null,
+      spanMs: media.session?.spanMs ?? 0,
     }))
     .sort((a, b) => a.atMs - b.atMs);
 
