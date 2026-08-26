@@ -50,18 +50,21 @@ const FALLBACK_LABELS: Record<MomentReason, string> = {
 };
 
 /**
- * What happened in the class, not what changed on the screen. "Novo slide"
- * describes the camera's experience; "Conceito apresentado" describes the
- * student's, and it is just as true.
+ * The fallback title, used only when the surface carried no heading of its own.
+ *
+ * "Nova fórmula" tells the student what the camera noticed changing, which is
+ * the camera's experience of the class rather than theirs. A moment is now a
+ * topic, so every row is new by construction and saying so adds nothing —
+ * these say what kind of thing the topic was.
  */
-const KIND_LABELS: Record<ContentKind, { first: string; added: string }> = {
-  formula: { first: "Fórmula apresentada", added: "Nova fórmula" },
-  codigo: { first: "Código apresentado", added: "Novo trecho de código" },
-  datas: { first: "Datas apresentadas", added: "Novas datas" },
-  lista: { first: "Lista de tópicos", added: "Itens novos na lista" },
-  tabela: { first: "Tabela apresentada", added: "Tabela atualizada" },
-  definicao: { first: "Definição apresentada", added: "Nova definição" },
-  texto: { first: "Conceito apresentado", added: "Novo conceito" },
+const KIND_LABELS: Record<ContentKind, string> = {
+  formula: "Fórmula apresentada",
+  codigo: "Código apresentado",
+  datas: "Datas apresentadas",
+  lista: "Lista de tópicos",
+  tabela: "Tabela apresentada",
+  definicao: "Definição apresentada",
+  texto: "Conceito apresentado",
 };
 
 /** The category shown beside a moment, in one word. */
@@ -116,10 +119,14 @@ export function describeMoment(
     return { label: FALLBACK_LABELS.manual, detail, kind };
   }
 
-  const labels = KIND_LABELS[kind];
+
+  // A slide or a board almost always names its own topic, and that heading is
+  // a far better title than any category ever is: "Leis de Newton" instead of
+  // "Nova fórmula". It is a line the lecturer wrote, so nothing is invented.
+  const heading = pickHeading(lines);
   return {
-    label: previousLines.length > 0 ? labels.added : labels.first,
-    detail,
+    label: heading ?? KIND_LABELS[kind],
+    detail: heading && detail === heading ? null : detail,
     kind,
   };
 }
@@ -150,6 +157,33 @@ function classifyContent(lines: string[]): ContentKind {
   if (hits(isListItem) >= 2) return "lista";
   if (hits(isDefinition) >= 1) return "definicao";
   return "texto";
+}
+
+/**
+ * The topic's own name, when the surface carries one.
+ *
+ * A heading sits at the top and reads as language: short, no operators, no
+ * bullet marker. Taking the first line that qualifies matches how slides and
+ * boards are written, and anything that fails simply leaves the title to the
+ * category.
+ */
+/** Long enough for a real lecture heading, short enough to still be a title. */
+const HEADING_MAX = 54;
+
+function pickHeading(lines: string[]): string | null {
+  for (const line of lines.slice(0, 3)) {
+    // Structure is tested on the raw line: tidying collapses the runs of
+    // spaces that are the only sign a line came out of a table, and a column
+    // header then reads as a perfectly good heading.
+    if (isTableRow(line) || isListItem(line)) continue;
+    const tidied = clean(line);
+    if (!tidied) continue;
+    if (tidied.length < 6 || tidied.length > HEADING_MAX) continue;
+    if (isFormula(tidied) || isCode(tidied)) continue;
+    if (!readsAsLanguage(tidied)) continue;
+    return capitalise(tidied);
+  }
+  return null;
 }
 
 /** The line worth showing is the one that justified the label. */
