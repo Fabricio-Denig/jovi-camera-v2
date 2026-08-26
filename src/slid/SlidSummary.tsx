@@ -22,6 +22,7 @@ export interface SavedClass {
   subject: string;
   moments: { id: string; label: string; detail: string | null }[];
   topics: string[];
+  kinds: [string, number][];
 }
 
 interface SlidSummaryProps {
@@ -146,24 +147,19 @@ export function SlidSummary({
           <div className="flex flex-col gap-6">
             {/* 1. O que aconteceu, em uma frase de fatos. */}
             <p className="text-[15px] leading-relaxed text-ink">
-              {minutes} {minutes === 1 ? "minuto" : "minutos"} de aula{" "}
-              {minutes === 1 ? "virou" : "viraram"}{" "}
               <span className="font-semibold">
                 {captures.length}{" "}
                 {captures.length === 1
                   ? "momento importante"
                   : "momentos importantes"}
-              </span>
+              </span>{" "}
+              em {minutes} {minutes === 1 ? "minuto" : "minutos"} de aula.
               {stats.skippedDuplicates > 0 && (
-                <>
-                  , enquanto {stats.skippedDuplicates}{" "}
-                  {stats.skippedDuplicates === 1 ? "vez" : "vezes"} em que nada
-                  mudou {stats.skippedDuplicates === 1 ? "foi" : "foram"}{" "}
-                  ignorad
-                  {stats.skippedDuplicates === 1 ? "a" : "as"}
-                </>
+                <span className="text-ink-muted">
+                  {" "}
+                  O resto a câmera deixou passar.
+                </span>
               )}
-              .
             </p>
 
             {/* 2. Do que a aula tratou — linhas que o professor escreveu. */}
@@ -235,6 +231,17 @@ export function SlidSummary({
       </div>
 
       <footer className="border-t border-line px-5 pb-[max(16px,env(safe-area-inset-bottom))] pt-3">
+        {captures.length === 0 ? (
+          // Saving nothing announced a class that does not exist. The only
+          // honest action here is going back to the camera.
+          <button
+            type="button"
+            onClick={onDiscard}
+            className="min-h-11 w-full rounded-xl bg-surface-2 py-3 text-sm font-medium text-ink active:opacity-70"
+          >
+            Voltar para a câmera
+          </button>
+        ) : (
         <button
           type="button"
           onClick={() =>
@@ -246,12 +253,14 @@ export function SlidSummary({
                 detail,
               })),
               topics,
+              kinds: kinds.map(([kind, count]) => [kind, count]),
             })
           }
           className="min-h-11 w-full rounded-xl bg-accent py-3 text-sm font-medium text-accent-ink active:opacity-80"
         >
           Salvar aula
         </button>
+        )}
       </footer>
     </div>
   );

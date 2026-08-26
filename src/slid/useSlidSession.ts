@@ -318,15 +318,20 @@ export function useSlidSession({
   }, [status, videoRef, takeCapture]);
 
   const start = useCallback(() => {
+    // Arriving from the suggestion means the scene was already confirmed three
+    // ticks in a row. Making the session re-earn that from zero opens it with
+    // "procurando o conteúdo" over the very content it just recognised — the
+    // narrative breaks in the first second, exactly where it matters most.
+    const alreadyConfirmed = detectionCountRef.current >= DETECTION_TICKS;
     startedAtRef.current = Date.now();
     pausedTotalRef.current = 0;
     lastSampleRef.current = null;
     lastCapturedMarksRef.current = null;
     stableCountRef.current = 0;
-    sceneArmedRef.current = false;
-    sceneOkRef.current = 0;
+    sceneArmedRef.current = alreadyConfirmed;
+    sceneOkRef.current = alreadyConfirmed ? SCENE_ARM_TICKS : 0;
     sceneMissRef.current = 0;
-    setSceneReady(false);
+    setSceneReady(alreadyConfirmed);
     setCaptures([]);
     setStats({ analysed: 0, skippedDuplicates: 0 });
     setLastMoment(null);

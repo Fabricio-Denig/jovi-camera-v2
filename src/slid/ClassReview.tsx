@@ -28,7 +28,7 @@ export function ClassReview({ record, startAt, onClose }: ClassReviewProps) {
   const atEnd = index === record.moments.length - 1;
 
   return (
-    <div className="absolute inset-0 z-50 flex flex-col bg-black">
+    <div className="fixed inset-0 z-[60] flex flex-col bg-black">
       <header className="flex items-center justify-between gap-3 px-4 pb-3 pt-[max(14px,env(safe-area-inset-top))]">
         <div className="min-w-0">
           <p className="truncate text-[13px] font-medium text-white">

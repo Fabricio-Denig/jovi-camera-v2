@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { MomentRow } from "./MomentRow";
 import { ClassReview } from "./ClassReview";
 import { getClassById, renameClass, type ClassRecord } from "./classes";
+import { KIND_NAMES, type ContentKind } from "./readContent";
 import { formatClock } from "../shared/lib/time";
 
 interface ClassPageProps {
@@ -72,9 +73,6 @@ export function ClassPage({ classId, onClose }: ClassPageProps) {
       <header className="border-b border-line px-5 pb-4 pt-[max(18px,env(safe-area-inset-top))]">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-accent">
-              Sua aula
-            </p>
             <input
               value={name}
               onChange={(event) => setName(event.target.value)}
@@ -94,17 +92,11 @@ export function ClassPage({ classId, onClose }: ClassPageProps) {
           </button>
         </div>
 
-        <p className="mt-2 px-1 text-[13px] text-ink-muted">
+        {/* One quiet line instead of a block: the curation is context for the
+            class, not the headline above it. */}
+        <p className="mt-1 px-1 text-[13px] text-ink-muted">
           {formatDate(record.savedAt)} · {formatClock(record.durationMs)} de aula
         </p>
-
-        {record.skippedDuplicates > 0 && (
-          <p className="mt-3 rounded-xl bg-surface-2 px-3.5 py-2.5 text-[12.5px] leading-snug text-ink-muted">
-            A câmera acompanhou a aula inteira e ignorou{" "}
-            {record.skippedDuplicates} vezes em que nada mudou, para você não
-            revisar a mesma coisa duas vezes.
-          </p>
-        )}
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
@@ -114,6 +106,24 @@ export function ClassPage({ classId, onClose }: ClassPageProps) {
           </p>
         ) : (
           <div className="flex flex-col gap-6">
+            {record.kinds.length > 0 && (
+              <section>
+                <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
+                  Conteúdo reconhecido
+                </h2>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {record.kinds.map(([kind, count]) => (
+                    <span
+                      key={kind}
+                      className="rounded-full bg-accent/12 px-3 py-1.5 text-[12.5px] font-medium text-accent"
+                    >
+                      {count} {nameKind(kind, count)}
+                    </span>
+                  ))}
+                </div>
+              </section>
+            )}
+
             {record.topics.length > 0 && (
               <section className="rounded-2xl bg-surface-2 px-4 py-4">
                 <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
@@ -184,6 +194,12 @@ export function ClassPage({ classId, onClose }: ClassPageProps) {
       )}
     </div>
   );
+}
+
+/** Stored kinds come back as plain strings; anything unknown simply says nothing. */
+function nameKind(kind: string, count: number): string {
+  const names = KIND_NAMES[kind as ContentKind];
+  return names ? names[count === 1 ? 0 : 1] : "";
 }
 
 function formatDate(at: number): string {

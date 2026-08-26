@@ -32,6 +32,8 @@ interface CameraShellProps {
   onBoardDetected: (detected: boolean) => void;
   onOpenClass: (classId: string) => void;
   onOpenGallery: () => void;
+  /** The summary takes over the screen, navigation included. */
+  onReviewOpenChange: (open: boolean) => void;
 }
 
 /** The camera screen: permission, preview, capture and local persistence. */
@@ -43,6 +45,7 @@ export function CameraShell({
   onBoardDetected,
   onOpenClass,
   onOpenGallery,
+  onReviewOpenChange,
 }: CameraShellProps) {
   const {
     videoRef,
@@ -79,6 +82,12 @@ export function CameraShell({
   useEffect(() => {
     onBoardDetected(slid.boardDetected);
   }, [slid.boardDetected, onBoardDetected]);
+
+  const [confirmingFinish, setConfirmingFinish] = useState(false);
+  const summaryOpen = isSlid && slid.status === "finished";
+  useEffect(() => {
+    onReviewOpenChange(summaryOpen || confirmingFinish);
+  }, [summaryOpen, confirmingFinish, onReviewOpenChange]);
 
   // Entering SliD from the mode bar starts the session directly, so the mode
   // and the session never disagree about what is happening.
@@ -209,7 +218,7 @@ export function CameraShell({
           bounds={slid.contentBounds}
           videoRef={videoRef}
           facing={facing}
-          label="Conteúdo identificado"
+          label="Aula detectada"
         />
       )}
 
@@ -246,15 +255,16 @@ export function CameraShell({
           onPause={slid.pause}
           onResume={slid.resume}
           onFinish={slid.finish}
+          onConfirmingChange={setConfirmingFinish}
         />
       )}
 
-      {isSlid && slid.status === "finished" && (
+      {summaryOpen && (
         <SlidSummary
           captures={slid.captures}
           stats={slid.stats}
           elapsedMs={slid.elapsedMs}
-          onSave={async ({ subject, moments, topics }) => {
+          onSave={async ({ subject, moments, topics, kinds }) => {
             const sessionId = crypto.randomUUID();
             const savedAt = Date.now();
             const described = new Map(moments.map((m) => [m.id, m]));
@@ -279,6 +289,7 @@ export function CameraShell({
                   skippedDuplicates: slid.stats.skippedDuplicates,
                   savedAt,
                   topics,
+                  kinds,
                 },
               });
             }
@@ -311,7 +322,7 @@ export function CameraShell({
           {/* Scrim behind the controls: white text over a bright scene — a
               whiteboard, a sunlit wall — is otherwise unreadable, and the
               whiteboard is exactly where SliD is used. */}
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[5] h-56 bg-gradient-to-t from-black/75 via-black/35 to-transparent" />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[5] h-64 bg-gradient-to-t from-black/80 via-black/55 to-transparent" />
 
           <div className="absolute inset-x-0 bottom-0 z-10 flex flex-col items-center gap-5 pb-6">
             <ModeTabs
@@ -357,7 +368,9 @@ export function CameraShell({
       )}
 
       {savedClass && (
-        <div className="absolute inset-x-0 top-0 z-40 flex justify-center pt-[max(70px,calc(env(safe-area-inset-top)+54px))]">
+        // Anchored to the bottom: at the top it landed on the first class card
+        // in the library and covered the very thing it was confirming.
+        <div className="absolute inset-x-0 bottom-4 z-40 flex justify-center px-4">
           {/* Saving a class and then hiding it is the moment a student decides
               the app forgot. The way in is the confirmation itself. */}
           <button

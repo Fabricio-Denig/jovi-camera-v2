@@ -20,6 +20,13 @@ export function AppShell() {
   const [galleryRefresh, setGalleryRefresh] = useState(0);
   const [boardDetected, setBoardDetected] = useState(false);
   const [openClassId, setOpenClassId] = useState<string | null>(null);
+  /**
+   * The review surfaces are documents, not tabs. Leaving the app's navigation
+   * under a finished class makes it read as one more screen of a camera app,
+   * when the whole point of that screen is that the class became something the
+   * student keeps.
+   */
+  const [reviewOpen, setReviewOpen] = useState(false);
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-canvas">
@@ -33,6 +40,7 @@ export function AppShell() {
             onBoardDetected={setBoardDetected}
             onOpenClass={setOpenClassId}
             onOpenGallery={() => dispatch({ type: "select-tab", tab: "gallery" })}
+            onReviewOpenChange={setReviewOpen}
           />
         </div>
 
@@ -66,11 +74,13 @@ export function AppShell() {
         />
       </div>
 
-      <BottomNav
-        tab={state.tab}
-        sheetOpen={state.openSheet !== null}
-        onSelect={(tab) => dispatch({ type: "select-tab", tab })}
-      />
+      {!reviewOpen && openClassId === null && (
+        <BottomNav
+          tab={state.tab}
+          sheetOpen={state.openSheet !== null}
+          onSelect={(tab) => dispatch({ type: "select-tab", tab })}
+        />
+      )}
     </div>
   );
 }

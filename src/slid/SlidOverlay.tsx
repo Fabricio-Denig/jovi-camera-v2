@@ -17,6 +17,8 @@ interface SlidOverlayProps {
   onPause: () => void;
   onResume: () => void;
   onFinish: () => void;
+  /** The confirmation owns the whole screen, navigation included. */
+  onConfirmingChange: (confirming: boolean) => void;
 }
 
 /** How long the controls stay up after a tap before the screen goes quiet again. */
@@ -49,6 +51,7 @@ export function SlidOverlay({
   onPause,
   onResume,
   onFinish,
+  onConfirmingChange,
 }: SlidOverlayProps) {
   const running = status === "running";
   // Saying "acompanhando a aula" while the camera faces a wall is the kind of
@@ -63,6 +66,16 @@ export function SlidOverlay({
     const timer = setTimeout(() => setHintVisible(false), HINT_MS);
     return () => clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    onConfirmingChange(confirming);
+  }, [confirming, onConfirmingChange]);
+
+  // Confirming ends the session, which unmounts this overlay in the same
+  // commit — the effect above never gets to report the dialog closing, and the
+  // app's navigation stayed hidden for good. Releasing it on unmount is the
+  // only place that always runs.
+  useEffect(() => () => onConfirmingChange(false), [onConfirmingChange]);
 
   // The controls retire on their own, so the screen returns to the state the
   // product is arguing for without the student having to dismiss anything.
