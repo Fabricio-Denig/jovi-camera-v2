@@ -85,8 +85,10 @@ const MIN_CHANGE = 0.0025;
 /** How far one direction must outweigh the other before it means anything.
  *  Writing measures ∞; nudging the camera measures 1.05. */
 const DIRECTION_DOMINANCE = 2;
-/** A symmetric change this large is the camera having moved, not the content. */
-const REFRAMED = 0.01;
+/** Change outside the content at this scale means the camera moved, not the class. */
+const REFRAMED = 0.006;
+/** Marks leaving and arriving together at this scale: the surface was replaced. */
+const SURFACE_REPLACED = 0.008;
 
 /** Consecutive positive readings before the class suggestion appears. */
 const DETECTION_TICKS = 3;
@@ -160,6 +162,7 @@ export function useSlidSession({
   const lastSampleRef = useRef<Uint8Array | null>(null);
   const stableCountRef = useRef(0);
   const sceneArmedRef = useRef(false);
+  const boundsRef = useRef<ContentBounds | null>(null);
   const sceneOkRef = useRef(0);
   const sceneMissRef = useRef(0);
   const detectionCountRef = useRef(0);
@@ -251,6 +254,7 @@ export function useSlidSession({
       if (scene.isStudy) {
         sceneMissRef.current = 0;
         sceneOkRef.current++;
+        boundsRef.current = scene.bounds;
         setContentBounds(scene.bounds);
         if (sceneOkRef.current >= SCENE_ARM_TICKS && !sceneArmedRef.current) {
           sceneArmedRef.current = true;
@@ -294,22 +298,19 @@ export function useSlidSession({
         return;
       }
 
-      const change = contentDelta(reference, marks);
-
-      // The camera was nudged: everything shifted by a pixel, so marks appear
-      // and disappear in equal measure. Re-anchor quietly instead of staying
-      // blocked against a reference that no longer lines up.
-      if (
-        change.added > REFRAMED &&
-        change.removed > REFRAMED &&
-        change.added < change.removed * DIRECTION_DOMINANCE &&
-        change.removed < change.added * DIRECTION_DOMINANCE
-      ) {
+      // Where the change happened decides what it was. A slide advancing and a
+      // camera being nudged look identical from the content alone — marks
+      // leaving and arriving in equal measure. They differ everywhere else:
+      // moving the camera also moves the bezel, the desk and the wall, and a
+      // new slide leaves all of that exactly where it was.
+      const region = boundsRef.current;
+      const outside = contentDelta(reference, marks, region, "outside");
+      if (outside.added + outside.removed > REFRAMED) {
         lastCapturedMarksRef.current = marks;
         return;
       }
 
-      const reason = classifyChange(change);
+      const reason = classifyChange(contentDelta(reference, marks, region));
       if (!reason) {
         // Same content as the last moment: skip it and count the noise the
         // student was spared from reviewing later.
@@ -414,12 +415,22 @@ export function useSlidSession({
  * direction of the change rather than its size is what separates the two.
  */
 function classifyChange({ added, removed }: ContentDelta): MomentReason | null {
-  const gained = added >= MIN_CHANGE && added > removed * DIRECTION_DOMINANCE;
-  const lost = removed >= MIN_CHANGE && removed > added * DIRECTION_DOMINANCE;
-
-  // Replaced wholesale while staying one-directional: the slide advanced.
-  if (lost && added >= MIN_CHANGE) return "novo-slide";
-  if (lost) return "novo-topico";
-  if (gained) return "novo-conteudo";
+  // Measured inside the content only, so marks leaving and arriving together
+  // can mean what it usually means in a lecture: the surface was replaced.
+  // This is the primary case — a student watching a projector — and it was
+  // being discarded as camera shake.
+  if (
+    added >= MIN_CHANGE &&
+    removed >= MIN_CHANGE &&
+    added + removed >= SURFACE_REPLACED
+  ) {
+    return "novo-slide";
+  }
+  if (removed >= MIN_CHANGE && removed > added * DIRECTION_DOMINANCE) {
+    return "novo-topico";
+  }
+  if (added >= MIN_CHANGE && added > removed * DIRECTION_DOMINANCE) {
+    return "novo-conteudo";
+  }
   return null;
 }
