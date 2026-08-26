@@ -17,6 +17,8 @@ export interface MomentDescription {
   detail: string | null;
   /** The structure recognised, so the class can say what kinds of content it holds. */
   kind: ContentKind | null;
+  /** The topic's own name, when the surface carried one. Null means the label is a fallback. */
+  heading: string | null;
 }
 
 /**
@@ -42,9 +44,17 @@ interface DescribeOptions {
   confidence?: number;
 }
 
+/**
+ * Used when the surface carried nothing readable.
+ *
+ * Deliberately generic. The capture rule knows that the surface was replaced;
+ * it does not know whether that surface was a projector, a whiteboard or a
+ * sheet of paper, and "Novo slide" claimed one of them. A graceful generic is
+ * better than a confident guess that is wrong a third of the time.
+ */
 const FALLBACK_LABELS: Record<MomentReason, string> = {
-  "novo-topico": "Novo tópico no quadro",
-  "novo-slide": "Novo slide",
+  "novo-topico": "Momento importante",
+  "novo-slide": "Momento importante",
   "novo-conteudo": "Conteúdo acrescentado",
   manual: "Você marcou este momento",
 };
@@ -87,7 +97,12 @@ export function describeMoment(
   // Nothing read cleanly. Handwriting defeats OCR routinely, so the honest
   // answer is the reason the moment was kept — never a guess at what it was.
   if (lines.length === 0)
-    return { label: FALLBACK_LABELS[reason], detail: null, kind: null };
+    return {
+      label: FALLBACK_LABELS[reason],
+      detail: null,
+      kind: null,
+      heading: null,
+    };
 
   // What this moment added, rather than everything the surface still carries.
   const previousLines = previousText ? toLines(previousText) : [];
@@ -116,7 +131,7 @@ export function describeMoment(
       : null;
 
   if (reason === "manual") {
-    return { label: FALLBACK_LABELS.manual, detail, kind };
+    return { label: FALLBACK_LABELS.manual, detail, kind, heading: null };
   }
 
 
@@ -128,6 +143,7 @@ export function describeMoment(
     label: heading ?? KIND_LABELS[kind],
     detail: heading && detail === heading ? null : detail,
     kind,
+    heading,
   };
 }
 
@@ -371,6 +387,82 @@ function overlap(a: Set<string>, b: Set<string>): number {
   let shared = 0;
   for (const word of b) if (a.has(word)) shared++;
   return shared / Math.min(a.size, b.size);
+}
+
+/**
+ * The class in a sentence, assembled from what was actually captured.
+ *
+ * Every clause is backed by a number or by a line that was on the surface: how
+ * many moments, how long, which structures were recognised, which topics the
+ * class moved through. Nothing here knows the subject, the teacher or the
+ * course, and nothing here guesses at them.
+ *
+ * When the reading was too weak to name topics, the sentence says so and
+ * describes what it does have. That is the honest version of this screen, and
+ * it is also the one that survives a lecture hall with bad light.
+ */
+export interface ClassOverview {
+  moments: number;
+  durationMs: number;
+  /** Topic names in the order they appeared, already filtered for quality. */
+  headings: string[];
+  /** Recognised structures with how often each appeared. */
+  kinds: [ContentKind, number][];
+}
+
+export function summariseClass({
+  moments,
+  durationMs,
+  headings,
+  kinds,
+}: ClassOverview): string {
+  if (moments === 0) return "";
+
+  const count =
+    moments === 1 ? "1 momento importante" : `${moments} momentos importantes`;
+  const minutes = Math.max(1, Math.round(durationMs / 60000));
+  const span = `${minutes} ${minutes === 1 ? "minuto" : "minutos"}`;
+
+  // Nothing read cleanly. Say what the class does have rather than dressing up
+  // an absence — the captures are still in order, and that is worth something.
+  if (headings.length === 0) {
+    return (
+      `Esta aula registrou ${count} em ${span}. ` +
+      "Alguns textos não foram reconhecidos com confiança, mas as capturas " +
+      "ficaram organizadas em ordem para revisão."
+    );
+  }
+
+  const focus = describeFocus(kinds);
+  const opening = focus
+    ? `Esta aula teve ${count} em ${span}, com foco em ${focus}.`
+    : `Esta aula teve ${count} em ${span}.`;
+
+  const unique = [...new Set(headings)];
+  if (unique.length === 1) {
+    return `${opening} O conteúdo girou em torno de ${unique[0]}.`;
+  }
+  if (unique.length === 2) {
+    return `${opening} Começou com ${unique[0]} e terminou com ${unique[1]}.`;
+  }
+  return (
+    `${opening} Começou com ${unique[0]}, passou por ${unique[1]} ` +
+    `e terminou com ${unique[unique.length - 1]}.`
+  );
+}
+
+/**
+ * The one or two structures that dominated, named the way a student would.
+ * A structure seen once is not a focus — mentioning it produced "fórmulas e
+ * anotação", which reads as a sentence assembled by a machine.
+ */
+function describeFocus(kinds: [ContentKind, number][]): string | null {
+  const ranked = [...kinds].sort((a, b) => b[1] - a[1]);
+  const strong = ranked.filter(([, count]) => count >= 2).slice(0, 2);
+  const chosen = strong.length > 0 ? strong : ranked.slice(0, 1);
+  if (chosen.length === 0) return null;
+  const names = chosen.map(([kind, count]) => KIND_NAMES[kind][count === 1 ? 0 : 1]);
+  return names.length === 1 ? names[0] : `${names[0]} e ${names[1]}`;
 }
 
 /** Below this, a reading is too shaky to put in the largest text on the screen. */

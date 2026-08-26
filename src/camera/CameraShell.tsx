@@ -282,7 +282,7 @@ export function CameraShell({
           captures={slid.captures}
           stats={slid.stats}
           elapsedMs={slid.elapsedMs}
-          onSave={async ({ subject, moments, topics, kinds }) => {
+          onSave={async ({ subject, moments, topics, kinds, overview }) => {
             const sessionId = crypto.randomUUID();
             const savedAt = Date.now();
             const described = new Map(moments.map((m) => [m.id, m]));
@@ -310,6 +310,7 @@ export function CameraShell({
                   savedAt,
                   topics,
                   kinds,
+                  overview,
                 },
               });
             }

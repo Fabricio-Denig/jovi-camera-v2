@@ -25,6 +25,7 @@ export interface ClassRecord {
   skippedDuplicates: number;
   topics: string[];
   kinds: [string, number][];
+  overview: string;
   moments: ClassMoment[];
 }
 
@@ -52,6 +53,7 @@ function toRecord(id: string, items: CapturedMedia[]): ClassRecord {
     skippedDuplicates: first?.skippedDuplicates ?? 0,
     topics: first?.topics ?? [],
     kinds: first?.kinds ?? [],
+    overview: first?.overview ?? "",
     moments,
   };
 }

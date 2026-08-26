@@ -6,6 +6,7 @@ import {
   KIND_TAGS,
   describeMoment,
   suggestSubject,
+  summariseClass,
   summariseTopics,
   type ContentKind,
 } from "./readContent";
@@ -31,6 +32,7 @@ export interface SavedClass {
   }[];
   topics: string[];
   kinds: [string, number][];
+  overview: string;
 }
 
 interface SlidSummaryProps {
@@ -113,6 +115,19 @@ export function SlidSummary({
 
   const minutes = Math.max(1, Math.round(elapsedMs / 60000));
 
+  const overview = useMemo(
+    () =>
+      summariseClass({
+        moments: captures.length,
+        durationMs: elapsedMs,
+        headings: described
+          .map((moment) => moment.heading)
+          .filter((heading): heading is string => Boolean(heading)),
+        kinds,
+      }),
+    [captures.length, elapsedMs, described, kinds],
+  );
+
   return (
     <div className="absolute inset-0 z-50 flex flex-col bg-canvas">
       <header className="border-b border-line px-5 pb-4 pt-[max(18px,env(safe-area-inset-top))]">
@@ -154,22 +169,16 @@ export function SlidSummary({
           </p>
         ) : (
           <div className="flex flex-col gap-6">
-            {/* 1. O que aconteceu, em uma frase de fatos. */}
-            <p className="text-[15px] leading-relaxed text-ink">
-              <span className="font-semibold">
-                {captures.length}{" "}
-                {captures.length === 1
-                  ? "momento importante"
-                  : "momentos importantes"}
-              </span>{" "}
-              em {minutes} {minutes === 1 ? "minuto" : "minutos"} de aula.
-              {stats.skippedDuplicates > 0 && (
-                <span className="text-ink-muted">
-                  {" "}
-                  A câmera olhou {stats.skippedDuplicates} vezes em que nada
-                  tinha mudado e deixou passar.
-                </span>
-              )}
+            {/* A aula em uma frase, montada só do que foi capturado. */}
+            {overview && (
+              <p className="text-[15px] leading-relaxed text-ink">{overview}</p>
+            )}
+
+            {/* Os números por trás dela. */}
+            <p className="text-[13.5px] leading-relaxed text-ink-muted">
+              {stats.skippedDuplicates > 0
+                ? `A câmera olhou ${stats.skippedDuplicates} vezes em que nada tinha mudado e deixou passar.`
+                : `${minutes} ${minutes === 1 ? "minuto" : "minutos"} acompanhados.`}
             </p>
 
             {/* 2. Do que a aula tratou — linhas que o professor escreveu. */}
@@ -276,6 +285,7 @@ export function SlidSummary({
               })),
               topics,
               kinds: kinds.map(([kind, count]) => [kind, count]),
+              overview,
             })
           }
           className="min-h-11 w-full rounded-xl bg-accent py-3 text-sm font-medium text-accent-ink active:opacity-80"

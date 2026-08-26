@@ -46,6 +46,8 @@ export interface CapturedMedia {
     savedAt?: number;
     /** What the class was about, as lines the lecturer actually wrote. */
     topics?: string[];
+    /** The class in a sentence, assembled from what was captured. */
+    overview?: string;
     /** Structures the camera recognised, as [kind, count] — the class reopens saying what the summary said. */
     kinds?: [string, number][];
   };
