@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { ClassTitle } from "./ClassTitle";
 import { MomentRow } from "./MomentRow";
 import {
   KIND_NAMES,
@@ -115,15 +116,13 @@ export function SlidSummary({
             </p>
             {/* The title is the class itself, not a form field waiting at the
                 bottom of the screen. */}
-            <input
+            <ClassTitle
               value={subjectValue}
-              onChange={(event) => {
-                setEdited(true);
-                setSubject(event.target.value);
-              }}
               placeholder="Nomear esta aula"
-              aria-label="Nome da aula"
-              className="-ml-1 mt-0.5 w-full rounded-lg bg-transparent px-1 text-[22px] font-semibold text-ink placeholder:text-ink-muted/60 focus:bg-surface-2 focus:outline-none"
+              onChange={(next) => {
+                setEdited(true);
+                setSubject(next);
+              }}
             />
           </div>
           <button

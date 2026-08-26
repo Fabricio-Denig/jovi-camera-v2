@@ -386,10 +386,12 @@ export function CameraShell({
               onOpenClass(savedClass.id);
               setSavedClass(null);
             }}
-            className="flex min-h-11 animate-[slid-rise_240ms_ease-out] items-center gap-2 rounded-full bg-accent px-4 py-2 text-[12.5px] font-medium text-accent-ink active:opacity-80"
+            className="flex min-h-11 max-w-full animate-[slid-rise_240ms_ease-out] items-center gap-2 rounded-full bg-accent px-4 py-2 text-[12.5px] font-medium text-accent-ink active:opacity-80"
           >
-            <span>{savedClass.subject} guardada</span>
-            <span className="opacity-70">Ver aula</span>
+            {/* The name is confirmation, not the message: a real class title
+                ran to three lines and turned a toast into a paragraph. */}
+            <span className="truncate">{savedClass.subject}</span>
+            <span className="shrink-0 opacity-70">guardada · Ver aula</span>
           </button>
         </div>
       )}

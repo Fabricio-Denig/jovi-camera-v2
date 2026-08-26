@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { ClassTitle } from "./ClassTitle";
 import { MomentRow } from "./MomentRow";
 import { ClassReview } from "./ClassReview";
 import { getClassById, renameClass, type ClassRecord } from "./classes";
@@ -73,13 +74,11 @@ export function ClassPage({ classId, onClose }: ClassPageProps) {
       <header className="border-b border-line px-5 pb-4 pt-[max(18px,env(safe-area-inset-top))]">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <input
+            <ClassTitle
               value={name}
-              onChange={(event) => setName(event.target.value)}
-              onBlur={commitName}
-              aria-label="Nome da aula"
               placeholder="Nomear esta aula"
-              className="-ml-1 mt-0.5 w-full rounded-lg bg-transparent px-1 text-[22px] font-semibold text-ink placeholder:text-ink-muted/60 focus:bg-surface-2 focus:outline-none"
+              onChange={setName}
+              onCommit={commitName}
             />
           </div>
           <button
