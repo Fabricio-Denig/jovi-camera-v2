@@ -78,9 +78,19 @@ const BACKGROUND_RADIUS = 6;
  */
 const MARK_DELTA = 22;
 
-/** Below this share of a row's width, marks are a vertical object crossing the
- *  frame — a notebook spine, a table edge — and not a line of writing. */
-const ROW_INKED = 0.06;
+/**
+ * A row of writing breaks into many short runs of marks — letters, strokes,
+ * symbols. Everything else that crosses a frame horizontally does not: the
+ * edge of a sheet against a desk, a ruled line, the lid of a laptop are all
+ * one long run. Counting runs rather than marked pixels is what separates
+ * writing from the objects around it.
+ */
+const MIN_RUNS = 4;
+/** A row needs some marks to be a line of writing, and cannot be solid ink. */
+const MIN_ROW_COVER = 0.02;
+const MAX_ROW_COVER = 0.6;
+/** A line of writing is several sample rows tall; a single row is a coincidence. */
+const MIN_BAND = 3;
 
 /** Local mean via an integral image: O(n) whatever the radius. */
 function localBackground(gray: Uint8Array, radius: number): Float64Array {
@@ -133,17 +143,16 @@ export function markMask(gray: Uint8Array): Uint8Array {
 }
 
 export interface SceneSignals {
-  /** Share of the frame covered in marks. */
-  markShare: number;
-  /** Share of rows with no writing in them — the clean surface around it. */
-  gapRatio: number;
+  /** Sample rows belonging to a band of writing. */
+  writtenRows: number;
+  /** Average number of mark runs across those rows — how broken up the writing is. */
+  runDensity: number;
   /** Whether this frame holds study material. */
   isStudy: boolean;
   /**
-   * Where the content sits, as fractions of the frame. Drawn on screen so the
-   * detection can be checked rather than believed: this is the actual extent
-   * of the marks the classifier found, so when it is wrong the student sees it
-   * is wrong.
+   * Where the writing sits, as fractions of the frame. Measured over the bands
+   * alone, so a slide across a room is framed on the slide rather than on the
+   * laptop, the desk and the wall behind it.
    */
   bounds: ContentBounds | null;
 }
@@ -155,92 +164,116 @@ export interface ContentBounds {
   height: number;
 }
 
-/**
- * Share of the marks trimmed from each edge before the box closes. A single
- * stray pixel in a corner would otherwise stretch the frame across the whole
- * view, which reads as a camera that has no idea what it is looking at.
- */
-const BOUNDS_TRIM = 0.02;
-
-function spanOf(counts: Float64Array, total: number, size: number): [number, number] {
-  const cut = total * BOUNDS_TRIM;
-  let seen = 0;
-  let start = 0;
-  while (start < size && seen + counts[start] <= cut) seen += counts[start++];
-  seen = 0;
-  let end = size - 1;
-  while (end > start && seen + counts[end] <= cut) seen += counts[end--];
-  return [start, end];
-}
-
 /*
- * Thresholds measured across the reference scenes at 128×96:
+ * Measured across every reference scene at 128×96:
  *
- *                          marcas   vãos
- *   folha, só o título      0.010   0.96
- *   folha, título+fórmula   0.015   0.93
- *   folha A4 densa          0.056   0.72
- *   caderno aberto          0.066   0.81
- *   slide escuro            0.082   0.64
- *   lousa verde com giz     0.023   0.84
- *   lousa branca escrita    0.039   0.82
- *   ─────────────────────────────────────
- *   pessoa                  0.090   0.25
- *   ambiente movimentado    0.198   0.00
- *   folha vazia / parede    0.000   1.00
+ *                            linhas em faixa   runs/linha
+ *   folha só com o título            5            14.8
+ *   folha A4 densa                  34            11.4
+ *   caderno aberto escrito          19            11.1
+ *   folha escrita sobre a mesa      19             9.5
+ *   slide num notebook              15             7.9
+ *   slide escuro em tela cheia      28            10.2
+ *   lousa verde com giz             17             8.8
+ *   lousa branca escrita            19            11.8
+ *   ──────────────────────────────────────────────────
+ *   rosto                            9             4.3
+ *   ambiente movimentado            96             8.8
+ *   folha vazia sobre a mesa         0               —
+ *   caderno vazio com pauta          0               —
+ *   lousa vazia, parede              0               —
  *
- * The gap ratio is what does the work: study material leaves clean surface
- * between its lines, and a face or a room does not. The worst study case (0.64)
- * and the worst non-study case (0.25) sit either side of the threshold with
- * almost equal margin.
+ * Run density is what tells a line of writing from the band of a face: eyes and
+ * brows make a wide, contiguous band too, but a sparse one. And a frame where
+ * every row is written is not a document being read, it is a scene.
  */
 
-/** Something has to be written; an empty page is not a class. */
-const MIN_MARKS = 0.005;
-/** Marks over this share of the frame are a scene, not writing on a surface. */
-const MAX_MARKS = 0.14;
-/** Clean surface between the lines — the signature of anything written down. */
-const MIN_GAP = 0.45;
+/** A band has to exist before anything can be read from it. */
+const MIN_WRITTEN_ROWS = 3;
+/** Writing over most of the frame is a busy scene, not a surface with text. */
+const MAX_WRITTEN_ROWS = Math.round(SAMPLE_H * 0.6);
+/** Below this, the band is too sparse to be writing. */
+const MIN_RUN_DENSITY = 6;
 
 export function readScene(gray: Uint8Array): SceneSignals {
   const mask = markMask(gray);
 
-  const rowCounts = new Float64Array(SAMPLE_H);
-  const colCounts = new Float64Array(SAMPLE_W);
-  let marks = 0;
+  const rowRuns = new Int32Array(SAMPLE_H);
+  const written = new Uint8Array(SAMPLE_H);
   for (let y = 0; y < SAMPLE_H; y++) {
+    let runs = 0;
+    let covered = 0;
+    let previous = 0;
     for (let x = 0; x < SAMPLE_W; x++) {
-      if (mask[y * SAMPLE_W + x]) {
-        rowCounts[y]++;
-        colCounts[x]++;
-        marks++;
+      const mark = mask[y * SAMPLE_W + x];
+      if (mark) {
+        covered++;
+        if (!previous) runs++;
       }
+      previous = mark;
     }
+    const cover = covered / SAMPLE_W;
+    rowRuns[y] = runs;
+    written[y] =
+      runs >= MIN_RUNS && cover >= MIN_ROW_COVER && cover <= MAX_ROW_COVER
+        ? 1
+        : 0;
   }
-  const markShare = marks / mask.length;
 
-  let inkedRows = 0;
-  for (let y = 0; y < SAMPLE_H; y++) {
-    if (rowCounts[y] / SAMPLE_W >= ROW_INKED) inkedRows++;
+  // Only rows inside a band count. One row on its own is the edge of something,
+  // not a line of writing.
+  const inBand = new Uint8Array(SAMPLE_H);
+  let writtenRows = 0;
+  let runsTotal = 0;
+  let run = 0;
+  for (let y = 0; y <= SAMPLE_H; y++) {
+    if (y < SAMPLE_H && written[y]) {
+      run++;
+      continue;
+    }
+    if (run >= MIN_BAND) {
+      for (let k = y - run; k < y; k++) {
+        inBand[k] = 1;
+        runsTotal += rowRuns[k];
+      }
+      writtenRows += run;
+    }
+    run = 0;
   }
-  const gapRatio = 1 - inkedRows / SAMPLE_H;
 
+  const runDensity = writtenRows ? runsTotal / writtenRows : 0;
   const isStudy =
-    markShare >= MIN_MARKS && markShare <= MAX_MARKS && gapRatio >= MIN_GAP;
+    writtenRows >= MIN_WRITTEN_ROWS &&
+    writtenRows <= MAX_WRITTEN_ROWS &&
+    runDensity >= MIN_RUN_DENSITY;
 
   let bounds: ContentBounds | null = null;
-  if (isStudy && marks > 0) {
-    const [x0, x1] = spanOf(colCounts, marks, SAMPLE_W);
-    const [y0, y1] = spanOf(rowCounts, marks, SAMPLE_H);
-    bounds = {
-      x: x0 / SAMPLE_W,
-      y: y0 / SAMPLE_H,
-      width: (x1 - x0 + 1) / SAMPLE_W,
-      height: (y1 - y0 + 1) / SAMPLE_H,
-    };
+  if (isStudy) {
+    let top = SAMPLE_H;
+    let bottom = -1;
+    let left = SAMPLE_W;
+    let right = -1;
+    for (let y = 0; y < SAMPLE_H; y++) {
+      if (!inBand[y]) continue;
+      if (y < top) top = y;
+      if (y > bottom) bottom = y;
+      for (let x = 0; x < SAMPLE_W; x++) {
+        if (!mask[y * SAMPLE_W + x]) continue;
+        if (x < left) left = x;
+        if (x > right) right = x;
+      }
+    }
+    if (bottom >= top && right >= left) {
+      bounds = {
+        x: left / SAMPLE_W,
+        y: top / SAMPLE_H,
+        width: (right - left + 1) / SAMPLE_W,
+        height: (bottom - top + 1) / SAMPLE_H,
+      };
+    }
   }
 
-  return { markShare, gapRatio, isStudy, bounds };
+  return { writtenRows, runDensity, isStudy, bounds };
 }
 
 export interface ContentDelta {
@@ -264,15 +297,40 @@ export interface ContentDelta {
  * Writing is asymmetric and moving the camera is not. Testing the direction of
  * the change rather than its size is the whole trick.
  */
-export function contentDelta(before: Uint8Array, after: Uint8Array): ContentDelta {
+export function contentDelta(
+  before: Uint8Array,
+  after: Uint8Array,
+  region?: ContentBounds | null,
+  side: "inside" | "outside" = "inside",
+): ContentDelta {
   if (before.length !== after.length) return { added: 1, removed: 1 };
+
+  // Fractions stay relative to the whole frame whichever side is measured, so
+  // one set of thresholds means the same thing everywhere.
+  const total = before.length;
+  const box = region && {
+    x0: Math.round(region.x * SAMPLE_W),
+    x1: Math.round((region.x + region.width) * SAMPLE_W),
+    y0: Math.round(region.y * SAMPLE_H),
+    y1: Math.round((region.y + region.height) * SAMPLE_H),
+  };
+
   let added = 0;
   let removed = 0;
-  for (let i = 0; i < before.length; i++) {
-    if (after[i] && !before[i]) added++;
-    else if (before[i] && !after[i]) removed++;
+  for (let y = 0; y < SAMPLE_H; y++) {
+    for (let x = 0; x < SAMPLE_W; x++) {
+      if (box) {
+        const within = x >= box.x0 && x < box.x1 && y >= box.y0 && y < box.y1;
+        if (within !== (side === "inside")) continue;
+      } else if (side === "outside") {
+        continue;
+      }
+      const i = y * SAMPLE_W + x;
+      if (after[i] && !before[i]) added++;
+      else if (before[i] && !after[i]) removed++;
+    }
   }
-  return { added: added / before.length, removed: removed / before.length };
+  return { added: added / total, removed: removed / total };
 }
 
 /** Mean absolute difference between two samples, 0..1. Used to spot movement. */
