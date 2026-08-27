@@ -17,8 +17,12 @@ import { formatClock } from "../shared/lib/time";
 interface ClassPageProps {
   classId: string;
   onClose: () => void;
-  /** Called after the class moves to the trash, so the gallery reloads behind it. */
-  onTrashed?: () => void;
+  /**
+   * Called after anything here writes. The gallery stays mounted behind this
+   * page, so a matéria changed here has to reach the chips it filters by —
+   * without it, the class moved and the filter above it did not.
+   */
+  onChanged?: () => void;
 }
 
 /**
@@ -29,7 +33,7 @@ interface ClassPageProps {
  * happening and stored then; nothing is recomputed, nothing is re-read, and no
  * extracted text, confidence or processing state ever reaches the student.
  */
-export function ClassPage({ classId, onClose, onTrashed }: ClassPageProps) {
+export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
   const [record, setRecord] = useState<ClassRecord | null | undefined>(undefined);
   /** Index of the moment being reviewed, or null when the timeline is showing. */
   const [reviewing, setReviewing] = useState<number | null>(null);
@@ -54,8 +58,8 @@ export function ClassPage({ classId, onClose, onTrashed }: ClassPageProps) {
     const trimmed = name.trim();
     if (!record || !trimmed || trimmed === record.subject) return;
     setRecord({ ...record, subject: trimmed });
-    void renameClass(record.id, trimmed);
-  }, [name, record]);
+    void renameClass(record.id, trimmed).then(() => onChanged?.());
+  }, [name, record, onChanged]);
 
   if (record === undefined) {
     return (
@@ -97,7 +101,7 @@ export function ClassPage({ classId, onClose, onTrashed }: ClassPageProps) {
             onClick={() => {
               const next = !record.favorite;
               setRecord({ ...record, favorite: next });
-              void setClassFavorite(record.id, next);
+              void setClassFavorite(record.id, next).then(() => onChanged?.());
             }}
             aria-label={
               record.favorite ? "Remover dos favoritos" : "Marcar como favorita"
@@ -149,7 +153,9 @@ export function ClassPage({ classId, onClose, onTrashed }: ClassPageProps) {
               value={record.discipline}
               onChange={(discipline) => {
                 setRecord({ ...record, discipline });
-                void setClassDiscipline(record.id, discipline);
+                void setClassDiscipline(record.id, discipline).then(() =>
+                  onChanged?.(),
+                );
               }}
             />
           </div>
@@ -255,7 +261,7 @@ export function ClassPage({ classId, onClose, onTrashed }: ClassPageProps) {
             type="button"
             onClick={async () => {
               await trashClass(record.id);
-              onTrashed?.();
+              onChanged?.();
               onClose();
             }}
             aria-label="Mover a aula para a lixeira"
