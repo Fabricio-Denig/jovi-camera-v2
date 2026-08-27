@@ -123,6 +123,23 @@ export function GalleryPage({
     return [...counts.entries()].sort((a, b) => b[1] - a[1]);
   }, [classes]);
 
+  // A matéria filtrada pode deixar de existir debaixo do filtro — a última aula
+  // dela foi para a lixeira, ou trocou de matéria. O chip some e a seleção
+  // ficaria apontando para o que não está mais lá, com a lista vazia e nenhum
+  // chip aceso. Volta para todas.
+  const favoriteClasses = useMemo(
+    () => classes.filter((record) => record.favorite).length,
+    [classes],
+  );
+  useEffect(() => {
+    if (discipline === "todas") return;
+    const ainda =
+      discipline === "favoritas"
+        ? favoriteClasses > 0
+        : disciplines.some(([name]) => name === discipline);
+    if (!ainda) setDiscipline("todas");
+  }, [disciplines, discipline, favoriteClasses]);
+
   const shownClasses = useMemo(() => {
     if (discipline === "todas") return classes;
     if (discipline === "favoritas") return classes.filter((r) => r.favorite);
@@ -170,7 +187,7 @@ export function GalleryPage({
           total={classes.length}
           disciplines={disciplines}
           active={discipline}
-          favorites={classes.filter((r) => r.favorite).length}
+          favorites={favoriteClasses}
           onSelectDiscipline={setDiscipline}
           onOpenClass={onOpenClass}
         />
