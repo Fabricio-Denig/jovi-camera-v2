@@ -427,8 +427,14 @@ export function summariseClass({
 
   const count =
     moments === 1 ? "1 momento importante" : `${moments} momentos importantes`;
-  const minutes = Math.max(1, Math.round(durationMs / 60000));
-  const span = `${minutes} ${minutes === 1 ? "minuto" : "minutos"}`;
+  // Arredondar meio minuto para cima dava "em 1 minuto" a uma aula de 26
+  // segundos — pequeno, mas é a primeira frase da tela, e ela não pode
+  // arredondar nada para cima.
+  const minutes = Math.round(durationMs / 60000);
+  const span =
+    minutes < 1
+      ? "menos de um minuto"
+      : `${minutes} ${minutes === 1 ? "minuto" : "minutos"}`;
   // "Esta aula de Física" — the matéria belongs to the class, so it belongs to
   // the sentence about the class. "Outra" is the button for naming one, not a
   // name, and never reaches the text.

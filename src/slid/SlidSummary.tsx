@@ -117,7 +117,7 @@ export function SlidSummary({
     return [...counts.entries()].sort((a, b) => b[1] - a[1]);
   }, [described]);
 
-  const minutes = Math.max(1, Math.round(elapsedMs / 60000));
+  const minutes = Math.round(elapsedMs / 60000);
 
   const overview = useMemo(
     () =>
@@ -183,7 +183,9 @@ export function SlidSummary({
             <p className="text-[13.5px] leading-relaxed text-ink-muted">
               {stats.skippedDuplicates > 0
                 ? `A câmera olhou ${stats.skippedDuplicates} vezes em que nada tinha mudado e deixou passar.`
-                : `${minutes} ${minutes === 1 ? "minuto" : "minutos"} acompanhados.`}
+                : minutes < 1
+                  ? "Menos de um minuto acompanhado."
+                  : `${minutes} ${minutes === 1 ? "minuto" : "minutos"} acompanhados.`}
             </p>
 
             {/* 2. Do que a aula tratou — linhas que o professor escreveu. */}
