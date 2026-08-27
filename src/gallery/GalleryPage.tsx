@@ -24,6 +24,13 @@ interface GalleryPageProps {
   /** Bumped by the shell after each capture so the page refetches. */
   refreshKey: number;
   onOpenClass: (classId: string) => void;
+  /**
+   * Reported so the shell can stand its navigation down. The viewer is a
+   * full-screen document, but this page is drawn inside a stacking context of
+   * its own — no z-index inside it can reach past the nav bar, which sat over
+   * the viewer's actions and ate the taps meant for them.
+   */
+  onViewerOpenChange?: (open: boolean) => void;
 }
 
 /**
@@ -43,7 +50,11 @@ interface GalleryPageProps {
  */
 type View = "todas" | "fotos" | "videos" | "favoritos" | "slid" | "lixeira";
 
-export function GalleryPage({ refreshKey, onOpenClass }: GalleryPageProps) {
+export function GalleryPage({
+  refreshKey,
+  onOpenClass,
+  onViewerOpenChange,
+}: GalleryPageProps) {
   const [media, setMedia] = useState<CapturedMedia[] | null>(null);
   const [classes, setClasses] = useState<ClassRecord[]>([]);
   const [trashedMedia, setTrashedMedia] = useState<CapturedMedia[]>([]);
@@ -74,6 +85,12 @@ export function GalleryPage({ refreshKey, onOpenClass }: GalleryPageProps) {
   }, [refreshKey, localRefresh]);
 
   const reload = () => setLocalRefresh((n) => n + 1);
+
+  useEffect(() => {
+    onViewerOpenChange?.(selected !== null);
+  }, [selected, onViewerOpenChange]);
+  // Leaving the tab with a capture open must not leave the navigation hidden.
+  useEffect(() => () => onViewerOpenChange?.(false), [onViewerOpenChange]);
 
   // The open capture has to follow the store, or favouriting from the viewer
   // shows a star that snaps back when it closes.

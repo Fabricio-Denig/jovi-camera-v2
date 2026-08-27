@@ -27,7 +27,7 @@ export function CaptureViewer({
   const url = useObjectUrl(media.blob);
 
   return (
-    <div className="fixed inset-0 z-20 flex flex-col bg-black">
+    <div className="fixed inset-0 z-[60] flex flex-col bg-black">
       <div className="flex items-center justify-between px-4 py-3 pt-[max(12px,env(safe-area-inset-top))]">
         <span className="font-mono text-xs text-ink-muted">
           {media.kind === "photo" ? "Foto" : "Vídeo"} ·{" "}
