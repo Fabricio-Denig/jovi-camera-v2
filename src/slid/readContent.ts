@@ -470,6 +470,29 @@ export function summariseClass({
 }
 
 /**
+ * The class's own sentence, re-opened under a different matéria.
+ *
+ * The sentence is written once and stored, because reopening a class months
+ * later must not depend on reading the board again. But the matéria is the one
+ * part of it a student can change afterwards — and a class that says "Esta aula
+ * de Física" under a matéria that no longer exists is the app contradicting
+ * itself on the screen where it explains what it understood.
+ *
+ * Only the opening clause is touched. Everything after it came from the
+ * surface and stays exactly as it was read.
+ */
+const OPENING = /^Esta aula(?: de .+?)? (teve|registrou) /;
+
+export function reopenOverview(
+  overview: string,
+  discipline: string | null,
+): string {
+  if (!overview || !OPENING.test(overview)) return overview;
+  const named = discipline && discipline !== "Outra" ? ` de ${discipline}` : "";
+  return overview.replace(OPENING, `Esta aula${named} $1 `);
+}
+
+/**
  * The one or two structures that dominated, named the way a student would.
  * A structure seen once is not a focus — mentioning it produced "fórmulas e
  * anotação", which reads as a sentence assembled by a machine.

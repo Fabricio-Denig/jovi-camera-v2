@@ -2,11 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { CaptureViewer } from "../camera/CaptureViewer";
 import { ClassCard, formatDate } from "./ClassCard";
 import { type Chip, FilterChips } from "./FilterChips";
+import { DisciplineManager } from "../slid/DisciplineManager";
 import {
   deleteClassForever,
   getClasses,
   getTrashedClasses,
   restoreClass,
+  setClassDiscipline,
   type ClassRecord,
 } from "../slid/classes";
 import {
@@ -59,9 +61,13 @@ export function GalleryPage({
   const [classes, setClasses] = useState<ClassRecord[]>([]);
   const [trashedMedia, setTrashedMedia] = useState<CapturedMedia[]>([]);
   const [trashedClasses, setTrashedClasses] = useState<ClassRecord[]>([]);
-  const [view, setView] = useState<View>("todas");
+  // Abre em Fotos: a galeria de uma câmera é o rolo do usuário, e o que ele
+  // tirou com o dedo é o que ele espera encontrar. O SliD é a área especial,
+  // alcançada pelo chip — não o que aparece antes de qualquer escolha.
+  const [view, setView] = useState<View>("fotos");
   const [discipline, setDiscipline] = useState("todas");
   const [selected, setSelected] = useState<CapturedMedia | null>(null);
+  const [managing, setManaging] = useState(false);
   /** Bumped by anything on this screen that writes, so the lists reload. */
   const [localRefresh, setLocalRefresh] = useState(0);
 
@@ -100,12 +106,19 @@ export function GalleryPage({
     if (fresh && fresh.favorite !== selected.favorite) setSelected(fresh);
   }, [media, selected]);
 
+  /*
+   * Fotos e Vídeos são o que o estudante capturou com o dedo, e só isso. Um
+   * momento do SliD também é um JPEG, mas ele não tirou aquela foto — a câmera
+   * tirou por ele, dentro de uma aula, e é lá que ele pertence. Misturar as
+   * duas coisas transforma a aula de volta numa pilha de fotos, que é
+   * exatamente a leitura que a sessão inteira trabalha para evitar.
+   */
   const photos = useMemo(
-    () => (media ?? []).filter((item) => item.kind === "photo"),
+    () => (media ?? []).filter((item) => item.kind === "photo" && !item.session),
     [media],
   );
   const videos = useMemo(
-    () => (media ?? []).filter((item) => item.kind === "video"),
+    () => (media ?? []).filter((item) => item.kind === "video" && !item.session),
     [media],
   );
   const favorites = useMemo(
@@ -148,12 +161,15 @@ export function GalleryPage({
 
   const trashCount = trashedMedia.length + trashedClasses.length;
 
+  // Fotos primeiro porque é onde a galeria abre, e SliD em terceiro porque o
+  // trilho rola: um chip que só existe depois de arrastar é um chip que a
+  // banca não encontra.
   const chips: Chip[] = [
-    { id: "todas", label: "Todas", count: media?.length ?? 0 },
     { id: "fotos", label: "Fotos", count: photos.length },
     { id: "videos", label: "Vídeos", count: videos.length },
-    { id: "favoritos", label: "Favoritos", count: favorites.length },
     { id: "slid", label: "SliD", count: classes.length },
+    { id: "favoritos", label: "Favoritos", count: favorites.length },
+    { id: "todas", label: "Todas", count: media?.length ?? 0 },
     { id: "lixeira", label: "Lixeira", count: trashCount },
   ];
 
@@ -190,6 +206,7 @@ export function GalleryPage({
           favorites={favoriteClasses}
           onSelectDiscipline={setDiscipline}
           onOpenClass={onOpenClass}
+          onManage={() => setManaging(true)}
         />
       )}
 
@@ -216,6 +233,28 @@ export function GalleryPage({
           )}
         </>
       )}
+
+      <DisciplineManager
+        open={managing}
+        onClose={() => setManaging(false)}
+        counts={new Map(disciplines)}
+        onRenamed={async (from, to) => {
+          // The classes go with the name. A matéria renamed under the lectures
+          // filed in it would quietly empty the filter it belongs to.
+          for (const record of classes) {
+            if (record.discipline === from) await setClassDiscipline(record.id, to);
+          }
+          if (discipline === from) setDiscipline(to);
+          reload();
+        }}
+        onRemoved={async (name) => {
+          for (const record of classes) {
+            if (record.discipline === name) await setClassDiscipline(record.id, null);
+          }
+          if (discipline === name) setDiscipline("todas");
+          reload();
+        }}
+      />
 
       {selected && (
         <CaptureViewer
@@ -254,14 +293,14 @@ function describe(
 }
 
 function EmptyState({ view }: { view: View }) {
-  const text =
+  const [title, text] =
     view === "favoritos"
-      ? "Abra uma captura e toque na estrela para guardá-la aqui."
+      ? ["Nada favoritado ainda", "Abra uma captura e toque na estrela para guardá-la aqui."]
       : view === "videos"
-        ? "Nenhum vídeo gravado ainda."
+        ? ["Seus vídeos aparecerão aqui", "Grave um vídeo pela câmera para vê-lo nesta galeria."]
         : view === "fotos"
-          ? "Nenhuma foto tirada ainda."
-          : "Suas fotos, vídeos e aulas aparecem aqui.";
+          ? ["Suas fotos aparecerão aqui", "Tire uma foto pela câmera para vê-la nesta galeria."]
+          : ["Nada guardado ainda", "Suas fotos, vídeos e aulas aparecem aqui."];
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-2 px-8 text-center">
       {/* Uma câmera, não uma moldura: 🖼 é escuro sobre fundo escuro e neste
@@ -270,7 +309,8 @@ function EmptyState({ view }: { view: View }) {
       <div className="flex size-14 items-center justify-center rounded-full bg-surface-2 text-2xl">
         {view === "favoritos" ? "★" : view === "videos" ? "🎞" : "📷"}
       </div>
-      <p className="text-sm text-ink-muted">{text}</p>
+      <p className="text-[15px] font-medium text-ink">{title}</p>
+      <p className="max-w-[30ch] text-[13px] leading-snug text-ink-muted">{text}</p>
     </div>
   );
 }
@@ -288,6 +328,7 @@ function SlidView({
   favorites,
   onSelectDiscipline,
   onOpenClass,
+  onManage,
 }: {
   classes: ClassRecord[];
   total: number;
@@ -296,6 +337,7 @@ function SlidView({
   favorites: number;
   onSelectDiscipline: (id: string) => void;
   onOpenClass: (id: string) => void;
+  onManage: () => void;
 }) {
   const chips: Chip[] = [
     { id: "todas", label: "Todas as aulas", count: total },
@@ -311,17 +353,27 @@ function SlidView({
         <div className="flex size-14 items-center justify-center rounded-full bg-surface-2 text-2xl">
           📚
         </div>
-        <p className="text-sm text-ink-muted">
+        <p className="max-w-[30ch] text-sm text-ink-muted">
           Abra o SliD durante uma aula e ela aparece aqui, organizada sozinha.
         </p>
+        <button
+          type="button"
+          onClick={onManage}
+          className="mt-1 min-h-10 rounded-full bg-surface-2 px-4 text-[13px] font-medium text-ink transition-transform active:scale-95 active:opacity-70"
+        >
+          Gerenciar matérias
+        </button>
       </div>
     );
   }
 
   return (
     <>
-      {chips.length > 1 && (
-        <div className="px-5 pb-3 pt-1">
+      {/* Filing lives with the class; the list of names is a different job, and
+          it needs somewhere to be. Beside the filters it feeds is the one place
+          a student looks for it. */}
+      <div className="flex items-center gap-2 px-5 pb-3 pt-1">
+        <div className="min-w-0 flex-1">
           <FilterChips
             chips={chips}
             active={active}
@@ -329,7 +381,16 @@ function SlidView({
             label="Filtrar por matéria"
           />
         </div>
-      )}
+        <button
+          type="button"
+          onClick={onManage}
+          aria-label="Gerenciar matérias"
+          className="flex min-h-9 shrink-0 items-center gap-1 rounded-full bg-surface-2 px-3 text-[12.5px] font-medium text-ink transition-transform active:scale-95 active:opacity-70"
+        >
+          <span aria-hidden="true">⚙</span>
+          Matérias
+        </button>
+      </div>
       {classes.length === 0 ? (
         <p className="px-8 py-10 text-center text-sm text-ink-muted">
           Nenhuma aula nesta matéria.
