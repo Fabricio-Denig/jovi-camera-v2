@@ -223,9 +223,15 @@ export function GalleryPage({
           {grid.length === 0 ? (
             <EmptyState view={view} />
           ) : (
-            <ul className="grid grid-cols-3 gap-1 px-1 pb-6">
-              {grid.map((item) => (
-                <li key={item.id}>
+            <ul key={view} className="grid grid-cols-3 gap-1 px-1 pb-6">
+              {grid.map((item, index) => (
+                <li
+                  key={item.id}
+                  className="animate-[slid-enter_260ms_ease-out_both]"
+                  // Escalonado só nas primeiras linhas: depois disso o atraso
+                  // vira espera, e ninguém espera para ver a própria galeria.
+                  style={{ animationDelay: `${Math.min(index, 8) * 22}ms` }}
+                >
                   <GalleryThumb media={item} onOpen={() => setSelected(item)} />
                 </li>
               ))}
@@ -397,8 +403,12 @@ function SlidView({
         </p>
       ) : (
         <ul className="flex flex-col gap-2 px-4 pb-6">
-          {classes.map((record) => (
-            <li key={record.id}>
+          {classes.map((record, index) => (
+            <li
+              key={record.id}
+              className="animate-[slid-enter_280ms_ease-out_both]"
+              style={{ animationDelay: `${Math.min(index, 6) * 34}ms` }}
+            >
               <ClassCard record={record} onOpen={() => onOpenClass(record.id)} />
             </li>
           ))}
@@ -465,7 +475,7 @@ function TrashView({
                     await restoreClass(record.id);
                     onChanged();
                   }}
-                  className="min-h-9 flex-1 rounded-xl bg-accent px-3 text-[13px] font-medium text-accent-ink active:opacity-80"
+                  className="min-h-9 flex-1 rounded-xl bg-accent px-3 text-[13px] font-medium text-accent-ink transition-transform duration-150 active:scale-95 active:opacity-80"
                 >
                   Restaurar
                 </button>
@@ -478,7 +488,7 @@ function TrashView({
                       name: record.subject,
                     })
                   }
-                  className="min-h-9 flex-1 rounded-xl bg-canvas px-3 text-[13px] font-medium text-danger active:opacity-70"
+                  className="min-h-9 flex-1 rounded-xl bg-canvas px-3 text-[13px] font-medium text-danger transition-transform duration-150 active:scale-95 active:opacity-70"
                 >
                   Apagar de vez
                 </button>
@@ -557,14 +567,14 @@ function ConfirmDelete({
           <button
             type="button"
             onClick={onCancel}
-            className="min-h-11 flex-1 rounded-xl bg-accent text-[13.5px] font-medium text-accent-ink active:opacity-80"
+            className="min-h-11 flex-1 rounded-xl bg-accent text-[13.5px] font-medium text-accent-ink transition-transform duration-150 active:scale-[0.98] active:opacity-80"
           >
             Manter
           </button>
           <button
             type="button"
             onClick={onConfirm}
-            className="min-h-11 flex-1 rounded-xl bg-surface-2 text-[13.5px] font-medium text-danger active:opacity-70"
+            className="min-h-11 flex-1 rounded-xl bg-surface-2 text-[13.5px] font-medium text-danger transition-transform duration-150 active:scale-[0.98] active:opacity-70"
           >
             Apagar de vez
           </button>
@@ -628,7 +638,7 @@ function GalleryThumb({
       type="button"
       onClick={onOpen}
       aria-label={`Abrir ${media.kind === "photo" ? "foto" : "vídeo"}`}
-      className="relative block aspect-square w-full overflow-hidden bg-surface-2 active:opacity-80"
+      className="relative block aspect-square w-full overflow-hidden bg-surface-2 transition-transform duration-150 ease-out active:scale-95 active:opacity-80"
     >
       {url &&
         (media.kind === "photo" ? (

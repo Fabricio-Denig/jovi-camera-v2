@@ -422,7 +422,7 @@ export function CameraShell({
               onOpenClass(savedClass.id);
               setSavedClass(null);
             }}
-            className="flex min-h-11 max-w-full animate-[slid-rise_240ms_ease-out] items-center gap-2 rounded-full bg-accent px-4 py-2 text-[12.5px] font-medium text-accent-ink active:opacity-80"
+            className="flex min-h-11 max-w-full animate-[slid-flash_5000ms_ease-out_both] items-center gap-2 rounded-full bg-accent px-4 py-2 text-[12.5px] font-medium text-accent-ink transition-transform duration-150 active:scale-95 active:opacity-80"
           >
             {/* The name is confirmation, not the message: a real class title
                 ran to three lines and turned a toast into a paragraph. */}

@@ -107,13 +107,15 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
               record.favorite ? "Remover dos favoritos" : "Marcar como favorita"
             }
             aria-pressed={record.favorite}
-            className={`flex size-11 shrink-0 items-center justify-center rounded-full text-[17px] active:opacity-70 ${
+            className={`flex size-11 shrink-0 items-center justify-center rounded-full text-[17px] transition-all duration-200 active:scale-90 active:opacity-70 ${
               record.favorite
                 ? "bg-accent-soft text-accent"
                 : "bg-surface-2 text-ink-muted"
             }`}
           >
-            {record.favorite ? "★" : "☆"}
+            <span key={String(record.favorite)} className="animate-[slid-rise_260ms_ease-out]">
+              {record.favorite ? "★" : "☆"}
+            </span>
           </button>
           <button
             type="button"
@@ -133,7 +135,7 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
             type="button"
             onClick={() => setFiling((open) => !open)}
             aria-expanded={filing}
-            className={`min-h-7 rounded-full px-2.5 text-[12px] font-medium active:opacity-70 ${
+            className={`min-h-7 rounded-full px-2.5 text-[12px] font-medium transition-all duration-200 active:scale-95 active:opacity-70 ${
               record.discipline
                 ? "bg-accent-soft text-accent"
                 : "bg-surface-2 text-ink-muted"
@@ -148,7 +150,7 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
         </p>
 
         {filing && (
-          <div className="mt-3">
+          <div className="mt-3 animate-[slid-enter_220ms_ease-out]">
             <DisciplinePicker
               value={record.discipline}
               onChange={(discipline) => {
@@ -250,7 +252,7 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
           <button
             type="button"
             onClick={() => setReviewing(0)}
-            className="min-h-11 flex-1 rounded-xl bg-accent py-3 text-sm font-medium text-accent-ink active:opacity-80"
+            className="min-h-11 flex-1 rounded-xl bg-accent py-3 text-sm font-medium text-accent-ink transition-transform duration-150 active:scale-[0.98] active:opacity-80"
           >
             Revisar a aula
           </button>
@@ -265,7 +267,7 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
               onClose();
             }}
             aria-label="Mover a aula para a lixeira"
-            className="flex min-h-11 items-center justify-center rounded-xl bg-surface-2 px-4 text-sm font-medium text-ink active:opacity-70"
+            className="flex min-h-11 items-center justify-center rounded-xl bg-surface-2 px-4 text-sm font-medium text-ink transition-transform duration-150 active:scale-95 active:opacity-70"
           >
             <span aria-hidden="true">🗑</span>
           </button>

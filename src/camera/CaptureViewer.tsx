@@ -72,13 +72,21 @@ export function CaptureViewer({
               aria-label={
                 media.favorite ? "Remover dos favoritos" : "Marcar como favorito"
               }
-              className={`flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl text-[13.5px] font-medium active:opacity-70 ${
+              className={`flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl text-[13.5px] font-medium transition-all duration-200 active:scale-95 active:opacity-70 ${
                 media.favorite
                   ? "bg-accent-soft text-accent"
                   : "bg-surface-2 text-ink"
               }`}
             >
-              <span aria-hidden="true">{media.favorite ? "★" : "☆"}</span>
+              <span
+                aria-hidden="true"
+                // A estrela some e volta cheia: a marca é do estudante e ele
+                // precisa ver a marca acontecer, não descobrir que aconteceu.
+                key={String(media.favorite)}
+                className="animate-[slid-rise_260ms_ease-out]"
+              >
+                {media.favorite ? "★" : "☆"}
+              </span>
               {media.favorite ? "Favorito" : "Favoritar"}
             </button>
           )}
@@ -87,7 +95,7 @@ export function CaptureViewer({
               type="button"
               onClick={onTrash}
               aria-label="Mover para a lixeira"
-              className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-surface-2 text-[13.5px] font-medium text-ink active:opacity-70"
+              className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-surface-2 text-[13.5px] font-medium text-ink transition-transform duration-200 active:scale-95 active:opacity-70"
             >
               <span aria-hidden="true">🗑</span>
               Apagar

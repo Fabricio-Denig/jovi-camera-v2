@@ -24,7 +24,7 @@ export function ClassCard({
       type="button"
       onClick={onOpen}
       aria-label={`Abrir a aula ${record.subject}`}
-      className="flex w-full gap-3.5 rounded-2xl bg-surface-2 p-3 text-left active:opacity-70"
+      className="flex w-full gap-3.5 rounded-2xl bg-surface-2 p-3 text-left transition-transform duration-150 ease-out active:scale-[0.98] active:opacity-80"
     >
       <div className="size-[68px] shrink-0 overflow-hidden rounded-xl bg-canvas">
         {url && <img src={url} alt="" className="size-full object-cover" />}
