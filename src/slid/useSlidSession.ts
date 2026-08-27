@@ -87,6 +87,13 @@ interface UseSlidSessionOptions {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   /** Contextual detection only runs while the camera is live and SliD is not already active. */
   detectionEnabled: boolean;
+  /**
+   * The crop the preview is applying on its own. The session reads the window
+   * the student framed — zooming in on a slide across a lecture hall is the
+   * whole point of the control, and it would do nothing if the analysis kept
+   * looking at the wide shot.
+   */
+  zoom?: number;
 }
 
 export interface SlidSession {
@@ -131,6 +138,7 @@ export interface SlidSession {
 export function useSlidSession({
   videoRef,
   detectionEnabled,
+  zoom = 1,
 }: UseSlidSessionOptions): SlidSession {
   const [status, setStatus] = useState<SlidStatus>("idle");
   const [captures, setCaptures] = useState<SlidCapture[]>([]);
@@ -160,6 +168,10 @@ export function useSlidSession({
   const detectionCountRef = useRef(0);
   const suggestionDismissedRef = useRef(false);
   const capturingRef = useRef(false);
+  // Read inside the loops rather than closed over: changing the zoom must not
+  // tear down and restart a session that is running.
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
 
   const takeCapture = useCallback(
     async (reason: MomentReason, sample: Uint8Array | null) => {
@@ -167,8 +179,10 @@ export function useSlidSession({
       if (!video || capturingRef.current) return;
       capturingRef.current = true;
       try {
-        const { blob } = await capturePhotoFromVideo(video);
-        const reference = sample ?? sampleFrame(video);
+        const { blob } = await capturePhotoFromVideo(video, {
+          zoom: zoomRef.current,
+        });
+        const reference = sample ?? sampleFrame(video, zoomRef.current);
         let marks = 0;
         if (reference) {
           const mask = markMask(reference);
@@ -208,8 +222,10 @@ export function useSlidSession({
       if (!video || capturingRef.current) return;
       capturingRef.current = true;
       try {
-        const { blob } = await capturePhotoFromVideo(video);
-        const reference = sample ?? sampleFrame(video);
+        const { blob } = await capturePhotoFromVideo(video, {
+          zoom: zoomRef.current,
+        });
+        const reference = sample ?? sampleFrame(video, zoomRef.current);
         let marks = 0;
         if (reference) {
           const mask = markMask(reference);
@@ -252,7 +268,7 @@ export function useSlidSession({
     const interval = setInterval(() => {
       const video = videoRef.current;
       if (!video) return;
-      const sample = sampleFrame(video);
+      const sample = sampleFrame(video, zoomRef.current);
       if (!sample) return;
 
       const scene = readScene(sample);
@@ -285,7 +301,7 @@ export function useSlidSession({
       if (!video) return;
       setElapsedMs(Date.now() - startedAtRef.current - pausedTotalRef.current);
 
-      const sample = sampleFrame(video);
+      const sample = sampleFrame(video, zoomRef.current);
       if (!sample) return;
       setStats((prev) => ({ ...prev, analysed: prev.analysed + 1 }));
 

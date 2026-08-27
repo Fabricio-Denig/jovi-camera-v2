@@ -13,6 +13,8 @@ interface ContentFrameProps {
    * what turns an automatic capture into something the student can see happen.
    */
   capturedKey?: string | null;
+  /** The crop the preview is applying, so the outline lands where it should. */
+  zoom?: number;
   /**
    * The camera is still making up its mind. Drawn fainter and without a label:
    * an outline settling into place is "I am looking at this", which is true,
@@ -42,8 +44,9 @@ export function ContentFrame({
   label,
   capturedKey,
   tentative,
+  zoom = 1,
 }: ContentFrameProps) {
-  const rect = useCoverRect(bounds, videoRef, facing);
+  const rect = useCoverRect(bounds, videoRef, facing, zoom);
   if (!rect) return null;
 
   return (
@@ -109,6 +112,7 @@ function useCoverRect(
   bounds: ContentBounds | null,
   videoRef: React.RefObject<HTMLVideoElement | null>,
   facing: CameraFacing,
+  zoom: number,
 ): Rect | null {
   const [rect, setRect] = useState<Rect | null>(null);
 
@@ -132,16 +136,34 @@ function useCoverRect(
       const offsetX = (cw - shownW) / 2;
       const offsetY = (ch - shownH) / 2;
 
-      const x = facing === "user" ? 1 - bounds.x - bounds.width : bounds.x;
+      // Under digital zoom the session reads the middle of the frame and the
+      // preview shows the middle of the frame, but they are told in different
+      // coordinates. The bounds arrive as fractions of the crop, so they go
+      // back to fractions of the whole frame first — and the same scale the CSS
+      // applies is applied to the result at the end. Without both halves the
+      // outline drifts off the writing it is pointing at.
+      const z = Math.max(1, zoom);
+      const wide = {
+        x: 0.5 + (bounds.x - 0.5) / z,
+        y: 0.5 + (bounds.y - 0.5) / z,
+        width: bounds.width / z,
+        height: bounds.height / z,
+      };
+      const x = facing === "user" ? 1 - wide.x - wide.width : wide.x;
 
       // `object-cover` crops the frame, so content near an edge is genuinely
       // off-screen. Clamping keeps the outline against the edge it runs past —
       // honest about the content continuing beyond the view — instead of
       // drawing most of a rectangle where nobody can see it.
-      const left = Math.max(0, offsetX + x * shownW);
-      const top = Math.max(0, offsetY + bounds.y * shownH);
-      const right = Math.min(cw, offsetX + (x + bounds.width) * shownW);
-      const bottom = Math.min(ch, offsetY + (bounds.y + bounds.height) * shownH);
+      const zoomAbout = (value: number, centre: number) =>
+        centre + (value - centre) * z;
+      const left = Math.max(0, zoomAbout(offsetX + x * shownW, cw / 2));
+      const top = Math.max(0, zoomAbout(offsetY + wide.y * shownH, ch / 2));
+      const right = Math.min(cw, zoomAbout(offsetX + (x + wide.width) * shownW, cw / 2));
+      const bottom = Math.min(
+        ch,
+        zoomAbout(offsetY + (wide.y + wide.height) * shownH, ch / 2),
+      );
 
       // A sliver clinging to one edge reads as a rendering fault, not as
       // recognition. Below this the frame says nothing worth saying.
@@ -157,7 +179,7 @@ function useCoverRect(
     const observer = new ResizeObserver(measure);
     observer.observe(video);
     return () => observer.disconnect();
-  }, [bounds, videoRef, facing]);
+  }, [bounds, videoRef, facing, zoom]);
 
   return rect;
 }
