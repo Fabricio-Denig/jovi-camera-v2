@@ -1,4 +1,11 @@
-import { getAllCaptures, saveCapture } from "../shared/lib/mediaStore";
+import {
+  deleteCapturesForever,
+  getAllCaptures,
+  getTrashedCaptures,
+  restoreCaptures,
+  saveCapture,
+  trashCaptures,
+} from "../shared/lib/mediaStore";
 import type { CapturedMedia } from "../types/camera";
 
 /**
@@ -20,6 +27,11 @@ export interface ClassMoment {
 export interface ClassRecord {
   id: string;
   subject: string;
+  /** The matéria, when the student filed it under one. */
+  discipline: string | null;
+  favorite: boolean;
+  /** Set while the class is in the trash. */
+  deletedAt: number | null;
   savedAt: number;
   durationMs: number;
   skippedDuplicates: number;
@@ -48,6 +60,9 @@ function toRecord(id: string, items: CapturedMedia[]): ClassRecord {
   return {
     id,
     subject: first?.subject ?? "Aula sem título",
+    discipline: first?.discipline ?? null,
+    favorite: first?.favorite ?? false,
+    deletedAt: items[0].deletedAt ?? null,
     savedAt: first?.savedAt ?? items[0].createdAt,
     durationMs: first?.durationMs ?? moments.at(-1)?.atMs ?? 0,
     skippedDuplicates: first?.skippedDuplicates ?? 0,
@@ -58,8 +73,7 @@ function toRecord(id: string, items: CapturedMedia[]): ClassRecord {
   };
 }
 
-export async function getClasses(): Promise<ClassRecord[]> {
-  const captures = await getAllCaptures();
+function group(captures: CapturedMedia[]): ClassRecord[] {
   const bySession = new Map<string, CapturedMedia[]>();
   for (const media of captures) {
     if (!media.session) continue;
@@ -72,16 +86,76 @@ export async function getClasses(): Promise<ClassRecord[]> {
     .sort((a, b) => b.savedAt - a.savedAt);
 }
 
+export async function getClasses(): Promise<ClassRecord[]> {
+  return group(await getAllCaptures());
+}
+
+/** Classes in the trash, so they can be given back whole. */
+export async function getTrashedClasses(): Promise<ClassRecord[]> {
+  return group(await getTrashedCaptures()).sort(
+    (a, b) => (b.deletedAt ?? 0) - (a.deletedAt ?? 0),
+  );
+}
+
 export async function getClassById(id: string): Promise<ClassRecord | null> {
   const classes = await getClasses();
   return classes.find((record) => record.id === id) ?? null;
 }
 
-/** The name belongs to the student; a class can be renamed whenever. */
-export async function renameClass(id: string, subject: string): Promise<void> {
-  const captures = await getAllCaptures();
+/**
+ * Everything below rewrites every moment of the class, because the class-level
+ * facts are stored on each of them. That is the cost of a class being one query
+ * and no second object store, and it is paid on actions a student takes by hand
+ * — renaming, filing, favouriting — never in a loop.
+ */
+async function editClass(
+  id: string,
+  change: (session: NonNullable<CapturedMedia["session"]>) => NonNullable<
+    CapturedMedia["session"]
+  >,
+): Promise<void> {
+  const captures = [...(await getAllCaptures()), ...(await getTrashedCaptures())];
   for (const media of captures) {
     if (media.session?.id !== id) continue;
-    await saveCapture({ ...media, session: { ...media.session, subject } });
+    await saveCapture({ ...media, session: change(media.session) });
   }
+}
+
+/** The name belongs to the student; a class can be renamed whenever. */
+export async function renameClass(id: string, subject: string): Promise<void> {
+  await editClass(id, (session) => ({ ...session, subject }));
+}
+
+/** Filing a class under a matéria, or taking it back out. */
+export async function setClassDiscipline(
+  id: string,
+  discipline: string | null,
+): Promise<void> {
+  await editClass(id, (session) => {
+    if (!discipline) {
+      const { discipline: _removed, ...rest } = session;
+      return rest;
+    }
+    return { ...session, discipline };
+  });
+}
+
+export async function setClassFavorite(
+  id: string,
+  favorite: boolean,
+): Promise<void> {
+  await editClass(id, (session) => ({ ...session, favorite }));
+}
+
+/** A class goes to the trash whole, and comes back whole. */
+export async function trashClass(id: string): Promise<void> {
+  await trashCaptures((media) => media.session?.id === id);
+}
+
+export async function restoreClass(id: string): Promise<void> {
+  await restoreCaptures((media) => media.session?.id === id);
+}
+
+export async function deleteClassForever(id: string): Promise<void> {
+  await deleteCapturesForever((media) => media.session?.id === id);
 }

@@ -18,10 +18,22 @@ export interface CapturedMedia {
   createdAt: number;
   width: number;
   height: number;
+  /** Marked by the student, and the only reason a capture ever gets promoted. */
+  favorite?: boolean;
+  /**
+   * When it was thrown away. Set rather than deleted, so the trash can give it
+   * back: a lecture is not something to lose to one stray tap.
+   */
+  deletedAt?: number;
   /** Present when the capture came from a SliD session, which groups it by class. */
   session?: {
     id: string;
     subject: string;
+    /**
+     * The matéria the student filed it under, when they said. Never guessed —
+     * an invented subject is an invented class.
+     */
+    discipline?: string;
     /** Milliseconds into the session, preserving the order of the class. */
     atMs: number;
     /**
@@ -50,5 +62,7 @@ export interface CapturedMedia {
     overview?: string;
     /** Structures the camera recognised, as [kind, count] — the class reopens saying what the summary said. */
     kinds?: [string, number][];
+    /** Marked by the student. Denormalised across the moments, like the name. */
+    favorite?: boolean;
   };
 }
