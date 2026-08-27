@@ -27,6 +27,7 @@ export function AppShell() {
    * student keeps.
    */
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [viewerOpen, setViewerOpen] = useState(false);
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-canvas">
@@ -50,6 +51,7 @@ export function AppShell() {
             <GalleryPage
               refreshKey={galleryRefresh}
               onOpenClass={setOpenClassId}
+              onViewerOpenChange={setViewerOpen}
             />
           </div>
         )}
@@ -61,6 +63,7 @@ export function AppShell() {
             <ClassPage
               classId={openClassId}
               onClose={() => setOpenClassId(null)}
+              onTrashed={() => setGalleryRefresh((n) => n + 1)}
             />
           </div>
         )}
@@ -74,7 +77,7 @@ export function AppShell() {
         />
       </div>
 
-      {!reviewOpen && openClassId === null && (
+      {!reviewOpen && !viewerOpen && openClassId === null && (
         <BottomNav
           tab={state.tab}
           sheetOpen={state.openSheet !== null}

@@ -2,13 +2,23 @@ import { useCallback, useEffect, useState } from "react";
 import { ClassTitle } from "./ClassTitle";
 import { MomentRow } from "./MomentRow";
 import { ClassReview } from "./ClassReview";
-import { getClassById, renameClass, type ClassRecord } from "./classes";
+import { DisciplinePicker } from "./DisciplinePicker";
+import {
+  getClassById,
+  renameClass,
+  setClassDiscipline,
+  setClassFavorite,
+  trashClass,
+  type ClassRecord,
+} from "./classes";
 import { KIND_NAMES, type ContentKind } from "./readContent";
 import { formatClock } from "../shared/lib/time";
 
 interface ClassPageProps {
   classId: string;
   onClose: () => void;
+  /** Called after the class moves to the trash, so the gallery reloads behind it. */
+  onTrashed?: () => void;
 }
 
 /**
@@ -19,11 +29,12 @@ interface ClassPageProps {
  * happening and stored then; nothing is recomputed, nothing is re-read, and no
  * extracted text, confidence or processing state ever reaches the student.
  */
-export function ClassPage({ classId, onClose }: ClassPageProps) {
+export function ClassPage({ classId, onClose, onTrashed }: ClassPageProps) {
   const [record, setRecord] = useState<ClassRecord | null | undefined>(undefined);
   /** Index of the moment being reviewed, or null when the timeline is showing. */
   const [reviewing, setReviewing] = useState<number | null>(null);
   const [name, setName] = useState("");
+  const [filing, setFiling] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -83,6 +94,25 @@ export function ClassPage({ classId, onClose }: ClassPageProps) {
           </div>
           <button
             type="button"
+            onClick={() => {
+              const next = !record.favorite;
+              setRecord({ ...record, favorite: next });
+              void setClassFavorite(record.id, next);
+            }}
+            aria-label={
+              record.favorite ? "Remover dos favoritos" : "Marcar como favorita"
+            }
+            aria-pressed={record.favorite}
+            className={`flex size-11 shrink-0 items-center justify-center rounded-full text-[17px] active:opacity-70 ${
+              record.favorite
+                ? "bg-accent-soft text-accent"
+                : "bg-surface-2 text-ink-muted"
+            }`}
+          >
+            {record.favorite ? "★" : "☆"}
+          </button>
+          <button
+            type="button"
             onClick={onClose}
             aria-label="Fechar aula"
             className="flex size-11 shrink-0 items-center justify-center rounded-full bg-surface-2 text-ink-muted active:opacity-70"
@@ -92,10 +122,38 @@ export function ClassPage({ classId, onClose }: ClassPageProps) {
         </div>
 
         {/* One quiet line instead of a block: the curation is context for the
-            class, not the headline above it. */}
-        <p className="mt-1 px-1 text-[13px] text-ink-muted">
-          {formatDate(record.savedAt)} · {formatClock(record.durationMs)} de aula
+            class, not the headline above it. The matéria joins it because it is
+            how the student will look for this class again. */}
+        <p className="mt-1 flex flex-wrap items-center gap-x-1.5 px-1 text-[13px] text-ink-muted">
+          <button
+            type="button"
+            onClick={() => setFiling((open) => !open)}
+            aria-expanded={filing}
+            className={`min-h-7 rounded-full px-2.5 text-[12px] font-medium active:opacity-70 ${
+              record.discipline
+                ? "bg-accent-soft text-accent"
+                : "bg-surface-2 text-ink-muted"
+            }`}
+          >
+            {record.discipline ?? "Escolher matéria"}
+          </button>
+          <span aria-hidden="true">·</span>
+          <span>{formatDate(record.savedAt)}</span>
+          <span aria-hidden="true">·</span>
+          <span>{formatClock(record.durationMs)} de aula</span>
         </p>
+
+        {filing && (
+          <div className="mt-3">
+            <DisciplinePicker
+              value={record.discipline}
+              onChange={(discipline) => {
+                setRecord({ ...record, discipline });
+                void setClassDiscipline(record.id, discipline);
+              }}
+            />
+          </div>
+        )}
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
@@ -182,13 +240,28 @@ export function ClassPage({ classId, onClose }: ClassPageProps) {
       </div>
 
       {record.moments.length > 0 && (
-        <footer className="border-t border-line px-5 pb-[max(16px,env(safe-area-inset-bottom))] pt-3">
+        <footer className="flex gap-2.5 border-t border-line px-5 pb-[max(16px,env(safe-area-inset-bottom))] pt-3">
           <button
             type="button"
             onClick={() => setReviewing(0)}
-            className="min-h-11 w-full rounded-xl bg-accent py-3 text-sm font-medium text-accent-ink active:opacity-80"
+            className="min-h-11 flex-1 rounded-xl bg-accent py-3 text-sm font-medium text-accent-ink active:opacity-80"
           >
             Revisar a aula
+          </button>
+          {/* No confirmation, on purpose: this is the reversible one. The class
+              goes to the trash whole and comes back whole, and saying so here
+              is worth more than a dialog that would make it feel final. */}
+          <button
+            type="button"
+            onClick={async () => {
+              await trashClass(record.id);
+              onTrashed?.();
+              onClose();
+            }}
+            aria-label="Mover a aula para a lixeira"
+            className="flex min-h-11 items-center justify-center rounded-xl bg-surface-2 px-4 text-sm font-medium text-ink active:opacity-70"
+          >
+            <span aria-hidden="true">🗑</span>
           </button>
         </footer>
       )}

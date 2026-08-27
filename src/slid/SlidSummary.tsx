@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ClassTitle } from "./ClassTitle";
+import { DisciplinePicker } from "./DisciplinePicker";
 import { MomentRow } from "./MomentRow";
 import {
   KIND_NAMES,
@@ -23,6 +24,8 @@ const UNTITLED = "Aula sem título";
 /** What the session understood, ready to be stored as the class itself. */
 export interface SavedClass {
   subject: string;
+  /** Null when the student did not file it under anything. */
+  discipline: string | null;
   moments: {
     id: string;
     label: string;
@@ -65,6 +68,7 @@ export function SlidSummary({
   onDiscard,
 }: SlidSummaryProps) {
   const [subject, setSubject] = useState(UNTITLED);
+  const [discipline, setDiscipline] = useState<string | null>(null);
   const [edited, setEdited] = useState(false);
   const [discarding, setDiscarding] = useState(false);
   const ocr = useOcr();
@@ -124,8 +128,9 @@ export function SlidSummary({
           .map((moment) => moment.heading)
           .filter((heading): heading is string => Boolean(heading)),
         kinds,
+        discipline,
       }),
-    [captures.length, elapsedMs, described, kinds],
+    [captures.length, elapsedMs, described, kinds, discipline],
   );
 
   return (
@@ -260,6 +265,13 @@ export function SlidSummary({
       )}
 
       <footer className="border-t border-line px-5 pb-[max(16px,env(safe-area-inset-bottom))] pt-3">
+        {/* The matéria sits with the save button, because filing the class is
+            part of saving it — not a setting to go looking for afterwards. */}
+        {captures.length > 0 && (
+          <div className="pb-3">
+            <DisciplinePicker value={discipline} onChange={setDiscipline} />
+          </div>
+        )}
         {captures.length === 0 ? (
           // Saving nothing announced a class that does not exist. The only
           // honest action here is going back to the camera.
@@ -276,6 +288,7 @@ export function SlidSummary({
           onClick={() =>
             onSave({
               subject: subjectValue.trim() || UNTITLED,
+              discipline,
               moments: described.map(({ capture, label, detail, kind }) => ({
                 id: capture.id,
                 label,
