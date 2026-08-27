@@ -7,7 +7,7 @@
  */
 export function capturePhotoFromVideo(
   video: HTMLVideoElement,
-  options: { mirrored?: boolean } = {},
+  options: { mirrored?: boolean; zoom?: number } = {},
 ): Promise<{ blob: Blob; width: number; height: number }> {
   const width = video.videoWidth;
   const height = video.videoHeight;
@@ -35,7 +35,13 @@ export function capturePhotoFromVideo(
     ctx.translate(width, 0);
     ctx.scale(-1, 1);
   }
-  ctx.drawImage(video, 0, 0, width, height);
+  // Digital zoom crops the middle and fills the frame with it, so the saved
+  // photo holds what the viewfinder was showing. At 1x — and whenever the
+  // hardware did the zooming itself — this is the whole frame, unchanged.
+  const zoom = Math.max(1, options.zoom ?? 1);
+  const sw = width / zoom;
+  const sh = height / zoom;
+  ctx.drawImage(video, (width - sw) / 2, (height - sh) / 2, sw, sh, 0, 0, width, height);
 
   return new Promise((resolve, reject) => {
     canvas.toBlob(

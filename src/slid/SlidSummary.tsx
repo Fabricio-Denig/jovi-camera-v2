@@ -104,6 +104,11 @@ export function SlidSummary({
           previousText:
             index > 0 ? readByCapture.get(captures[index - 1].id)?.text : undefined,
           confidence: readByCapture.get(capture.id)?.confidence,
+          // Where the moment sits and whether the surface kept filling up —
+          // the only things known about a page that would not read.
+          position: index,
+          total: captures.length,
+          refined: capture.refinements > 0,
         }),
       })),
     [captures, readByCapture],
@@ -240,8 +245,12 @@ export function SlidSummary({
                   aria-hidden="true"
                   className="absolute bottom-4 left-[5px] top-3 w-px bg-line"
                 />
-                {described.map(({ capture, label, detail, kind }) => (
-                  <li key={capture.id}>
+                {described.map(({ capture, label, detail, kind }, index) => (
+                  <li
+                    key={capture.id}
+                    className="animate-[slid-enter_300ms_ease-out_both]"
+                    style={{ animationDelay: `${Math.min(index, 8) * 40}ms` }}
+                  >
                     <MomentRow
                       atMs={capture.atMs}
                       label={label}
@@ -280,7 +289,7 @@ export function SlidSummary({
           <button
             type="button"
             onClick={onDiscard}
-            className="min-h-11 w-full rounded-xl bg-surface-2 py-3 text-sm font-medium text-ink active:opacity-70"
+            className="min-h-11 w-full rounded-xl bg-surface-2 py-3 text-sm font-medium text-ink transition-transform duration-150 active:scale-[0.98] active:opacity-70"
           >
             Voltar para a câmera
           </button>
@@ -303,7 +312,7 @@ export function SlidSummary({
               overview,
             })
           }
-          className="min-h-11 w-full rounded-xl bg-accent py-3 text-sm font-medium text-accent-ink active:opacity-80"
+          className="min-h-11 w-full rounded-xl bg-accent py-3 text-sm font-medium text-accent-ink transition-transform duration-150 active:scale-[0.98] active:opacity-80"
         >
           Salvar aula
         </button>
@@ -348,14 +357,14 @@ function DiscardConfirm({
           <button
             type="button"
             onClick={onKeep}
-            className="min-h-11 flex-1 rounded-xl bg-accent text-[13.5px] font-medium text-accent-ink active:opacity-80"
+            className="min-h-11 flex-1 rounded-xl bg-accent text-[13.5px] font-medium text-accent-ink transition-transform duration-150 active:scale-[0.98] active:opacity-80"
           >
             Manter a aula
           </button>
           <button
             type="button"
             onClick={onDiscard}
-            className="min-h-11 flex-1 rounded-xl bg-surface-2 text-[13.5px] font-medium text-danger active:opacity-70"
+            className="min-h-11 flex-1 rounded-xl bg-surface-2 text-[13.5px] font-medium text-danger transition-transform duration-150 active:scale-[0.98] active:opacity-70"
           >
             Descartar
           </button>

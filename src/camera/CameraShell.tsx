@@ -8,6 +8,8 @@ import { PermissionGate } from "./PermissionGate";
 import { ShutterButton } from "./ShutterButton";
 import { TopBar } from "./TopBar";
 import { useCamera } from "./useCamera";
+import { useZoom } from "./useZoom";
+import { ZoomControl } from "./ZoomControl";
 import { useVideoRecorder } from "./useVideoRecorder";
 import { Viewfinder } from "./Viewfinder";
 import { ModePreviewCard } from "../modes/ModePreviewCard";
@@ -61,6 +63,7 @@ export function CameraShell({
     diagnostics,
   } = useCamera();
   const recorder = useVideoRecorder(stream);
+  const zoom = useZoom(stream);
 
   const mode = getMode(modeId);
   const [lastCapture, setLastCapture] = useState<CapturedMedia | null>(null);
@@ -77,6 +80,7 @@ export function CameraShell({
     videoRef,
     // Only look for a board when the suggestion could actually be acted on.
     detectionEnabled: status === "ready" && !isSlid && mode.fidelity === "real",
+    zoom: zoom.digital,
   });
 
   useEffect(() => {
@@ -153,7 +157,7 @@ export function CameraShell({
         if (!videoRef.current) return;
         const { blob, width, height } = await capturePhotoFromVideo(
           videoRef.current,
-          { mirrored: facing === "user" },
+          { mirrored: facing === "user", zoom: zoom.digital },
         );
         await persist({
           id: crypto.randomUUID(),
@@ -198,7 +202,7 @@ export function CameraShell({
       {/* Mounted unconditionally: the stream is attached to this element from an
           effect, so unmounting it on a status change would silently drop the
           preview and leave a black screen. */}
-      <Viewfinder videoRef={videoRef} facing={facing} />
+      <Viewfinder videoRef={videoRef} facing={facing} zoom={zoom.digital} />
 
       {!isReady && (
         <PermissionGate
@@ -224,6 +228,7 @@ export function CameraShell({
           bounds={slid.contentBounds}
           videoRef={videoRef}
           facing={facing}
+          zoom={zoom.digital}
           tentative
         />
       )}
@@ -235,6 +240,7 @@ export function CameraShell({
           bounds={slid.contentBounds}
           videoRef={videoRef}
           facing={facing}
+          zoom={zoom.digital}
           label="Aula detectada"
         />
       )}
@@ -244,6 +250,7 @@ export function CameraShell({
           bounds={slid.contentBounds}
           videoRef={videoRef}
           facing={facing}
+          zoom={zoom.digital}
           capturedKey={slid.lastMoment?.id ?? null}
         />
       )}
@@ -257,6 +264,15 @@ export function CameraShell({
 
       {isReady && !isSlid && mode.fidelity === "simulated" && (
         <ModePreviewCard mode={mode} onBack={() => onSelectMode("photo")} />
+      )}
+
+      {/* Sempre à mão durante a sessão, ao contrário dos outros controles:
+          enquadrar o slide é a única coisa que o estudante realmente precisa
+          fazer com as mãos, e é a primeira, antes de apoiar o celular. */}
+      {isReady && isSlid && slid.status !== "finished" && (
+        <div className="pointer-events-auto absolute bottom-28 left-4 z-30">
+          <ZoomControl level={zoom.level} onSelect={zoom.setLevel} />
+        </div>
       )}
 
       {isReady && isSlid && slid.status !== "finished" && (
@@ -349,6 +365,9 @@ export function CameraShell({
           <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[5] h-64 bg-gradient-to-t from-black/80 via-black/55 to-transparent" />
 
           <div className="absolute inset-x-0 bottom-0 z-10 flex flex-col items-center gap-5 pb-6">
+            {mode.kind === "photo" && (
+              <ZoomControl level={zoom.level} onSelect={zoom.setLevel} />
+            )}
             <ModeTabs
               modeId={modeId}
               onSelect={onSelectMode}
@@ -403,7 +422,7 @@ export function CameraShell({
               onOpenClass(savedClass.id);
               setSavedClass(null);
             }}
-            className="flex min-h-11 max-w-full animate-[slid-rise_240ms_ease-out] items-center gap-2 rounded-full bg-accent px-4 py-2 text-[12.5px] font-medium text-accent-ink active:opacity-80"
+            className="flex min-h-11 max-w-full animate-[slid-flash_5000ms_ease-out_both] items-center gap-2 rounded-full bg-accent px-4 py-2 text-[12.5px] font-medium text-accent-ink transition-transform duration-150 active:scale-95 active:opacity-80"
           >
             {/* The name is confirmation, not the message: a real class title
                 ran to three lines and turned a toast into a paragraph. */}

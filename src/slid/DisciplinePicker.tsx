@@ -54,9 +54,9 @@ export function DisciplinePicker({
                 // is undone the same way it was made.
                 onChange(selected ? null : name);
               }}
-              className={`min-h-9 shrink-0 whitespace-nowrap rounded-full px-3.5 text-[13px] font-medium active:opacity-70 ${
+              className={`min-h-9 shrink-0 whitespace-nowrap rounded-full px-3.5 text-[13px] font-medium transition-all duration-200 ease-out active:scale-95 active:opacity-80 ${
                 selected
-                  ? "bg-accent text-accent-ink"
+                  ? "bg-accent text-accent-ink shadow-[0_2px_10px_-2px] shadow-accent/50"
                   : "bg-surface-2 text-ink-muted"
               }`}
             >
@@ -67,7 +67,7 @@ export function DisciplinePicker({
       </div>
 
       {naming && (
-        <div className="mt-2 flex gap-2">
+        <div className="mt-2 flex animate-[slid-enter_200ms_ease-out] gap-2">
           <input
             autoFocus
             value={draft}
@@ -84,7 +84,7 @@ export function DisciplinePicker({
           <button
             type="button"
             onClick={create}
-            className="min-h-11 shrink-0 rounded-xl bg-accent px-4 text-[13.5px] font-medium text-accent-ink active:opacity-80"
+            className="min-h-11 shrink-0 rounded-xl bg-accent px-4 text-[13.5px] font-medium text-accent-ink transition-transform duration-150 active:scale-95 active:opacity-80"
           >
             Criar
           </button>

@@ -6,6 +6,7 @@ import {
   saveCapture,
   trashCaptures,
 } from "../shared/lib/mediaStore";
+import { reopenOverview } from "./readContent";
 import type { CapturedMedia } from "../types/camera";
 
 /**
@@ -132,11 +133,13 @@ export async function setClassDiscipline(
   discipline: string | null,
 ): Promise<void> {
   await editClass(id, (session) => {
+    // The stored sentence opens with the matéria, so it has to move with it.
+    const overview = reopenOverview(session.overview ?? "", discipline);
     if (!discipline) {
       const { discipline: _removed, ...rest } = session;
-      return rest;
+      return { ...rest, overview };
     }
-    return { ...session, discipline };
+    return { ...session, discipline, overview };
   });
 }
 

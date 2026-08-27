@@ -44,9 +44,9 @@ export function FilterChips({
             role="tab"
             aria-selected={selected}
             onClick={() => onSelect(chip.id)}
-            className={`min-h-9 shrink-0 whitespace-nowrap rounded-full px-3 text-[12.5px] font-medium transition-colors active:opacity-70 ${
+            className={`min-h-9 shrink-0 whitespace-nowrap rounded-full px-3 text-[12.5px] font-medium transition-all duration-200 ease-out active:scale-95 active:opacity-80 ${
               selected
-                ? "bg-accent text-accent-ink"
+                ? "bg-accent text-accent-ink shadow-[0_2px_10px_-2px] shadow-accent/50"
                 : "bg-surface-2 text-ink-muted"
             }`}
           >

@@ -88,6 +88,37 @@ body {
   }
 }
 
+/* Uma lista chegando: as linhas entram na ordem em que a aula aconteceu, com um
+   atraso curto entre elas. Curto de propósito — passar de 300 ms transforma
+   "carregou" em "está carregando". */
+@keyframes slid-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Uma confirmação que aparece e se apaga sozinha: salvou, restaurou, criou. */
+@keyframes slid-flash {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  12%,
+  82% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

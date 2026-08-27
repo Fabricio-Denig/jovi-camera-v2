@@ -47,13 +47,35 @@ function getSampler() {
   return sampler;
 }
 
-/** Downscaled grayscale snapshot of the current frame. */
-export function sampleFrame(video: HTMLVideoElement): Uint8Array | null {
+/**
+ * Downscaled grayscale snapshot of the current frame.
+ *
+ * `zoom` is the crop the preview is applying on its own — the part the camera
+ * hardware did not do. The session has to read the same window the student is
+ * looking at, or it would answer questions about a frame nobody is seeing.
+ */
+export function sampleFrame(
+  video: HTMLVideoElement,
+  zoom = 1,
+): Uint8Array | null {
   if (!video.videoWidth || !video.videoHeight) return null;
   const s = getSampler();
   if (!s) return null;
 
-  s.ctx.drawImage(video, 0, 0, SAMPLE_W, SAMPLE_H);
+  const scale = Math.max(1, zoom);
+  const sw = video.videoWidth / scale;
+  const sh = video.videoHeight / scale;
+  s.ctx.drawImage(
+    video,
+    (video.videoWidth - sw) / 2,
+    (video.videoHeight - sh) / 2,
+    sw,
+    sh,
+    0,
+    0,
+    SAMPLE_W,
+    SAMPLE_H,
+  );
   const { data } = s.ctx.getImageData(0, 0, SAMPLE_W, SAMPLE_H);
 
   const gray = new Uint8Array(SAMPLE_W * SAMPLE_H);
