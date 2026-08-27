@@ -240,6 +240,12 @@ export function useSlidSession({
   );
 
   // Contextual detection: looks for a board only when it could act on it.
+  //
+  // Deliberately a stricter question than the one the session asks. Offering a
+  // class is unprompted — nobody pointed the camera anywhere on purpose — so it
+  // waits for looksLikeClass, several lines of writing with clean surface
+  // between them, and not merely for a surface with marks on it. A tiled floor
+  // passes the session gate and must never open its mouth here.
   useEffect(() => {
     if (!detectionEnabled || suggestionDismissedRef.current) return;
 
@@ -250,7 +256,7 @@ export function useSlidSession({
       if (!sample) return;
 
       const scene = readScene(sample);
-      if (scene.isStudy) {
+      if (scene.looksLikeClass) {
         detectionCountRef.current++;
         // The bounds go up from the first positive read: what the camera is
         // weighing is worth seeing, not only what it concluded.

@@ -145,10 +145,19 @@ export function markMask(gray: Uint8Array): Uint8Array {
 export interface SceneSignals {
   /** Sample rows belonging to a band of writing. */
   writtenRows: number;
+  /** How many separate bands — lines of writing with clean surface between them. */
+  lines: number;
+  /** Share of the marks in those bands that are stroke-thin rather than bars. */
+  thinShare: number;
   /** Average number of mark runs across those rows — how broken up the writing is. */
   runDensity: number;
-  /** Whether this frame holds study material. */
+  /** Whether this frame holds study material. Gate for capturing during a session. */
   isStudy: boolean;
+  /**
+   * Whether this frame holds enough evidence to *offer* SliD unprompted, which
+   * is a stricter question than whether it holds study material. See below.
+   */
+  looksLikeClass: boolean;
   /**
    * Where the writing sits, as fractions of the frame. Measured over the bands
    * alone, so a slide across a room is framed on the slide rather than on the
@@ -195,6 +204,59 @@ const MAX_WRITTEN_ROWS = Math.round(SAMPLE_H * 0.6);
 /** Below this, the band is too sparse to be writing. */
 const MIN_RUN_DENSITY = 6;
 
+/*
+ * Offering SliD is a stricter question than capturing during a session, and it
+ * used to be the same question — both loops called isStudy. That is what let a
+ * wall offer a class: isStudy accepts a single band of three rows, because
+ * during a session, pointed at a page the student chose, one line is genuinely
+ * a line. Unprompted, over a surface nobody said anything about, one band of
+ * texture is not evidence of a lecture.
+ *
+ * So the suggestion asks for what a page, a slide and a board all have and
+ * what a wall, a table and a lit screen do not: several lines, with clean
+ * surface between them. The band count is the load-bearing part — texture
+ * (plaster, wood grain, sensor noise on a flat wall) marks one solid block of
+ * rows with no gaps, because there is nothing there to leave a gap. Writing is
+ * lines with space between them, whatever the surface.
+ *
+ * Being wrong in the two directions costs different things. Staying quiet over
+ * a real board costs one tap on the SliD mode, and the student is already
+ * looking at their phone. Offering a class over a wall costs the whole claim
+ * that the camera understands what it is seeing.
+ */
+/** Two lines and a gap. One band is texture as easily as it is a title. */
+const SUGGEST_MIN_LINES = 2;
+/** Enough writing to be a surface being used, not an edge caught at an angle. */
+const SUGGEST_MIN_ROWS = 8;
+/** Broken up more than the session gate asks, since nobody vouched for this frame. */
+const SUGGEST_MIN_RUN_DENSITY = 7;
+/** Half the frame written is already closer to a busy room than to a document. */
+const SUGGEST_MAX_ROWS = Math.round(SAMPLE_H * 0.5);
+
+/**
+ * A mark this wide or narrower is a stroke. At this scale a pen stroke, a
+ * letter stem and a stroke of chalk are one or two sample pixels across —
+ * that is what writing is made of, on any surface.
+ */
+const STROKE_WIDTH = 2;
+/**
+ * How much of the writing has to be strokes.
+ *
+ * The band count alone was not enough, and it took running the scenes through
+ * the browser's own decoder and scaler to see it: a laptop keyboard and a
+ * curtain both produce several bands of many short runs, and both offered a
+ * class. They are built from bars, not strokes — evenly spaced keys, evenly
+ * folded cloth — and the difference is plain once measured over the bands:
+ *
+ *   teclado do notebook    0.19–0.21        cortina com dobras     0.09–0.10
+ *   ─────────────────────────────────────────────────────────────────────────
+ *   slide num notebook     0.38             lousa verde com giz    0.68–0.70
+ *   folha escrita          0.55–0.58        folha A4               0.71–0.72
+ *   slide escuro           0.59–0.60        lousa branca escrita   0.75
+ *   caderno aberto         0.64–0.65        título e fórmula       0.78–0.80
+ */
+const SUGGEST_MIN_THIN = 0.28;
+
 export function readScene(gray: Uint8Array): SceneSignals {
   const mask = markMask(gray);
 
@@ -225,6 +287,7 @@ export function readScene(gray: Uint8Array): SceneSignals {
   const inBand = new Uint8Array(SAMPLE_H);
   let writtenRows = 0;
   let runsTotal = 0;
+  let lines = 0;
   let run = 0;
   for (let y = 0; y <= SAMPLE_H; y++) {
     if (y < SAMPLE_H && written[y]) {
@@ -237,15 +300,44 @@ export function readScene(gray: Uint8Array): SceneSignals {
         runsTotal += rowRuns[k];
       }
       writtenRows += run;
+      lines++;
     }
     run = 0;
   }
+
+  // The proportions of the writing itself, so the desk, the bezel and the wall
+  // behind it never get a say in what the writing is made of.
+  let strokes = 0;
+  let marksRuns = 0;
+  for (let y = 0; y < SAMPLE_H; y++) {
+    if (!inBand[y]) continue;
+    let width = 0;
+    for (let x = 0; x <= SAMPLE_W; x++) {
+      if (x < SAMPLE_W && mask[y * SAMPLE_W + x]) {
+        width++;
+        continue;
+      }
+      if (width) {
+        marksRuns++;
+        if (width <= STROKE_WIDTH) strokes++;
+      }
+      width = 0;
+    }
+  }
+  const thinShare = marksRuns ? strokes / marksRuns : 0;
 
   const runDensity = writtenRows ? runsTotal / writtenRows : 0;
   const isStudy =
     writtenRows >= MIN_WRITTEN_ROWS &&
     writtenRows <= MAX_WRITTEN_ROWS &&
     runDensity >= MIN_RUN_DENSITY;
+  const looksLikeClass =
+    isStudy &&
+    lines >= SUGGEST_MIN_LINES &&
+    writtenRows >= SUGGEST_MIN_ROWS &&
+    writtenRows <= SUGGEST_MAX_ROWS &&
+    runDensity >= SUGGEST_MIN_RUN_DENSITY &&
+    thinShare >= SUGGEST_MIN_THIN;
 
   let bounds: ContentBounds | null = null;
   if (isStudy) {
@@ -273,7 +365,7 @@ export function readScene(gray: Uint8Array): SceneSignals {
     }
   }
 
-  return { writtenRows, runDensity, isStudy, bounds };
+  return { writtenRows, lines, thinShare, runDensity, isStudy, looksLikeClass, bounds };
 }
 
 /**
