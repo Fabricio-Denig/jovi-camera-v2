@@ -408,6 +408,12 @@ export interface ClassOverview {
   headings: string[];
   /** Recognised structures with how often each appeared. */
   kinds: [ContentKind, number][];
+  /**
+   * The matéria, when the student chose one. The only fact in this sentence
+   * that did not come from the surface — and it is here precisely because a
+   * person put it there. Left out, the sentence reads exactly as before.
+   */
+  discipline?: string | null;
 }
 
 export function summariseClass({
@@ -415,6 +421,7 @@ export function summariseClass({
   durationMs,
   headings,
   kinds,
+  discipline,
 }: ClassOverview): string {
   if (moments === 0) return "";
 
@@ -422,12 +429,17 @@ export function summariseClass({
     moments === 1 ? "1 momento importante" : `${moments} momentos importantes`;
   const minutes = Math.max(1, Math.round(durationMs / 60000));
   const span = `${minutes} ${minutes === 1 ? "minuto" : "minutos"}`;
+  // "Esta aula de Física" — the matéria belongs to the class, so it belongs to
+  // the sentence about the class. "Outra" is the button for naming one, not a
+  // name, and never reaches the text.
+  const named = discipline && discipline !== "Outra" ? discipline : null;
+  const subject = named ? `Esta aula de ${named}` : "Esta aula";
 
   // Nothing read cleanly. Say what the class does have rather than dressing up
   // an absence — the captures are still in order, and that is worth something.
   if (headings.length === 0) {
     return (
-      `Esta aula registrou ${count} em ${span}. ` +
+      `${subject} registrou ${count} em ${span}. ` +
       "Alguns textos não foram reconhecidos com confiança, mas as capturas " +
       "ficaram organizadas em ordem para revisão."
     );
@@ -435,8 +447,8 @@ export function summariseClass({
 
   const focus = describeFocus(kinds);
   const opening = focus
-    ? `Esta aula teve ${count} em ${span}, com foco em ${focus}.`
-    : `Esta aula teve ${count} em ${span}.`;
+    ? `${subject} teve ${count} em ${span}, com foco em ${focus}.`
+    : `${subject} teve ${count} em ${span}.`;
 
   const unique = [...new Set(headings)];
   if (unique.length === 1) {

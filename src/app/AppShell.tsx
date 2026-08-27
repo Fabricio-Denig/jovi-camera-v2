@@ -61,6 +61,7 @@ export function AppShell() {
             <ClassPage
               classId={openClassId}
               onClose={() => setOpenClassId(null)}
+              onTrashed={() => setGalleryRefresh((n) => n + 1)}
             />
           </div>
         )}
