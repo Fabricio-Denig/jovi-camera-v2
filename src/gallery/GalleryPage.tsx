@@ -264,8 +264,11 @@ function EmptyState({ view }: { view: View }) {
           : "Suas fotos, vídeos e aulas aparecem aqui.";
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-2 px-8 text-center">
+      {/* Uma câmera, não uma moldura: 🖼 é escuro sobre fundo escuro e neste
+          tamanho se lê como glifo quebrado, que é a pior coisa possível numa
+          tela que já está vazia. */}
       <div className="flex size-14 items-center justify-center rounded-full bg-surface-2 text-2xl">
-        {view === "favoritos" ? "★" : "🖼"}
+        {view === "favoritos" ? "★" : view === "videos" ? "🎞" : "📷"}
       </div>
       <p className="text-sm text-ink-muted">{text}</p>
     </div>
