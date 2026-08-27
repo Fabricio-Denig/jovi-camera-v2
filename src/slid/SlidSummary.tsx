@@ -104,6 +104,11 @@ export function SlidSummary({
           previousText:
             index > 0 ? readByCapture.get(captures[index - 1].id)?.text : undefined,
           confidence: readByCapture.get(capture.id)?.confidence,
+          // Where the moment sits and whether the surface kept filling up —
+          // the only things known about a page that would not read.
+          position: index,
+          total: captures.length,
+          refined: capture.refinements > 0,
         }),
       })),
     [captures, readByCapture],

@@ -42,22 +42,47 @@ interface DescribeOptions {
   previousText?: string;
   /** How well this page read. Below the bar, the moment shows its label alone. */
   confidence?: number;
+  /** Where this moment sits in the class, and how many there are in all. */
+  position?: number;
+  total?: number;
+  /** The surface kept growing while this stayed the same topic. */
+  refined?: boolean;
 }
 
 /**
- * Used when the surface carried nothing readable.
+ * What a moment is called when the surface carried nothing readable.
  *
- * Deliberately generic. The capture rule knows that the surface was replaced;
+ * Every one of these has to be true without having read a word, which rules
+ * out most of what would sound clever. The rule knows the surface was replaced;
  * it does not know whether that surface was a projector, a whiteboard or a
- * sheet of paper, and "Novo slide" claimed one of them. A graceful generic is
- * better than a confident guess that is wrong a third of the time.
+ * sheet of paper — so "Trecho da apresentação" and "Anotação no quadro" are
+ * exactly the confident guess to avoid, wrong a third of the time.
+ *
+ * What it does know is honest and, usefully, different for each moment: where
+ * the moment sits in the class, and whether the surface kept filling up after
+ * it was kept. A lecture whose reading failed throughout used to come back as
+ * seven identical rows, which reads as a camera that noticed nothing seven
+ * times. These say the little that is actually known, and it is enough that no
+ * two neighbours land on the same words.
  */
-const FALLBACK_LABELS: Record<MomentReason, string> = {
-  "novo-topico": "Momento importante",
-  "novo-slide": "Momento importante",
-  "novo-conteudo": "Conteúdo acrescentado",
-  manual: "Você marcou este momento",
-};
+function fallbackLabel(
+  reason: MomentReason,
+  { position, total, refined }: DescribeOptions,
+): string {
+  if (reason === "manual") return "Você marcou este momento";
+  // The surface grew under the same topic — the one thing the rule saw happen.
+  // Two ways of saying it, alternating, because two neighbours that both grew
+  // is common and two identical rows is the thing being fixed.
+  if (reason === "novo-conteudo" || refined)
+    return position !== undefined && position % 2 === 1
+      ? "Conteúdo acrescentado"
+      : "Desenvolvimento do tópico";
+  if (position === 0) return "Início da aula";
+  if (total !== undefined && position === total - 1 && total > 2)
+    return "Fechamento da aula";
+  if (position === undefined) return "Momento importante";
+  return position % 2 === 0 ? "Conteúdo para revisão" : "Registro da aula";
+}
 
 /**
  * The fallback title, used only when the surface carried no heading of its own.
@@ -90,15 +115,16 @@ export const KIND_TAGS: Record<ContentKind, string> = {
 
 export function describeMoment(
   reason: MomentReason,
-  { text, previousText, confidence }: DescribeOptions = {},
+  options: DescribeOptions = {},
 ): MomentDescription {
+  const { text, previousText, confidence } = options;
   const lines = text ? toLines(text) : [];
 
   // Nothing read cleanly. Handwriting defeats OCR routinely, so the honest
   // answer is the reason the moment was kept — never a guess at what it was.
   if (lines.length === 0)
     return {
-      label: FALLBACK_LABELS[reason],
+      label: fallbackLabel(reason, options),
       detail: null,
       kind: null,
       heading: null,
@@ -131,7 +157,7 @@ export function describeMoment(
       : null;
 
   if (reason === "manual") {
-    return { label: FALLBACK_LABELS.manual, detail, kind, heading: null };
+    return { label: "Você marcou este momento", detail, kind, heading: null };
   }
 
 
@@ -139,8 +165,25 @@ export function describeMoment(
   // a far better title than any category ever is: "Leis de Newton" instead of
   // "Nova fórmula". It is a line the lecturer wrote, so nothing is invented.
   const heading = pickHeading(lines);
+
+  // The same words twice running are not two topics. A lecturer works through
+  // one slide for two minutes, or four moments in a row are all formulas, and
+  // the timeline came back saying "Funcao do 20 grau" twice and "Fórmula
+  // apresentada" four times — which reads as a camera that saw the same thing
+  // and filed it again. It is the same topic with more on it, and that is what
+  // the row should say. Working out what the row before was called is enough to
+  // catch both cases with one rule.
+  const previousHeading = previousLines.length ? pickHeading(previousLines) : null;
+  const title = heading ?? KIND_LABELS[kind];
+  const previousTitle = previousLines.length
+    ? (previousHeading ?? KIND_LABELS[classifyContent(previousLines)])
+    : null;
+  const continued = Boolean(
+    previousTitle && normalise(title) === normalise(previousTitle),
+  );
+
   return {
-    label: heading ?? KIND_LABELS[kind],
+    label: continued ? fallbackLabel(reason, { ...options, refined: true }) : title,
     detail: heading && detail === heading ? null : detail,
     kind,
     heading,
