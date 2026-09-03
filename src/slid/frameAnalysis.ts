@@ -92,13 +92,47 @@ export function sampleFrame(
  */
 const BACKGROUND_RADIUS = 6;
 
-/**
+/*
  * How far a pixel must depart from the surface behind it to count as a mark.
+ *
  * Compared against a *local* background, never a global one: a vignette, a
  * shadow falling across the page or a lamp being switched on all move the
  * background and the pixel together, so the mask does not move at all.
+ *
+ * The threshold itself used to be 22 out of 255, fixed, and that is what a
+ * projector in a lit room fails. Measured on the same slide as the room lights
+ * come up, the ink pulls away from the screen by less and less:
+ *
+ *   contraste 100%   p90 36        contraste 50%   p90 18
+ *   contraste  75%   p90 27        contraste 35%   p90 13   ← 0 linhas em 22
+ *
+ * So the bar moves with the scene. It cannot move with brightness alone —
+ * measured across the adversarial scenes, contrast is not what separates study
+ * material from a room: a venetian blind pulls away harder (p90 57) than a real
+ * projected slide does (p90 55). Texture out-contrasts writing routinely.
+ *
+ * That is the whole reason this is only a normalisation. It puts a page under a
+ * lamp and a slide across a dim hall on the same footing, and then the tests
+ * that actually decide — runs, bands, stroke width — do their work on a mask of
+ * comparable density either way. The floor is what keeps a blank wall blank:
+ * below it there is nothing to normalise, only sensor noise to amplify.
  */
+/** The bar for a scene with light to spare. Unchanged, and it stays the ceiling. */
 const MARK_DELTA = 22;
+/** How much of what a faint scene does offer counts as ink. */
+const MARK_DELTA_SHARE = 0.8;
+/*
+ * The percentile that stands for the ink, and it has to be a high one. Writing
+ * is sparse — a few per cent of the pixels — so the 90th percentile is still
+ * describing the paper. Tried there first, and it dragged the bar down on
+ * scenes that were working: an open notebook reads p90 12 and p98 25, and
+ * rescuing it at 10 flooded the page until fifty of the ninety-six rows counted
+ * as written. At the 98th the two cases separate cleanly — the notebook keeps
+ * the full bar, and the projector losing to daylight (p98 21, then 15) is the
+ * one that steps down.
+ */
+/** Never go below this: a smooth wall would turn its own noise into writing. */
+const MARK_DELTA_FLOOR = 8;
 
 /**
  * A row of writing breaks into many short runs of marks — letters, strokes,
@@ -157,9 +191,41 @@ function localBackground(gray: Uint8Array, radius: number): Float64Array {
  */
 export function markMask(gray: Uint8Array): Uint8Array {
   const background = localBackground(gray, BACKGROUND_RADIUS);
+
+  const departure = new Float64Array(gray.length);
+  // A 256-bucket histogram rather than a sort: the percentile is wanted every
+  // tick, and the values are already bytes.
+  const histogram = new Uint32Array(256);
+  for (let i = 0; i < gray.length; i++) {
+    const value = Math.abs(gray[i] - background[i]);
+    departure[i] = value;
+    histogram[Math.min(255, Math.round(value))]++;
+  }
+
+  const target = gray.length * 0.98;
+  let seen = 0;
+  let ink = 0;
+  for (let level = 0; level < 256; level++) {
+    seen += histogram[level];
+    if (seen >= target) {
+      ink = level;
+      break;
+    }
+  }
+  // One-sided on purpose. Adapting in both directions was tried first and cost
+  // more than it bought: raising the bar on a bright slide thinned its strokes
+  // until the lines merged into one band, and green chalk lost its density. A
+  // scene with contrast to spare is already handled — the only broken case is
+  // the scene whose ink never reaches the bar at all, so that is the only case
+  // that moves it.
+  const delta =
+    ink >= MARK_DELTA
+      ? MARK_DELTA
+      : Math.max(MARK_DELTA_FLOOR, ink * MARK_DELTA_SHARE);
+
   const mask = new Uint8Array(gray.length);
   for (let i = 0; i < gray.length; i++) {
-    if (Math.abs(gray[i] - background[i]) > MARK_DELTA) mask[i] = 1;
+    if (departure[i] > delta) mask[i] = 1;
   }
   return mask;
 }
