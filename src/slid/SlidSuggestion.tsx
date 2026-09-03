@@ -22,7 +22,7 @@ export function SlidSuggestion({ onAccept, onDismiss }: SlidSuggestionProps) {
 
   return (
     <div className="pointer-events-none absolute inset-x-0 top-[max(16px,env(safe-area-inset-top))] z-30 flex flex-col items-center gap-2.5 px-4">
-      <div className="pointer-events-auto flex animate-[slid-rise_240ms_ease-out] items-center gap-1 rounded-full bg-accent py-1 pl-3.5 pr-1.5 text-accent-ink shadow-lg">
+      <div className="pointer-events-auto flex animate-[slid-rise_240ms_ease-out] items-center gap-1 rounded-full bg-accent pl-3.5 pr-1.5 text-accent-ink shadow-lg">
         <span
           aria-hidden="true"
           className="size-2 shrink-0 animate-pulse rounded-full bg-accent-ink/85"

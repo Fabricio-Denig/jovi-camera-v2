@@ -6,7 +6,11 @@ import { DebugPanel } from "./DebugPanel";
 import { ModeTabs } from "./ModeTabs";
 import { PermissionGate } from "./PermissionGate";
 import { ShutterButton } from "./ShutterButton";
-import { TopBar } from "./TopBar";
+import { TopBar, nextAspect, nextTimer, type TimerSeconds } from "./TopBar";
+import { photoWindow, type AspectRatio } from "./aspect";
+import { FrameGuides } from "./FrameGuides";
+import { SettingsSheet, DEFAULT_SETTINGS, type CameraSettings } from "./SettingsSheet";
+import { useTorch } from "./useTorch";
 import { useCamera } from "./useCamera";
 import { useZoom } from "./useZoom";
 import { ZoomControl } from "./ZoomControl";
@@ -64,6 +68,13 @@ export function CameraShell({
   } = useCamera();
   const recorder = useVideoRecorder(stream);
   const zoom = useZoom(stream);
+  const torch = useTorch(stream);
+  const [timer, setTimer] = useState<TimerSeconds>(0);
+  const [aspect, setAspect] = useState<AspectRatio>("4:3");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settings, setSettings] = useState<CameraSettings>(DEFAULT_SETTINGS);
+  /** Segundos restantes da contagem, ou null quando não há contagem. */
+  const [countdown, setCountdown] = useState<number | null>(null);
 
   const mode = getMode(modeId);
   const [lastCapture, setLastCapture] = useState<CapturedMedia | null>(null);
@@ -143,6 +154,45 @@ export function CameraShell({
     }
   }
 
+  // O temporizador conta aqui e não dentro do disparo: assim o cancelamento é
+  // só limpar o estado, e sair da tela no meio da contagem não deixa um
+  // disparo pendente atrás.
+  useEffect(() => {
+    if (countdown === null) return;
+    if (countdown === 0) {
+      setCountdown(null);
+      void dispararFoto();
+      return;
+    }
+    const timeout = setTimeout(() => setCountdown((n) => (n === null ? null : n - 1)), 1000);
+    return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [countdown]);
+
+  async function dispararFoto() {
+    if (!videoRef.current) return;
+    const { blob, width, height } = await capturePhotoFromVideo(videoRef.current, {
+      mirrored: facing === "user" && settings.mirrorSelfie,
+      zoom: zoom.digital,
+      window: photoWindow(
+        aspect,
+        videoRef.current.videoWidth,
+        videoRef.current.videoHeight,
+        videoRef.current.clientWidth,
+        videoRef.current.clientHeight,
+      ),
+    });
+    await persist({
+      id: crypto.randomUUID(),
+      kind: "photo",
+      blob,
+      mimeType: blob.type,
+      createdAt: Date.now(),
+      width,
+      height,
+    });
+  }
+
   async function handleShutterPress() {
     setCaptureError(null);
     try {
@@ -154,20 +204,17 @@ export function CameraShell({
       }
 
       if (mode.kind === "photo") {
-        if (!videoRef.current) return;
-        const { blob, width, height } = await capturePhotoFromVideo(
-          videoRef.current,
-          { mirrored: facing === "user", zoom: zoom.digital },
-        );
-        await persist({
-          id: crypto.randomUUID(),
-          kind: "photo",
-          blob,
-          mimeType: blob.type,
-          createdAt: Date.now(),
-          width,
-          height,
-        });
+        // Tocar durante a contagem cancela: é o gesto que qualquer câmera tem,
+        // e sem ele o temporizador vira uma armadilha de dez segundos.
+        if (countdown !== null) {
+          setCountdown(null);
+          return;
+        }
+        if (timer > 0) {
+          setCountdown(timer);
+          return;
+        }
+        await dispararFoto();
         return;
       }
 
@@ -203,6 +250,21 @@ export function CameraShell({
           effect, so unmounting it on a status change would silently drop the
           preview and leave a black screen. */}
       <Viewfinder videoRef={videoRef} facing={facing} zoom={zoom.digital} />
+
+      {isReady && !isSlid && mode.kind === "photo" && (
+        <FrameGuides aspect={aspect} grid={settings.grid} />
+      )}
+
+      {countdown !== null && countdown > 0 && (
+        <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center">
+          <span
+            key={countdown}
+            className="animate-[slid-settle_420ms_ease-out] font-mono text-[86px] font-bold text-white drop-shadow-[0_2px_18px_rgba(0,0,0,0.65)]"
+          >
+            {countdown}
+          </span>
+        </div>
+      )}
 
       {!isReady && (
         <PermissionGate
@@ -359,6 +421,15 @@ export function CameraShell({
             isRecording={recorder.isRecording}
             elapsedMs={recorder.elapsedMs}
             isSwitching={isSwitching}
+            torchAvailable={torch.available}
+            torchOn={torch.on}
+            onToggleTorch={torch.toggle}
+            timer={timer}
+            onCycleTimer={() => setTimer(nextTimer)}
+            aspect={aspect}
+            onCycleAspect={() => setAspect(nextAspect)}
+            onOpenSettings={() => setSettingsOpen(true)}
+            suggesting={slid.boardDetected}
           />
 
           {/* Scrim behind the controls: white text over a bright scene — a
@@ -433,6 +504,13 @@ export function CameraShell({
           </button>
         </div>
       )}
+
+      <SettingsSheet
+        open={settingsOpen}
+        settings={settings}
+        onChange={setSettings}
+        onClose={() => setSettingsOpen(false)}
+      />
 
       {viewerOpen && lastCapture && (
         <CaptureViewer

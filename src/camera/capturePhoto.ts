@@ -7,15 +7,23 @@
  */
 export function capturePhotoFromVideo(
   video: HTMLVideoElement,
-  options: { mirrored?: boolean; zoom?: number } = {},
+  options: {
+    mirrored?: boolean;
+    zoom?: number;
+    /** A janela da proporção escolhida, em frações do quadro. */
+    window?: { x: number; y: number; width: number; height: number };
+  } = {},
 ): Promise<{ blob: Blob; width: number; height: number }> {
-  const width = video.videoWidth;
-  const height = video.videoHeight;
+  const frameWidth = video.videoWidth;
+  const frameHeight = video.videoHeight;
+  const janela = options.window ?? { x: 0, y: 0, width: 1, height: 1 };
+  const width = Math.round(frameWidth * janela.width);
+  const height = Math.round(frameHeight * janela.height);
 
-  if (!width || !height) {
+  if (!frameWidth || !frameHeight || !width || !height) {
     return Promise.reject(
       new Error(
-        `Vídeo sem dimensões (${width}×${height}) — o preview ainda não está ativo.`,
+        `Vídeo sem dimensões (${frameWidth}×${frameHeight}) — o preview ainda não está ativo.`,
       ),
     );
   }
@@ -38,10 +46,14 @@ export function capturePhotoFromVideo(
   // Digital zoom crops the middle and fills the frame with it, so the saved
   // photo holds what the viewfinder was showing. At 1x — and whenever the
   // hardware did the zooming itself — this is the whole frame, unchanged.
+  // Recorte digital e proporção são o mesmo gesto: uma janela dentro do quadro.
+  // A do zoom é sempre central; a da proporção vem de fora.
   const zoom = Math.max(1, options.zoom ?? 1);
-  const sw = width / zoom;
-  const sh = height / zoom;
-  ctx.drawImage(video, (width - sw) / 2, (height - sh) / 2, sw, sh, 0, 0, width, height);
+  const sw = (frameWidth * janela.width) / zoom;
+  const sh = (frameHeight * janela.height) / zoom;
+  const sx = frameWidth * janela.x + (frameWidth * janela.width - sw) / 2;
+  const sy = frameHeight * janela.y + (frameHeight * janela.height - sh) / 2;
+  ctx.drawImage(video, sx, sy, sw, sh, 0, 0, width, height);
 
   return new Promise((resolve, reject) => {
     canvas.toBlob(
