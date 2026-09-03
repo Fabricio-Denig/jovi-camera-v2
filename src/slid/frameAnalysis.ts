@@ -213,6 +213,12 @@ function localBackground(gray: Uint8Array, radius: number): Float64Array {
  * pipeline. This is what makes one classifier work for a notebook and for a
  * dark slide.
  */
+/** O limiar que a última máscara usou. Lido só pelo diagnóstico. */
+let lastInkThreshold = MARK_DELTA;
+export function inkThresholdOfLastMask(): number {
+  return lastInkThreshold;
+}
+
 export function markMask(gray: Uint8Array): Uint8Array {
   const background = localBackground(gray, BACKGROUND_RADIUS);
 
@@ -247,12 +253,43 @@ export function markMask(gray: Uint8Array): Uint8Array {
       ? MARK_DELTA
       : Math.max(MARK_DELTA_FLOOR, ink * MARK_DELTA_SHARE);
 
+  lastInkThreshold = delta;
+
   const mask = new Uint8Array(gray.length);
   for (let i = 0; i < gray.length; i++) {
     if (departure[i] > delta) mask[i] = 1;
   }
   return mask;
 }
+
+/**
+ * Por que este quadro foi ou não considerado uma aula.
+ *
+ * O classificador é uma conjunção de condições, e quando ele diz não, dizer
+ * *qual* delas falhou é a diferença entre "não detectou" e "o slide está pequeno
+ * demais, use 2x". Esta é a informação que faltava para o teste em sala virar
+ * relatório em vez de impressão.
+ */
+export type SceneVerdict =
+  | "aula"
+  | "sem-marcas"
+  | "poucas-linhas"
+  | "uma-faixa-so"
+  | "cena-cheia"
+  | "pouco-quebrado"
+  | "marcas-grossas"
+  | "trama-uniforme";
+
+export const VERDICT_LABELS: Record<SceneVerdict, string> = {
+  aula: "aula",
+  "sem-marcas": "nenhuma escrita",
+  "poucas-linhas": "escrita pequena demais",
+  "uma-faixa-so": "só uma linha",
+  "cena-cheia": "quadro cheio, parece cena",
+  "pouco-quebrado": "marcas pouco quebradas",
+  "marcas-grossas": "barras, não traços",
+  "trama-uniforme": "trama, todo traço igual",
+};
 
 export interface SceneSignals {
   /** Sample rows belonging to a band of writing. */
@@ -276,6 +313,10 @@ export interface SceneSignals {
    * laptop, the desk and the wall behind it.
    */
   bounds: ContentBounds | null;
+  /** Qual condição decidiu. "aula" quando todas passaram. */
+  verdict: SceneVerdict;
+  /** O limiar de tinta que esta cena mereceu — quanto contraste ela tinha. */
+  inkThreshold: number;
 }
 
 export interface ContentBounds {
@@ -473,6 +514,24 @@ export function readScene(gray: Uint8Array): SceneSignals {
     runDensity >= SUGGEST_MIN_RUN_DENSITY &&
     thinShare >= SUGGEST_MIN_THIN;
 
+  // Na ordem em que as condições contam uma história: primeiro se há escrita,
+  // depois se há bastante dela, depois de que ela é feita.
+  const verdict: SceneVerdict = looksLikeClass
+    ? "aula"
+    : writtenRows === 0
+      ? "sem-marcas"
+      : writtenRows > SUGGEST_MAX_ROWS
+        ? "cena-cheia"
+        : lines < SUGGEST_MIN_LINES
+          ? "uma-faixa-so"
+          : writtenRows < SUGGEST_MIN_ROWS
+            ? "poucas-linhas"
+            : runDensity < SUGGEST_MIN_RUN_DENSITY
+              ? "pouco-quebrado"
+              : thinShare < SUGGEST_MIN_THIN
+                ? "marcas-grossas"
+                : "poucas-linhas";
+
   let bounds: ContentBounds | null = null;
   if (isStudy) {
     let top = SAMPLE_H;
@@ -499,12 +558,36 @@ export function readScene(gray: Uint8Array): SceneSignals {
     }
   }
 
-  return { writtenRows, lines, thinShare, runDensity, isStudy, looksLikeClass, bounds };
+  return {
+    writtenRows,
+    lines,
+    thinShare,
+    runDensity,
+    isStudy,
+    looksLikeClass,
+    bounds,
+    verdict,
+    inkThreshold: lastInkThreshold,
+  };
 }
 
-export interface ScaledScene extends SceneSignals {
+export interface SceneReading extends SceneSignals {
   /** Which window this reading came from, as a multiple of the preview crop. */
   scale: number;
+}
+
+export interface ScaledScene extends SceneReading {
+  /** Todas as janelas que chegaram a ser lidas, na ordem. Para o diagnóstico. */
+  readings: SceneReading[];
+  /**
+   * Há sinal de escrita, mas não no tamanho que este enquadramento entrega.
+   *
+   * É o que separa "não tem aula aqui" de "tem, e está longe". Só liga quando
+   * uma janela recortada encontrou material de estudo e a vista aberta não —
+   * então parede e mesa, que não têm marca nenhuma em escala alguma, nunca
+   * disparam a dica, e a trama do carpete fica de fora pelo veredito dela.
+   */
+  tooSmall: boolean;
 }
 
 /**
@@ -553,7 +636,13 @@ export function readBestScene(samples: (Uint8Array | null)[]): ScaledScene | nul
   const wideSample = samples[0];
   if (!wideSample) return null;
 
-  const wide: ScaledScene = { ...readScene(wideSample), scale: ANALYSIS_SCALES[0] };
+  const readings: SceneReading[] = [];
+  const wideRead: SceneReading = {
+    ...readScene(wideSample),
+    scale: ANALYSIS_SCALES[0],
+  };
+  readings.push(wideRead);
+  const wide: ScaledScene = { ...wideRead, readings, tooSmall: false };
   if (wide.looksLikeClass) return wide;
   if (wide.lines >= WIDE_SHOT_HAS_AN_OPINION) return wide;
 
@@ -570,19 +659,37 @@ export function readBestScene(samples: (Uint8Array | null)[]): ScaledScene | nul
     // offer a class — not as the pick, and not as the fallback either. It can
     // still be captured inside a session the student chose to start, which is
     // the same asymmetry the two gates have everywhere else.
-    const scene: ScaledScene = {
+    const recusadaPorTrama = read.looksLikeClass && read.thinShare > CROP_MAX_THIN;
+    const reading: SceneReading = {
       ...read,
-      looksLikeClass: read.looksLikeClass && read.thinShare <= CROP_MAX_THIN,
+      looksLikeClass: read.looksLikeClass && !recusadaPorTrama,
+      verdict: recusadaPorTrama ? "trama-uniforme" : read.verdict,
       scale: ANALYSIS_SCALES[i],
     };
-    if (scene.looksLikeClass) return scene;
-    const score = evidence(scene);
+    readings.push(reading);
+    if (reading.looksLikeClass) return { ...reading, readings, tooSmall: false };
+    const score = evidence(reading);
     if (score > bestScore) {
-      best = scene;
+      best = { ...reading, readings, tooSmall: false };
       bestScore = score;
     }
   }
-  return best;
+
+  /*
+   * "Tem escrita, só que pequena" é uma coisa; "isto não é escrita" é outra, e
+   * a dica de zoom só serve à primeira. Um veredito de quadro cheio, de barras
+   * ou de trama é o classificador tendo *decidido* — mandar o estudante dar
+   * zoom numa parede rebocada porque o recorte dela ficou cheio de textura é
+   * pedir que ele insista no erro. Os únicos vereditos que significam falta de
+   * informação são os de escrita insuficiente.
+   */
+  const sinalRecortado = readings.some(
+    (r) =>
+      r.scale > 1 &&
+      r.isStudy &&
+      (r.verdict === "poucas-linhas" || r.verdict === "uma-faixa-so"),
+  );
+  return { ...best, readings, tooSmall: sinalRecortado && !best.looksLikeClass };
 }
 
 /**

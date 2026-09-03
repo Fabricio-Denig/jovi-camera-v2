@@ -23,13 +23,17 @@ import { getMode } from "../modes/modes";
 import { ContentFrame } from "../slid/ContentFrame";
 import { SlidOverlay } from "../slid/SlidOverlay";
 import { SlidSuggestion } from "../slid/SlidSuggestion";
+import { SlidDebugPanel } from "../slid/SlidDebugPanel";
 import { SlidSummary } from "../slid/SlidSummary";
 import { useSlidSession } from "../slid/useSlidSession";
 import { getLatestCapture, saveCapture } from "../shared/lib/mediaStore";
 import type { CapturedMedia } from "../types/camera";
 
 /** Diagnostics stay out of the demo but remain one query param away if the camera misbehaves on stage. */
-const debugEnabled = new URLSearchParams(window.location.search).has("debug");
+const params = new URLSearchParams(window.location.search);
+const debugEnabled = params.has("debug");
+/** `?debug=slid` liga o painel do SliD — o que se leva para a sala de aula. */
+const slidDebug = params.get("debug") === "slid";
 
 interface CameraShellProps {
   modeId: string;
@@ -102,6 +106,7 @@ export function CameraShell({
     // Only look for a board when the suggestion could actually be acted on.
     detectionEnabled: status === "ready" && !isSlid && mode.fidelity === "real",
     zoom: zoom.digital,
+    diagnosing: slidDebug,
   });
 
   useEffect(() => {
@@ -290,7 +295,17 @@ export function CameraShell({
         />
       )}
 
-      {debugEnabled && (
+      {slidDebug && isReady && (
+        <SlidDebugPanel
+          diagnostics={slid.diagnostics}
+          zoomLevel={zoom.level}
+          zoomNative={zoom.native}
+          suggesting={slid.boardDetected}
+          running={slid.status === "running"}
+        />
+      )}
+
+      {debugEnabled && !slidDebug && (
         <DebugPanel
           status={status}
           facing={facing}
