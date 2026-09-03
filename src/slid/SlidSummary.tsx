@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { ClassTitle } from "./ClassTitle";
 import { DisciplinePicker } from "./DisciplinePicker";
+import { StatusPicker } from "./StatusPicker";
+import { STATUS_STYLES, type ClassStatus } from "./status";
 import { MomentRow } from "./MomentRow";
 import {
   KIND_NAMES,
   KIND_TAGS,
   describeMoment,
   suggestSubject,
+  overviewWithStatus,
   summariseClass,
   summariseTopics,
   type ContentKind,
@@ -26,6 +29,8 @@ export interface SavedClass {
   subject: string;
   /** Null when the student did not file it under anything. */
   discipline: string | null;
+  /** Como a aula ficou para o estudante. Null enquanto ele não disser. */
+  status: ClassStatus | null;
   moments: {
     id: string;
     label: string;
@@ -69,6 +74,7 @@ export function SlidSummary({
 }: SlidSummaryProps) {
   const [subject, setSubject] = useState(UNTITLED);
   const [discipline, setDiscipline] = useState<string | null>(null);
+  const [status, setStatus] = useState<ClassStatus | null>(null);
   const [edited, setEdited] = useState(false);
   const [discarding, setDiscarding] = useState(false);
   const ocr = useOcr();
@@ -181,7 +187,13 @@ export function SlidSummary({
           <div className="flex flex-col gap-6">
             {/* A aula em uma frase, montada só do que foi capturado. */}
             {overview && (
-              <p className="text-[15px] leading-relaxed text-ink">{overview}</p>
+              <p className="text-[15px] leading-relaxed text-ink">
+                {overviewWithStatus(
+                  overview,
+                  status,
+                  status ? STATUS_STYLES[status].label : null,
+                )}
+              </p>
             )}
 
             {/* Os números por trás dela. */}
@@ -279,7 +291,8 @@ export function SlidSummary({
         {/* The matéria sits with the save button, because filing the class is
             part of saving it — not a setting to go looking for afterwards. */}
         {captures.length > 0 && (
-          <div className="pb-3">
+          <div className="flex flex-col gap-3 pb-3">
+            <StatusPicker value={status} onChange={setStatus} />
             <DisciplinePicker value={discipline} onChange={setDiscipline} />
           </div>
         )}
@@ -300,6 +313,7 @@ export function SlidSummary({
             onSave({
               subject: subjectValue.trim() || UNTITLED,
               discipline,
+              status,
               moments: described.map(({ capture, label, detail, kind }) => ({
                 id: capture.id,
                 label,

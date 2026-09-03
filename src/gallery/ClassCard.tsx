@@ -1,4 +1,5 @@
 import { useObjectUrl } from "../shared/hooks/useObjectUrl";
+import { StatusChip } from "../slid/StatusPicker";
 import type { ClassRecord } from "../slid/classes";
 
 /**
@@ -43,7 +44,9 @@ export function ClassCard({
         </div>
 
         {/* Matéria first: it is the one fact the student put there themselves. */}
-        <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-[12px] text-ink-muted">
+        <p className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[12px] text-ink-muted">
+          {/* O status antes da matéria: é o que decide o que revisar primeiro. */}
+          {record.status && <StatusChip status={record.status} />}
           {record.discipline && (
             <span className="rounded-full bg-accent-soft px-2 py-0.5 font-medium text-accent">
               {record.discipline}

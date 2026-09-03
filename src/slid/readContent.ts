@@ -526,6 +526,26 @@ export function summariseClass({
  */
 const OPENING = /^Esta aula(?: de .+?)? (teve|registrou) /;
 
+/**
+ * A frase da aula com a marca que o estudante deu a ela.
+ *
+ * Composta na hora de mostrar, e não guardada junto: o status é a única coisa
+ * da aula que muda de opinião depois: ele existe justamente para ser trocado
+ * quando o estudante revisar. Guardá-lo dentro do texto obrigaria a reescrever
+ * a frase a cada troca, que é o que a matéria precisa fazer e não é bonito.
+ *
+ * Em segunda pessoa porque é a única frase da tela que não veio da superfície:
+ * tudo o mais o SliD leu, isto aqui foi você quem disse.
+ */
+export function overviewWithStatus(
+  overview: string,
+  status: string | null,
+  label: string | null,
+): string {
+  if (!overview || !status || !label) return overview;
+  return `${overview} Você marcou esta aula como ${label}.`;
+}
+
 export function reopenOverview(
   overview: string,
   discipline: string | null,

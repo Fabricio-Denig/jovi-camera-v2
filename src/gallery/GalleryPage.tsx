@@ -3,6 +3,7 @@ import { CaptureViewer } from "../camera/CaptureViewer";
 import { ClassCard, formatDate } from "./ClassCard";
 import { type Chip, FilterChips } from "./FilterChips";
 import { DisciplineManager } from "../slid/DisciplineManager";
+import { CLASS_STATUSES, STATUS_STYLES, type ClassStatus } from "../slid/status";
 import {
   deleteClassForever,
   getClasses,
@@ -140,6 +141,14 @@ export function GalleryPage({
   // dela foi para a lixeira, ou trocou de matéria. O chip some e a seleção
   // ficaria apontando para o que não está mais lá, com a lista vazia e nenhum
   // chip aceso. Volta para todas.
+  /** Quantas aulas há em cada status, para o chip só existir quando serve. */
+  const statusCounts = useMemo(() => {
+    const counts = new Map<ClassStatus, number>();
+    for (const record of classes)
+      if (record.status) counts.set(record.status, (counts.get(record.status) ?? 0) + 1);
+    return counts;
+  }, [classes]);
+
   const favoriteClasses = useMemo(
     () => classes.filter((record) => record.favorite).length,
     [classes],
@@ -149,13 +158,21 @@ export function GalleryPage({
     const ainda =
       discipline === "favoritas"
         ? favoriteClasses > 0
-        : disciplines.some(([name]) => name === discipline);
+        : discipline.startsWith("status:")
+          ? (statusCounts.get(discipline.slice(7) as ClassStatus) ?? 0) > 0
+          : disciplines.some(([name]) => name === discipline);
     if (!ainda) setDiscipline("todas");
-  }, [disciplines, discipline, favoriteClasses]);
+  }, [disciplines, discipline, favoriteClasses, statusCounts]);
 
+  // Um trilho só, com matéria e status juntos. Dois trilhos empilhados sob os
+  // chips da galeria seriam três linhas de filtro antes da primeira aula.
   const shownClasses = useMemo(() => {
     if (discipline === "todas") return classes;
     if (discipline === "favoritas") return classes.filter((r) => r.favorite);
+    if (discipline.startsWith("status:")) {
+      const wanted = discipline.slice(7);
+      return classes.filter((record) => record.status === wanted);
+    }
     return classes.filter((record) => record.discipline === discipline);
   }, [classes, discipline]);
 
@@ -204,6 +221,7 @@ export function GalleryPage({
           disciplines={disciplines}
           active={discipline}
           favorites={favoriteClasses}
+          statusCounts={statusCounts}
           onSelectDiscipline={setDiscipline}
           onOpenClass={onOpenClass}
           onManage={() => setManaging(true)}
@@ -332,6 +350,7 @@ function SlidView({
   disciplines,
   active,
   favorites,
+  statusCounts,
   onSelectDiscipline,
   onOpenClass,
   onManage,
@@ -341,12 +360,22 @@ function SlidView({
   disciplines: [string, number][];
   active: string;
   favorites: number;
+  statusCounts: Map<ClassStatus, number>;
   onSelectDiscipline: (id: string) => void;
   onOpenClass: (id: string) => void;
   onManage: () => void;
 }) {
+  // Status antes de matéria: quem volta à galeria para estudar procura o que
+  // precisa revisar, não o que era de Física.
   const chips: Chip[] = [
     { id: "todas", label: "Todas as aulas", count: total },
+    ...CLASS_STATUSES.filter((status) => (statusCounts.get(status) ?? 0) > 0).map(
+      (status) => ({
+        id: `status:${status}`,
+        label: STATUS_STYLES[status].label,
+        count: statusCounts.get(status),
+      }),
+    ),
     ...(favorites > 0
       ? [{ id: "favoritas", label: "Favoritas", count: favorites }]
       : []),
@@ -399,7 +428,11 @@ function SlidView({
       </div>
       {classes.length === 0 ? (
         <p className="px-8 py-10 text-center text-sm text-ink-muted">
-          Nenhuma aula nesta matéria.
+          {active.startsWith("status:")
+            ? "Nenhuma aula com esse status."
+            : active === "favoritas"
+              ? "Nenhuma aula favoritada."
+              : "Nenhuma aula nesta matéria."}
         </p>
       ) : (
         <ul className="flex flex-col gap-2 px-4 pb-6">
