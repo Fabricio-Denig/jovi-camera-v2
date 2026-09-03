@@ -64,5 +64,10 @@ export interface CapturedMedia {
     kinds?: [string, number][];
     /** Marked by the student. Denormalised across the moments, like the name. */
     favorite?: boolean;
+    /**
+     * How the class turned out for the student — revisar, atenção, importante,
+     * tranquilo, revisado. Absent until they say.
+     */
+    status?: string;
   };
 }

@@ -7,6 +7,7 @@ import {
   trashCaptures,
 } from "../shared/lib/mediaStore";
 import { reopenOverview } from "./readContent";
+import { readStatus, type ClassStatus } from "./status";
 import type { CapturedMedia } from "../types/camera";
 
 /**
@@ -30,6 +31,8 @@ export interface ClassRecord {
   subject: string;
   /** The matéria, when the student filed it under one. */
   discipline: string | null;
+  /** Como a aula ficou para o estudante, quando ele disse. */
+  status: ClassStatus | null;
   favorite: boolean;
   /** Set while the class is in the trash. */
   deletedAt: number | null;
@@ -62,6 +65,7 @@ function toRecord(id: string, items: CapturedMedia[]): ClassRecord {
     id,
     subject: first?.subject ?? "Aula sem título",
     discipline: first?.discipline ?? null,
+    status: readStatus(first?.status),
     favorite: first?.favorite ?? false,
     deletedAt: items[0].deletedAt ?? null,
     savedAt: first?.savedAt ?? items[0].createdAt,
@@ -140,6 +144,20 @@ export async function setClassDiscipline(
       return { ...rest, overview };
     }
     return { ...session, discipline, overview };
+  });
+}
+
+/** O status é do estudante e muda quando ele mudar de ideia sobre a aula. */
+export async function setClassStatus(
+  id: string,
+  status: ClassStatus | null,
+): Promise<void> {
+  await editClass(id, (session) => {
+    if (!status) {
+      const { status: _removed, ...rest } = session;
+      return rest;
+    }
+    return { ...session, status };
   });
 }
 

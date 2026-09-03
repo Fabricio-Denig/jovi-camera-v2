@@ -3,11 +3,15 @@ import { ClassTitle } from "./ClassTitle";
 import { MomentRow } from "./MomentRow";
 import { ClassReview } from "./ClassReview";
 import { DisciplinePicker } from "./DisciplinePicker";
+import { StatusPicker } from "./StatusPicker";
+import { STATUS_STYLES, type ClassStatus } from "./status";
+import { overviewWithStatus } from "./readContent";
 import {
   getClassById,
   renameClass,
   setClassDiscipline,
   setClassFavorite,
+  setClassStatus,
   trashClass,
   type ClassRecord,
 } from "./classes";
@@ -39,6 +43,7 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
   const [reviewing, setReviewing] = useState<number | null>(null);
   const [name, setName] = useState("");
   const [filing, setFiling] = useState(false);
+  const [marking, setMarking] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -143,11 +148,36 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
           >
             {record.discipline ?? "Escolher matéria"}
           </button>
+          <button
+            type="button"
+            onClick={() => setMarking((open) => !open)}
+            aria-expanded={marking}
+            className={`min-h-7 rounded-full px-2.5 text-[12px] font-medium transition-all duration-200 active:scale-95 active:opacity-70 ${
+              record.status
+                ? STATUS_STYLES[record.status].chip
+                : "bg-surface-2 text-ink-muted"
+            }`}
+          >
+            {record.status ? STATUS_STYLES[record.status].label : "Marcar status"}
+          </button>
           <span aria-hidden="true">·</span>
           <span>{formatDate(record.savedAt)}</span>
           <span aria-hidden="true">·</span>
           <span>{formatClock(record.durationMs)} de aula</span>
         </p>
+
+        {marking && (
+          <div className="mt-3 animate-[slid-enter_220ms_ease-out]">
+            <StatusPicker
+              value={record.status}
+              label="Como ficou essa aula para você?"
+              onChange={(status: ClassStatus | null) => {
+                setRecord({ ...record, status });
+                void setClassStatus(record.id, status).then(() => onChanged?.());
+              }}
+            />
+          </div>
+        )}
 
         {filing && (
           <div className="mt-3 animate-[slid-enter_220ms_ease-out]">
@@ -174,7 +204,11 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
             {/* A aula reaberta abre com a mesma frase que o resumo abriu. */}
             {record.overview && (
               <p className="text-[15px] leading-relaxed text-ink">
-                {record.overview}
+                {overviewWithStatus(
+                  record.overview,
+                  record.status,
+                  record.status ? STATUS_STYLES[record.status].label : null,
+                )}
               </p>
             )}
 

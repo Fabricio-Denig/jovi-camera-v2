@@ -298,7 +298,7 @@ export function CameraShell({
           captures={slid.captures}
           stats={slid.stats}
           elapsedMs={slid.elapsedMs}
-          onSave={async ({ subject, discipline, moments, topics, kinds, overview }) => {
+          onSave={async ({ subject, discipline, status, moments, topics, kinds, overview }) => {
             const sessionId = crypto.randomUUID();
             const savedAt = Date.now();
             const described = new Map(moments.map((m) => [m.id, m]));
@@ -317,6 +317,8 @@ export function CameraShell({
                   // Only written when the student chose one — an absent matéria
                   // stays absent rather than becoming a guess.
                   ...(discipline ? { discipline } : {}),
+                  // Mesma regra da matéria: ausente é ausente, nunca um palpite.
+                  ...(status ? { status } : {}),
                   atMs: capture.atMs,
                   // Stored so the class reads the same months later, without
                   // ever going back to the images.
