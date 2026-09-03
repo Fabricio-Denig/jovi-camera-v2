@@ -12,6 +12,8 @@ export function capturePhotoFromVideo(
     zoom?: number;
     /** A janela da proporção escolhida, em frações do quadro. */
     window?: { x: number; y: number; width: number; height: number };
+    /** O filtro do visor, em CSS, para a foto sair como a tela mostrava. */
+    filter?: string;
   } = {},
 ): Promise<{ blob: Blob; width: number; height: number }> {
   const frameWidth = video.videoWidth;
@@ -53,7 +55,12 @@ export function capturePhotoFromVideo(
   const sh = (frameHeight * janela.height) / zoom;
   const sx = frameWidth * janela.x + (frameWidth * janela.width - sw) / 2;
   const sy = frameHeight * janela.y + (frameHeight * janela.height - sh) / 2;
+  // O mesmo texto de filtro do visor. Onde o navegador não souber desenhar com
+  // filtro no canvas, a atribuição é ignorada e a foto sai limpa — sem filtro é
+  // melhor que com um filtro errado, e melhor ainda que não tirar a foto.
+  if (options.filter && options.filter !== "none") ctx.filter = options.filter;
   ctx.drawImage(video, sx, sy, sw, sh, 0, 0, width, height);
+  ctx.filter = "none";
 
   return new Promise((resolve, reject) => {
     canvas.toBlob(

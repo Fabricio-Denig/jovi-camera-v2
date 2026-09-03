@@ -6,10 +6,12 @@ interface ViewfinderProps {
   facing: CameraFacing;
   /** The crop the preview applies itself, when the hardware could not. */
   zoom?: number;
+  /** O filtro escolhido, em CSS. Não toca no que o SliD analisa. */
+  filter?: string;
 }
 
 /** The live camera preview. Mirrored on the front camera, matching the convention every phone camera follows. */
-export function Viewfinder({ videoRef, facing, zoom = 1 }: ViewfinderProps) {
+export function Viewfinder({ videoRef, facing, zoom = 1, filter }: ViewfinderProps) {
   const parts = [
     facing === "user" ? "scaleX(-1)" : "",
     zoom > 1 ? `scale(${zoom})` : "",
@@ -22,7 +24,10 @@ export function Viewfinder({ videoRef, facing, zoom = 1 }: ViewfinderProps) {
       playsInline
       muted
       className="absolute inset-0 size-full object-cover transition-transform duration-300 ease-out"
-      style={parts.length ? { transform: parts.join(" ") } : undefined}
+      style={{
+        transform: parts.length ? parts.join(" ") : undefined,
+        filter: filter && filter !== "none" ? filter : undefined,
+      }}
     />
   );
 }
