@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { decideMoment, REFRAME_TICKS, REFRAMED } from "./momentPolicy";
 import {
+  ANALYSIS_SCALES,
   type ContentBounds,
+  boundsAtScale,
   contentDelta,
   frameDifference,
   markArea,
   markMask,
+  readBestScene,
   readScene,
   unionBounds,
   sampleFrame,
@@ -172,6 +175,25 @@ export function useSlidSession({
   // tear down and restart a session that is running.
   const zoomRef = useRef(zoom);
   zoomRef.current = zoom;
+  /**
+   * The window the running session reads through, held still once the scene is
+   * armed.
+   *
+   * Picking afresh every tick is what would break the comparison the whole
+   * session rests on: the masks of two ticks are only subtractable if they show
+   * the same region, and a scene that flickered between the wide shot and a
+   * crop would read as the board being wiped and rewritten every second. So the
+   * choice is made while the scene is being found, and then it stops moving
+   * until the scene is lost.
+   */
+  const scaleRef = useRef(1);
+
+  /** Every window of one frame, in the order the analysis expects them. */
+  const sampleAll = useCallback(
+    (video: HTMLVideoElement) =>
+      ANALYSIS_SCALES.map((scale) => sampleFrame(video, zoomRef.current * scale)),
+    [],
+  );
 
   const takeCapture = useCallback(
     async (reason: MomentReason, sample: Uint8Array | null) => {
@@ -182,7 +204,8 @@ export function useSlidSession({
         const { blob } = await capturePhotoFromVideo(video, {
           zoom: zoomRef.current,
         });
-        const reference = sample ?? sampleFrame(video, zoomRef.current);
+        const reference =
+          sample ?? sampleFrame(video, zoomRef.current * scaleRef.current);
         let marks = 0;
         if (reference) {
           const mask = markMask(reference);
@@ -225,7 +248,8 @@ export function useSlidSession({
         const { blob } = await capturePhotoFromVideo(video, {
           zoom: zoomRef.current,
         });
-        const reference = sample ?? sampleFrame(video, zoomRef.current);
+        const reference =
+          sample ?? sampleFrame(video, zoomRef.current * scaleRef.current);
         let marks = 0;
         if (reference) {
           const mask = markMask(reference);
@@ -268,15 +292,17 @@ export function useSlidSession({
     const interval = setInterval(() => {
       const video = videoRef.current;
       if (!video) return;
-      const sample = sampleFrame(video, zoomRef.current);
-      if (!sample) return;
+      const scene = readBestScene(sampleAll(video));
+      if (!scene) return;
 
-      const scene = readScene(sample);
       if (scene.looksLikeClass) {
         detectionCountRef.current++;
+        // The window that found the class is the one the session will read
+        // through, so it is chosen here and handed over by start().
+        scaleRef.current = scene.scale;
         // The bounds go up from the first positive read: what the camera is
         // weighing is worth seeing, not only what it concluded.
-        setContentBounds(scene.bounds);
+        setContentBounds(boundsAtScale(scene.bounds, scene.scale));
         const confirmed = detectionCountRef.current >= DETECTION_TICKS;
         setBoardDetected(confirmed);
         setWeighing(!confirmed);
@@ -301,19 +327,28 @@ export function useSlidSession({
       if (!video) return;
       setElapsedMs(Date.now() - startedAtRef.current - pausedTotalRef.current);
 
-      const sample = sampleFrame(video, zoomRef.current);
-      if (!sample) return;
+      // While the scene is still being found the session may re-pick its
+      // window; once armed it holds still, and reads that one window alone.
+      const sample = sceneArmedRef.current
+        ? sampleFrame(video, zoomRef.current * scaleRef.current)
+        : null;
+      const scene = sample
+        ? { ...readScene(sample), scale: scaleRef.current }
+        : readBestScene(sampleAll(video));
+      if (!scene) return;
+      const frame = sample ?? sampleFrame(video, zoomRef.current * scene.scale);
+      if (!frame) return;
       setStats((prev) => ({ ...prev, analysed: prev.analysed + 1 }));
 
       // Gate 1 — scene context. Hysteresis on both sides: a single good frame
       // does not arm the session, and a hand passing over the board does not
       // disarm it.
-      const scene = readScene(sample);
       if (scene.isStudy) {
         sceneMissRef.current = 0;
         sceneOkRef.current++;
+        if (!sceneArmedRef.current) scaleRef.current = scene.scale;
         boundsRef.current = scene.bounds;
-        setContentBounds(scene.bounds);
+        setContentBounds(boundsAtScale(scene.bounds, scaleRef.current));
         if (sceneOkRef.current >= SCENE_ARM_TICKS && !sceneArmedRef.current) {
           sceneArmedRef.current = true;
           setSceneReady(true);
@@ -323,13 +358,16 @@ export function useSlidSession({
         sceneMissRef.current++;
         if (sceneMissRef.current >= SCENE_LOST_TICKS && sceneArmedRef.current) {
           sceneArmedRef.current = false;
+          // The window was chosen for content that is no longer there; the next
+          // scene gets to pick its own.
+          scaleRef.current = 1;
           setSceneReady(false);
           setContentBounds(null);
         }
       }
 
       const previous = lastSampleRef.current;
-      lastSampleRef.current = sample;
+      lastSampleRef.current = frame;
 
       if (!sceneArmedRef.current) {
         stableCountRef.current = 0;
@@ -339,7 +377,7 @@ export function useSlidSession({
 
       // Wait for the scene to settle: a hand crossing the board is movement,
       // not new content.
-      if (frameDifference(previous, sample) > MOTION_THRESHOLD) {
+      if (frameDifference(previous, frame) > MOTION_THRESHOLD) {
         stableCountRef.current = 0;
         return;
       }
@@ -348,11 +386,11 @@ export function useSlidSession({
 
       // Gate 2 — content. The first steady frame of study material is the
       // starting state of the lesson and is always worth keeping.
-      const marks = markMask(sample);
+      const marks = markMask(frame);
       const reference = lastCapturedMarksRef.current;
       if (!reference) {
         stableCountRef.current = 0;
-        void takeCapture("novo-topico", sample);
+        void takeCapture("novo-topico", frame);
         return;
       }
 
@@ -403,12 +441,12 @@ export function useSlidSession({
       }
 
       stableCountRef.current = 0;
-      if (decision.refine) void refineCapture(sample);
-      else void takeCapture(decision.reason, sample);
+      if (decision.refine) void refineCapture(frame);
+      else void takeCapture(decision.reason, frame);
     }, TICK_MS);
 
     return () => clearInterval(interval);
-  }, [status, videoRef, takeCapture]);
+  }, [status, videoRef, takeCapture, sampleAll]);
 
   const start = useCallback(() => {
     // Arriving from the suggestion means the scene was already confirmed three
@@ -426,6 +464,8 @@ export function useSlidSession({
     sceneArmedRef.current = alreadyConfirmed;
     sceneOkRef.current = alreadyConfirmed ? SCENE_ARM_TICKS : 0;
     sceneMissRef.current = 0;
+    // Arriving from the suggestion keeps the window that found the class.
+    if (!alreadyConfirmed) scaleRef.current = 1;
     setSceneReady(alreadyConfirmed);
     setCaptures([]);
     setStats({ analysed: 0, skippedDuplicates: 0 });
@@ -455,6 +495,7 @@ export function useSlidSession({
     setElapsedMs(0);
     suggestionDismissedRef.current = false;
     detectionCountRef.current = 0;
+    scaleRef.current = 1;
     setWeighing(false);
     sceneArmedRef.current = false;
     sceneOkRef.current = 0;

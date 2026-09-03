@@ -48,6 +48,30 @@ function getSampler() {
 }
 
 /**
+ * The windows the frame is read through, as multiples of the preview's own crop.
+ *
+ * One window was the single biggest reason the camera missed a real projector.
+ * A line of writing needs three of the ninety-six sample rows to register as a
+ * line, which is 3.1 % of the frame's height; a slide across a lecture hall
+ * fills maybe a third of the width, so its six lines land under 1 % each and
+ * nothing forms. Measured on the same slide at different apparent sizes, only
+ * one narrow band of scale worked at all:
+ *
+ *   ocupa 95 % da largura   as linhas colam numa faixa só  → não sugere
+ *   ocupa 70 % da largura   6 faixas                       → sugere
+ *   ocupa 50 % da largura   1 faixa                        → não sugere
+ *   ocupa 35 % / 25 % / 18 %                               → não sugere
+ *
+ * Both ends fail, which is the tell: the classifier is not wrong about what it
+ * sees, it is looking at the wrong scale. So it stops choosing one. The same
+ * classifier runs over a few concentric windows and the strongest reading wins
+ * — the wide shot catches a board filling the room, the tighter ones catch the
+ * slide across the hall, and cropping also concentrates the ink enough for the
+ * contrast rescue to find it.
+ */
+export const ANALYSIS_SCALES = [1, 1.7, 2.6];
+
+/**
  * Downscaled grayscale snapshot of the current frame.
  *
  * `zoom` is the crop the preview is applying on its own — the part the camera
@@ -344,6 +368,28 @@ const STROKE_WIDTH = 2;
  *   caderno aberto         0.64–0.65        título e fórmula       0.78–0.80
  */
 const SUGGEST_MIN_THIN = 0.28;
+/**
+ * A ceiling that applies to the cropped windows alone.
+ *
+ * A fine weave — carpet, fabric — has no structure at all in the wide shot, so
+ * it is exactly the case where the tighter windows get consulted, and magnified
+ * enough its threads form bands of short runs that pass every other test. What
+ * gives it away is that nearly *every* run is a hairline. Measured through the
+ * browser's own decoder and scaler, which is the only measurement that has ever
+ * been right about this:
+ *
+ *   carpete @1.7x        0.966 – 0.977      slide a 50 % @2.6x     0.770
+ *   parede rebocada      0.975 – 0.995      slide a 35 % @1.7x     0.550
+ *                                           slide a 25 % @1.7x     0.481
+ *
+ * It belongs to the crops and not to the wide shot, and that is the honest
+ * reason rather than a convenience: the uniformity is manufactured by
+ * magnifying a weave past the point where its threads are threads. At native
+ * framing an open notebook legitimately reads 0.96 — every stroke thin because
+ * every stroke *is* thin — and there is no texture in the adversarial set that
+ * reaches the wide shot and passes, because the wide shot keeps the last word.
+ */
+const CROP_MAX_THIN = 0.93;
 
 export function readScene(gray: Uint8Array): SceneSignals {
   const mask = markMask(gray);
@@ -454,6 +500,110 @@ export function readScene(gray: Uint8Array): SceneSignals {
   }
 
   return { writtenRows, lines, thinShare, runDensity, isStudy, looksLikeClass, bounds };
+}
+
+export interface ScaledScene extends SceneSignals {
+  /** Which window this reading came from, as a multiple of the preview crop. */
+  scale: number;
+}
+
+/**
+ * How much a reading is worth, for picking between the cropped windows.
+ *
+ * Bands first, because bands are what a page has and a wall does not, and a
+ * reading with more of them is a reading that found more of the writing. Rows
+ * break the tie so that between two windows showing the same number of lines,
+ * the one holding more of them wins.
+ */
+function evidence(scene: SceneSignals): number {
+  if (!scene.isStudy) return 0;
+  return scene.lines * 100 + Math.min(scene.writtenRows, 60);
+}
+
+/**
+ * Below this many bands, the wide shot did not find enough to have an opinion.
+ * At or above it, whatever it decided was a decision.
+ */
+const WIDE_SHOT_HAS_AN_OPINION = 2;
+
+/**
+ * Reads one frame, cropping in only when the wide shot had nothing to go on.
+ *
+ * Consulting every window and keeping the best reading was the obvious first
+ * try and it let a laptop keyboard back in. Measured, the difference is plain:
+ *
+ *                        1x                    recortado
+ *   teclado        59 linhas, 8 faixas   →  reprova por traços grossos … e passa
+ *   slide a 50 %    4 linhas, 1 faixa    →  nada a julgar        … e passa
+ *
+ * The keyboard is not a case of the camera being too far away. At the wide shot
+ * it sees the whole thing, finds plenty of structure, and turns it down because
+ * the marks are bars and not strokes. Going and asking a crop for a second
+ * opinion is looking for the answer you wanted: crop into any repeating texture
+ * far enough and its rows start to look like lines of writing.
+ *
+ * So the wide shot keeps both the first and the last word whenever it could see
+ * the surface at all. The crops exist for the other case — the slide across the
+ * hall whose lines land under one per cent of the frame, where the wide shot
+ * genuinely has nothing to judge.
+ *
+ * `samples` must be in the same order as ANALYSIS_SCALES, widest first.
+ */
+export function readBestScene(samples: (Uint8Array | null)[]): ScaledScene | null {
+  const wideSample = samples[0];
+  if (!wideSample) return null;
+
+  const wide: ScaledScene = { ...readScene(wideSample), scale: ANALYSIS_SCALES[0] };
+  if (wide.looksLikeClass) return wide;
+  if (wide.lines >= WIDE_SHOT_HAS_AN_OPINION) return wide;
+
+  // Nothing to judge out here. Take the widest crop that does find a class, and
+  // failing that the one that found the most — the session gate is more
+  // forgiving than the suggestion, and a distant board still deserves capturing.
+  let best = wide;
+  let bestScore = evidence(wide);
+  for (let i = 1; i < samples.length; i++) {
+    const sample = samples[i];
+    if (!sample) continue;
+    const read = readScene(sample);
+    // The ceiling is applied here, once, so a window that fails it can never
+    // offer a class — not as the pick, and not as the fallback either. It can
+    // still be captured inside a session the student chose to start, which is
+    // the same asymmetry the two gates have everywhere else.
+    const scene: ScaledScene = {
+      ...read,
+      looksLikeClass: read.looksLikeClass && read.thinShare <= CROP_MAX_THIN,
+      scale: ANALYSIS_SCALES[i],
+    };
+    if (scene.looksLikeClass) return scene;
+    const score = evidence(scene);
+    if (score > bestScore) {
+      best = scene;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
+/**
+ * Bounds read inside a cropped window, expressed against the preview instead.
+ *
+ * The outline is drawn over what the student is looking at, and the window the
+ * session chose to read through is not that. Without this the frame lands on
+ * the middle of the screen whatever it found, which is worse than drawing
+ * nothing: it claims a position it does not have.
+ */
+export function boundsAtScale(
+  bounds: ContentBounds | null,
+  scale: number,
+): ContentBounds | null {
+  if (!bounds || scale <= 1) return bounds;
+  return {
+    x: 0.5 + (bounds.x - 0.5) / scale,
+    y: 0.5 + (bounds.y - 0.5) / scale,
+    width: bounds.width / scale,
+    height: bounds.height / scale,
+  };
 }
 
 /**
