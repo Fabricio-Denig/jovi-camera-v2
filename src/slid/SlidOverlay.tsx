@@ -133,14 +133,31 @@ export function SlidOverlay({
         )}
       </div>
 
+      {/*
+        A trilha do que já foi guardado, na borda direita, como no Figma.
+        Quatro e não a aula inteira: cada miniatura carrega um object URL de um
+        JPEG, e uma aula de uma hora acumularia dezenas deles vivos ao mesmo
+        tempo em cima do laço de análise. Quatro é o que o Figma mostra e é o
+        que cabe sem tapar o quadro.
+      */}
       {captures.length > 0 && (
-        <div className="pointer-events-none absolute right-3 top-[max(140px,calc(env(safe-area-inset-top)+124px))] z-20 flex max-h-[38%] flex-col gap-2 overflow-hidden">
+        <div className="pointer-events-none absolute right-3 top-[max(140px,calc(env(safe-area-inset-top)+124px))] z-20 flex max-h-[46%] flex-col gap-2 overflow-hidden">
           {captures
-            .slice(-3)
+            .slice(-RAIL_LENGTH)
             .reverse()
-            .map((capture) => (
-              <MomentChip key={capture.id} capture={capture} />
+            .map((capture, index) => (
+              <MomentChip
+                key={capture.id}
+                capture={capture}
+                fresh={index === 0 && capture.id === lastMoment?.id}
+                index={captures.length - index}
+              />
             ))}
+          {captures.length > RAIL_LENGTH && (
+            <span className="self-center rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-medium text-white/80 backdrop-blur">
+              +{captures.length - RAIL_LENGTH}
+            </span>
+          )}
         </div>
       )}
 
@@ -307,14 +324,48 @@ function MomentToast({ moment }: { moment: SlidCapture }) {
   );
 }
 
-function MomentChip({ capture }: { capture: SlidCapture }) {
+/** Quantas miniaturas ficam vivas na trilha. O Figma mostra quatro. */
+const RAIL_LENGTH = 4;
+
+/**
+ * Um momento já guardado, na trilha.
+ *
+ * O ponto azul é do Figma e ganhou função: ele pisca no momento recém-capturado
+ * e fica quieto nos anteriores. Sem isso, uma captura automática acontece e a
+ * única prova é uma miniatura a mais numa pilha que o estudante não estava
+ * olhando — que é o oposto de ver a câmera decidir.
+ */
+function MomentChip({
+  capture,
+  fresh,
+  index,
+}: {
+  capture: SlidCapture;
+  fresh: boolean;
+  index: number;
+}) {
   const url = useObjectUrl(capture.blob);
   return (
-    <div className="relative size-16 animate-[slid-rise_260ms_ease-out] overflow-hidden rounded-lg border border-white/40">
+    <div
+      aria-hidden="true"
+      className={`relative size-[58px] animate-[slid-rise_260ms_ease-out] overflow-hidden rounded-xl border transition-colors duration-500 ${
+        fresh ? "border-accent" : "border-white/35"
+      }`}
+    >
       {url && <img src={url} alt="" className="size-full object-cover" />}
-      <span className="absolute inset-x-0 bottom-0 bg-black/65 text-center font-mono text-[9px] text-white">
-        {formatClock(capture.atMs)}
+      <span
+        className={`absolute right-1 top-1 size-2 rounded-full ${
+          fresh ? "animate-pulse bg-accent" : "bg-accent/70"
+        }`}
+      />
+      {/* O número do momento em vez do relógio: na trilha o que ajuda é saber
+          quantos já são, e o horário exato está no resumo depois. */}
+      <span className="absolute inset-x-0 bottom-0 bg-black/60 text-center font-mono text-[9.5px] text-white">
+        {index}
       </span>
+      {fresh && (
+        <span className="pointer-events-none absolute inset-0 animate-[slid-confirm_700ms_ease-out] bg-accent/25" />
+      )}
     </div>
   );
 }

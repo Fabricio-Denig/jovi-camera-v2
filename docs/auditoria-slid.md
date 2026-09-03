@@ -87,3 +87,47 @@ política de momentos — e ataca a única coisa que a medição mostra estar er
 Tudo acima é cena gerada em código. Vale como diagnóstico da geometria, não como
 prova de comportamento em sala. Continua valendo o critério: só é "validado em
 device real" quando o teste no celular confirmar.
+
+---
+
+# Curadoria — o que se verificou, e o que não precisou mudar
+
+*Medido depois das correções de escala e contraste.*
+
+A outra metade do relato era "às vezes não marca momentos que deveria". Isso
+podia estar na detecção ou na curadoria — na regra que decide se o que mudou
+merece virar momento. Testei a curadoria isoladamente, com a política do app
+importada, sobre uma aula gravada de 24 slides.
+
+| cenário | esperado | medido |
+|---|---|---|
+| slide parado por 1 minuto | 1 momento (a abertura) | 1 |
+| professor atravessa na frente | 0 extras | 0 |
+| cursor percorre o slide | 0 extras | 0 |
+| reflexo desliza na tela | 0 extras | 0 |
+| animação pisca no canto | 0 extras | 0 |
+| **troca de slide** | **cria momento** | 2º momento criado |
+| **build no mesmo slide** | **refina, não cria** | 1 momento, 1 refinamento |
+| plateia discreta se mexendo | troca ainda é vista | 2 momentos |
+| plateia agitada | troca ainda é vista | 2 momentos |
+
+As duas últimas eram a hipótese mais provável para o relato: ninguém assiste
+aula numa sala parada, e se o movimento de fundo mantivesse a diferença entre
+quadros acima do limiar, a sessão nunca chegaria aos dois tiques estáveis que
+exige, e a troca de slide passaria sem ser vista. Não é o que acontece — a
+comparação é feita sobre as marcas dentro da região do conteúdo, e a plateia
+está fora dela.
+
+**Nenhuma linha de código mudou nesta etapa.** A curadoria já estava certa; o
+que falhava era a detecção, e isso foi corrigido nos dois commits anteriores.
+Registrar isso é mais útil do que inventar uma correção para parecer trabalho.
+
+E a aula longa foi remedida depois das mudanças, que é o risco real de aumentar
+sensibilidade: **49 minutos, 24 slides, 24 momentos criados, 0 falsos
+positivos, 46 builds absorvidos como refinamento, 108 tremores absorvidos.**
+
+## Continua sem validação em aparelho
+
+Tudo acima é quadro gravado processado fora do navegador. Prova que a regra
+decide certo quando recebe os quadros; não prova o que a câmera de um celular
+entrega numa sala de aula.

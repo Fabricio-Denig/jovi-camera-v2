@@ -33,9 +33,11 @@ interface ContentFrameProps {
  * student can see that — a decorative rectangle that always looks right would
  * teach them to trust a camera that had not earned it.
  *
- * Deliberately not a scanner: no corner brackets, no sweeping line, no grid.
- * A thin resting outline that settles into place is a camera confirming
- * something; the rest is a machine processing a document.
+ * Os colchetes de canto vêm do Figma, e a diferença entre eles e um scanner
+ * está no que os acompanha: sem linha varrendo, sem grade, sem contagem de
+ * páginas. Um colchete que assenta e para é a câmera confirmando o que
+ * reconheceu; o que faria disto um leitor de documentos seria o movimento
+ * contínuo, que aqui não existe.
  */
 export function ContentFrame({
   bounds,
@@ -57,8 +59,8 @@ export function ContentFrame({
       <div
         className={
           tentative
-            ? "absolute animate-[slid-settle_420ms_cubic-bezier(0.16,1,0.3,1)] rounded-xl border border-dashed border-accent/45 transition-all duration-300"
-            : "absolute animate-[slid-settle_420ms_cubic-bezier(0.16,1,0.3,1)] rounded-xl border border-accent/80 transition-all duration-300"
+            ? "absolute animate-[slid-settle_420ms_cubic-bezier(0.16,1,0.3,1)] rounded-xl border border-dashed border-accent/30 transition-all duration-300"
+            : "absolute animate-[slid-settle_420ms_cubic-bezier(0.16,1,0.3,1)] rounded-xl border border-accent/45 transition-all duration-300"
         }
         style={{
           left: `${rect.left}px`,
@@ -77,6 +79,19 @@ export function ContentFrame({
           />
         )}
 
+        {/* Os quatro cantos. Desenhados como cantos e não como uma borda inteira
+            porque é o que o Figma mostra, e porque um retângulo fechado sobre um
+            quadro branco compete com o próprio conteúdo que ele aponta. */}
+        {CORNERS.map(({ key, className }) => (
+          <span
+            key={key}
+            aria-hidden="true"
+            className={`pointer-events-none absolute size-5 border-accent ${className} ${
+              tentative ? "opacity-45" : "opacity-100"
+            }`}
+          />
+        ))}
+
         {/* Inside the frame, not above it: content that reaches the top of the
             view would push a label outside the screen. */}
         {label && (
@@ -91,6 +106,14 @@ export function ContentFrame({
 
 /** Smallest visible frame worth drawing, in CSS pixels. */
 const MIN_VISIBLE = 64;
+
+/** Cada canto é duas bordas de um quadrado, o que dá o colchete do Figma. */
+const CORNERS = [
+  { key: "tl", className: "-left-px -top-px rounded-tl-xl border-l-2 border-t-2" },
+  { key: "tr", className: "-right-px -top-px rounded-tr-xl border-r-2 border-t-2" },
+  { key: "bl", className: "-bottom-px -left-px rounded-bl-xl border-b-2 border-l-2" },
+  { key: "br", className: "-bottom-px -right-px rounded-br-xl border-b-2 border-r-2" },
+];
 
 interface Rect {
   left: number;

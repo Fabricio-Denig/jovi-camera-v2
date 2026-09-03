@@ -290,6 +290,10 @@ export function useSlidSession({
     if (!detectionEnabled || suggestionDismissedRef.current) return;
 
     const interval = setInterval(() => {
+      // Relido a cada tique, e não só quando o efeito monta. Dispensar mexe num
+      // ref, refs não remontam efeitos, e o intervalo já em curso continuava
+      // reacendendo a sugestão no tique seguinte — dispensar durava 1,2 s.
+      if (suggestionDismissedRef.current) return;
       const video = videoRef.current;
       if (!video) return;
       const scene = readBestScene(sampleAll(video));
