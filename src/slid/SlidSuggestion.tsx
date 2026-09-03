@@ -1,48 +1,103 @@
+import { useState } from "react";
+
 interface SlidSuggestionProps {
   onAccept: () => void;
   onDismiss: () => void;
 }
 
 /**
- * The contextual suggestion — the moment the whole product argues for.
+ * A sugestão contextual — o momento pelo qual o produto inteiro argumenta.
  *
- * It says what it saw, what it offers and why that helps, because a feature
- * name alone is what makes people ignore features they would have wanted.
- * Dismissing is always available and is remembered for the session: a
- * suggestion that keeps coming back stops being a suggestion.
+ * A forma vem do Figma: uma pílula de uma linha no alto, e não um cartão sobre
+ * o rodapé. A pílula inteira é o botão de ativar, e o ✕ dentro dela é o de
+ * dispensar; dispensar fica lembrado pela sessão, porque uma sugestão que volta
+ * sozinha deixa de ser sugestão.
+ *
+ * Abaixo dela, o cartão que o Figma coloca ali: o que o SliD faz, em duas
+ * linhas. Ele existe porque um nome de recurso sozinho é o que faz as pessoas
+ * ignorarem recursos que teriam querido.
  */
 export function SlidSuggestion({ onAccept, onDismiss }: SlidSuggestionProps) {
-  return (
-    // Anchored above the camera controls rather than over the viewfinder: a
-    // card that covers the board it just recognised argues against itself, and
-    // now it would also hide the frame drawn around that board.
-    <div className="pointer-events-none absolute inset-x-0 bottom-[max(178px,calc(env(safe-area-inset-bottom)+178px))] z-20 flex justify-center px-4">
-      {/* Three things, each said once: the frame on the board says what was
-          recognised, this line says what that is worth, the button acts. The
-          card used to repeat the recognition and explain it in three lines,
-          which is how a suggestion turns into a paragraph nobody reads. */}
-      <div className="pointer-events-auto flex w-full max-w-sm items-center gap-3 rounded-2xl border border-accent/40 bg-canvas/95 p-3 pl-4 shadow-lg backdrop-blur">
-        <p className="min-w-0 flex-1 text-[13px] leading-snug text-ink">
-          O SliD acompanha e salva os momentos importantes.
-        </p>
+  const [expandido, setExpandido] = useState(false);
 
+  return (
+    <div className="pointer-events-none absolute inset-x-0 top-[max(16px,env(safe-area-inset-top))] z-30 flex flex-col items-center gap-2.5 px-4">
+      <div className="pointer-events-auto flex animate-[slid-rise_240ms_ease-out] items-center gap-1 rounded-full bg-accent py-1 pl-3.5 pr-1.5 text-accent-ink shadow-lg">
+        <span
+          aria-hidden="true"
+          className="size-2 shrink-0 animate-pulse rounded-full bg-accent-ink/85"
+        />
         <button
           type="button"
           onClick={onAccept}
-          className="min-h-11 shrink-0 rounded-xl bg-accent px-4 text-[13px] font-medium text-accent-ink active:opacity-80"
+          // 44px de alvo, ainda que a pílula do Figma seja mais fina: o dedo
+          // decide isto, não o desenho.
+          className="min-h-11 whitespace-nowrap px-1 text-[12.5px] font-semibold transition-transform active:scale-95"
         >
-          Ativar
+          Aula detectada · ativar SliD
         </button>
-
         <button
           type="button"
           onClick={onDismiss}
           aria-label="Dispensar sugestão"
-          className="-mr-1 flex size-11 shrink-0 items-center justify-center rounded-full text-ink-muted active:opacity-60"
+          className="flex size-11 shrink-0 items-center justify-center rounded-full text-accent-ink/75 transition-transform active:scale-90 active:text-accent-ink"
         >
           ✕
         </button>
       </div>
+
+      <div className="pointer-events-auto flex w-full max-w-sm animate-[slid-enter_280ms_ease-out_120ms_both] items-start gap-3 rounded-2xl bg-canvas/92 p-3 shadow-lg backdrop-blur">
+        <span
+          aria-hidden="true"
+          className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent"
+        >
+          <BoardIcon />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[12.5px] font-semibold text-ink">
+            SliD · Captura inteligente das aulas
+          </p>
+          <p className="mt-0.5 text-[11.5px] leading-snug text-ink-muted">
+            Captura automaticamente enquanto você assiste. Organiza por matéria.
+          </p>
+          {/* "Saiba mais" abre aqui mesmo, e não leva a lugar nenhum: durante
+              uma aula, tirar o estudante da câmera para explicar a câmera é
+              perder a aula que estava começando. */}
+          {expandido && (
+            <p className="mt-1.5 animate-[slid-enter_200ms_ease-out] text-[11.5px] leading-snug text-ink-muted">
+              Você apoia o celular e assiste. O SliD guarda cada momento em que o
+              quadro muda, e no fim entrega a aula em ordem, com o que
+              reconheceu — sem você tocar em nada.
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={() => setExpandido((aberto) => !aberto)}
+            className="mt-0.5 min-h-10 pr-3 text-[11.5px] font-semibold text-accent transition-transform active:scale-95"
+          >
+            {expandido ? "Mostrar menos" : "Saiba mais"}
+          </button>
+        </div>
+      </div>
     </div>
+  );
+}
+
+function BoardIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="3" y="4" width="18" height="13" rx="1.5" />
+      <path d="M12 17v3M8 8h8M8 12h5" />
+    </svg>
   );
 }
