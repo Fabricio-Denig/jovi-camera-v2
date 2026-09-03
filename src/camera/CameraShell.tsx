@@ -9,6 +9,8 @@ import { ShutterButton } from "./ShutterButton";
 import { TopBar, nextAspect, nextTimer, type TimerSeconds } from "./TopBar";
 import { photoWindow, type AspectRatio } from "./aspect";
 import { FrameGuides } from "./FrameGuides";
+import { FilterStrip } from "./FilterStrip";
+import { findFilter } from "./filters";
 import { SettingsSheet, DEFAULT_SETTINGS, type CameraSettings } from "./SettingsSheet";
 import { useTorch } from "./useTorch";
 import { useCamera } from "./useCamera";
@@ -73,6 +75,8 @@ export function CameraShell({
   const [aspect, setAspect] = useState<AspectRatio>("4:3");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settings, setSettings] = useState<CameraSettings>(DEFAULT_SETTINGS);
+  const [filterId, setFilterId] = useState("nenhum");
+  const [filtersOpen, setFiltersOpen] = useState(true);
   /** Segundos restantes da contagem, ou null quando não há contagem. */
   const [countdown, setCountdown] = useState<number | null>(null);
 
@@ -87,6 +91,12 @@ export function CameraShell({
   } | null>(null);
 
   const isSlid = mode.id === "slid";
+  /*
+   * Nenhum filtro sobre uma aula. Um momento em P&B ou com sépia é a câmera
+   * mudando o que ela guardou de uma lousa, e o material de estudo não pode
+   * carregar uma escolha estética feita antes da aula começar.
+   */
+  const filtro = isSlid ? findFilter("nenhum") : findFilter(filterId);
   const slid = useSlidSession({
     videoRef,
     // Only look for a board when the suggestion could actually be acted on.
@@ -174,6 +184,7 @@ export function CameraShell({
     const { blob, width, height } = await capturePhotoFromVideo(videoRef.current, {
       mirrored: facing === "user" && settings.mirrorSelfie,
       zoom: zoom.digital,
+      filter: filtro.css,
       window: photoWindow(
         aspect,
         videoRef.current.videoWidth,
@@ -249,7 +260,12 @@ export function CameraShell({
       {/* Mounted unconditionally: the stream is attached to this element from an
           effect, so unmounting it on a status change would silently drop the
           preview and leave a black screen. */}
-      <Viewfinder videoRef={videoRef} facing={facing} zoom={zoom.digital} />
+      <Viewfinder
+        videoRef={videoRef}
+        facing={facing}
+        zoom={zoom.digital}
+        filter={filtro.css}
+      />
 
       {isReady && !isSlid && mode.kind === "photo" && (
         <FrameGuides aspect={aspect} grid={settings.grid} />
@@ -440,6 +456,29 @@ export function CameraShell({
           <div className="absolute inset-x-0 bottom-0 z-10 flex flex-col items-center gap-5 pb-6">
             {mode.kind === "photo" && (
               <ZoomControl level={zoom.level} onSelect={zoom.setLevel} />
+            )}
+
+            {mode.kind === "photo" && (
+              <div className="flex w-full flex-col items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setFiltersOpen((aberto) => !aberto)}
+                  aria-expanded={filtersOpen}
+                  className="min-h-10 rounded-full bg-black/40 px-4 text-[11.5px] font-medium text-white/85 transition-transform active:scale-95"
+                >
+                  Filtros {filtersOpen ? "⌄" : "⌃"}
+                </button>
+                {filtersOpen && (
+                  <div className="w-full animate-[slid-enter_220ms_ease-out]">
+                    <FilterStrip
+                      videoRef={videoRef}
+                      active={filterId}
+                      onSelect={setFilterId}
+                      mirrored={facing === "user"}
+                    />
+                  </div>
+                )}
+              </div>
             )}
             <ModeTabs
               modeId={modeId}
