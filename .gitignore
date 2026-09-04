@@ -25,3 +25,4 @@ dist-ssr
 
 # OCR runtime, gerado por scripts/copy-ocr-assets.mjs
 public/tesseract
+tests/cenas/

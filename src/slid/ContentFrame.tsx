@@ -188,14 +188,29 @@ function useCoverRect(
         zoomAbout(offsetY + (wide.y + wide.height) * shownH, ch / 2),
       );
 
-      // A sliver clinging to one edge reads as a rendering fault, not as
-      // recognition. Below this the frame says nothing worth saying.
-      if (right - left < MIN_VISIBLE || bottom - top < MIN_VISIBLE) {
+      // Conteúdo inteiramente fora da vista não tem o que apontar.
+      if (right <= 0 || bottom <= 0 || left >= cw || top >= ch) {
         setRect(null);
         return;
       }
 
-      setRect({ left, top, width: right - left, height: bottom - top });
+      // Uma faixa fina demais some, e sumir é a pior resposta possível: a câmera
+      // acabou de dizer que achou uma aula e não mostra onde. Um slide do fundo
+      // da sala dá 59 px de altura contra o mínimo de 64 e desaparecia por
+      // quatro pixels. Então o contorno cresce em torno do próprio centro até
+      // ficar legível, em vez de desistir — ele continua apontando o mesmo
+      // lugar, só com tamanho suficiente para ser visto.
+      const cresce = (a: number, b: number, limite: number) => {
+        if (b - a >= MIN_VISIBLE) return [a, b];
+        const centro = (a + b) / 2;
+        const meio = MIN_VISIBLE / 2;
+        const inicio = Math.max(0, Math.min(limite - MIN_VISIBLE, centro - meio));
+        return [inicio, Math.min(limite, inicio + MIN_VISIBLE)];
+      };
+      const [x0, x1] = cresce(left, right, cw);
+      const [y0, y1] = cresce(top, bottom, ch);
+
+      setRect({ left: x0, top: y0, width: x1 - x0, height: y1 - y0 });
     };
 
     measure();

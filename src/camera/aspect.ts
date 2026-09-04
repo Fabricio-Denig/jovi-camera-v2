@@ -65,12 +65,7 @@ export function photoWindow(
     return aspectWindow(ratio, frameWidth, frameHeight);
   }
 
-  // O que o object-cover deixa visível, em frações do quadro.
-  const escala = Math.max(viewWidth / frameWidth, viewHeight / frameHeight);
-  const visivel = {
-    width: Math.min(1, viewWidth / (frameWidth * escala)),
-    height: Math.min(1, viewHeight / (frameHeight * escala)),
-  };
+  const visivel = coverWindow(frameWidth, frameHeight, viewWidth, viewHeight);
 
   // E a proporção, dentro do que está visível.
   const dentro = aspectWindow(
@@ -81,5 +76,29 @@ export function photoWindow(
 
   const width = visivel.width * dentro.width;
   const height = visivel.height * dentro.height;
+  return { x: (1 - width) / 2, y: (1 - height) / 2, width, height };
+}
+
+/**
+ * O pedaço do quadro que o visor está de fato mostrando, em frações.
+ *
+ * O `object-cover` preenche a tela e descarta o resto: num celular em pé com
+ * um sensor deitado, o que fica de fora chega a dois terços da largura. Quem
+ * precisa disto é qualquer coisa que guarde uma imagem — a foto manual, que já
+ * compõe isto com a proporção escolhida, e o momento do SliD, que não tem
+ * proporção a escolher e para no recorte do visor.
+ */
+export function coverWindow(
+  frameWidth: number,
+  frameHeight: number,
+  viewWidth: number,
+  viewHeight: number,
+): { x: number; y: number; width: number; height: number } {
+  if (!frameWidth || !frameHeight || !viewWidth || !viewHeight) {
+    return { x: 0, y: 0, width: 1, height: 1 };
+  }
+  const escala = Math.max(viewWidth / frameWidth, viewHeight / frameHeight);
+  const width = Math.min(1, viewWidth / (frameWidth * escala));
+  const height = Math.min(1, viewHeight / (frameHeight * escala));
   return { x: (1 - width) / 2, y: (1 - height) / 2, width, height };
 }

@@ -673,8 +673,19 @@ const WIDE_SHOT_HAS_AN_OPINION = 2;
  * genuinely has nothing to judge.
  *
  * `samples` must be in the same order as ANALYSIS_SCALES, widest first.
+ *
+ * @param preferred A janela que funcionou no tique anterior, quando houve uma.
+ *   Ela é tentada antes das outras, e isso não é otimização — é o que impede a
+ *   moldura de dançar. Sem preferência, um quadro parado pode ser resolvido por
+ *   1x num tique e por 2.6x no seguinte, e as duas janelas descrevem a mesma
+ *   escrita com caixas diferentes: o contorno pula 159 px sobre uma cena que
+ *   não se moveu. Ficar na janela que já explicava a cena mantém a caixa quieta
+ *   enquanto a cena estiver quieta.
  */
-export function readBestScene(samples: (Uint8Array | null)[]): ScaledScene | null {
+export function readBestScene(
+  samples: (Uint8Array | null)[],
+  preferred?: number,
+): ScaledScene | null {
   const wideSample = samples[0];
   if (!wideSample) return null;
 
@@ -711,6 +722,16 @@ export function readBestScene(samples: (Uint8Array | null)[]): ScaledScene | nul
   for (let i = 1; i < samples.length; i++) tentativas.push({ index: i });
   for (let i = 0; i < samples.length; i++)
     tentativas.push({ index: i, delta: RESCUE_DELTA });
+
+  // A janela do tique anterior vai para a frente da fila, nos dois limiares.
+  const preferido = ANALYSIS_SCALES.indexOf(preferred ?? -1);
+  if (preferido > 0) {
+    tentativas.sort((a, bb) => {
+      const pa = a.index === preferido ? 0 : 1;
+      const pb = bb.index === preferido ? 0 : 1;
+      return pa - pb;
+    });
+  }
 
   for (const { index, delta } of tentativas) {
     const sample = samples[index];

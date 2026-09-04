@@ -16,6 +16,7 @@ import { useTorch } from "./useTorch";
 import { useCamera } from "./useCamera";
 import { useZoom } from "./useZoom";
 import { ZoomControl } from "./ZoomControl";
+import { FramingHint } from "../slid/FramingHint";
 import { useVideoRecorder } from "./useVideoRecorder";
 import { Viewfinder } from "./Viewfinder";
 import { ModePreviewCard } from "../modes/ModePreviewCard";
@@ -363,7 +364,8 @@ export function CameraShell({
           enquadrar o slide é a única coisa que o estudante realmente precisa
           fazer com as mãos, e é a primeira, antes de apoiar o celular. */}
       {isReady && isSlid && slid.status !== "finished" && (
-        <div className="pointer-events-auto absolute bottom-28 left-4 z-30">
+        <div className="pointer-events-auto absolute bottom-28 left-4 z-30 flex flex-col items-start gap-2">
+          {slid.framingHint === "distante" && <FramingHint zoomLevel={zoom.level} />}
           <ZoomControl level={zoom.level} onSelect={zoom.setLevel} />
         </div>
       )}
@@ -470,7 +472,12 @@ export function CameraShell({
 
           <div className="absolute inset-x-0 bottom-0 z-10 flex flex-col items-center gap-5 pb-6">
             {mode.kind === "photo" && (
-              <ZoomControl level={zoom.level} onSelect={zoom.setLevel} />
+              <>
+                {slid.framingHint === "distante" && !slid.boardDetected && (
+                  <FramingHint zoomLevel={zoom.level} />
+                )}
+                <ZoomControl level={zoom.level} onSelect={zoom.setLevel} />
+              </>
             )}
 
             {mode.kind === "photo" && (
