@@ -72,6 +72,25 @@ function getSampler() {
 export const ANALYSIS_SCALES = [1, 1.7, 2.6];
 
 /**
+ * O segundo limiar de tinta, tentado quando o primeiro não achou nada.
+ *
+ * O resgate por percentil que existia aqui nunca disparava, e o painel de
+ * diagnóstico foi quem mostrou: o limiar saía 22 até nas cenas de sala clara
+ * para as quais ele tinha sido feito. A causa é que o percentil alto de um
+ * quadro com um slide iluminado contra uma sala escura mede a *borda da tela*,
+ * que é a maior variação da cena — e não a tinta dentro dela, que é o que
+ * importa. Nenhum percentil separa as duas: onde a tinta cai, depende do
+ * tamanho do slide, que é justamente o que não se sabe.
+ *
+ * Então o limiar deixa de ser calculado e passa a ser procurado, do mesmo jeito
+ * que a escala. Medido: com 11, o slide a 50 % da largura com 45 % de contraste
+ * passa a ser visto, o de 32 % com 50 % também, e nenhuma das vinte cenas
+ * adversárias entra junto — porque quem rejeita textura são as provas de
+ * estrutura, e elas funcionam igual em qualquer limiar.
+ */
+const RESCUE_DELTA = 11;
+
+/**
  * Downscaled grayscale snapshot of the current frame.
  *
  * `zoom` is the crop the preview is applying on its own — the part the camera
@@ -219,7 +238,7 @@ export function inkThresholdOfLastMask(): number {
   return lastInkThreshold;
 }
 
-export function markMask(gray: Uint8Array): Uint8Array {
+export function markMask(gray: Uint8Array, forced?: number): Uint8Array {
   const background = localBackground(gray, BACKGROUND_RADIUS);
 
   const departure = new Float64Array(gray.length);
@@ -249,9 +268,10 @@ export function markMask(gray: Uint8Array): Uint8Array {
   // the scene whose ink never reaches the bar at all, so that is the only case
   // that moves it.
   const delta =
-    ink >= MARK_DELTA
+    forced ??
+    (ink >= MARK_DELTA
       ? MARK_DELTA
-      : Math.max(MARK_DELTA_FLOOR, ink * MARK_DELTA_SHARE);
+      : Math.max(MARK_DELTA_FLOOR, ink * MARK_DELTA_SHARE));
 
   lastInkThreshold = delta;
 
@@ -431,9 +451,22 @@ const SUGGEST_MIN_THIN = 0.28;
  * reaches the wide shot and passes, because the wide shot keeps the last word.
  */
 const CROP_MAX_THIN = 0.93;
+/**
+ * E o teto só vale quando há faixas o bastante para aquilo ser uma trama.
+ *
+ * Medido pelo navegador, escrita fraca e tecido se encostam no valor: o carpete
+ * lê 0,966 e um slide de sala clara, visto num recorte, lê 0,96. O que os
+ * separa não é quão finos os traços são, é quantos. A trama enche o quadro —
+ * treze faixas, quarenta linhas — porque ela é a superfície inteira. A escrita
+ * fraca de um slide são duas faixas soltas num campo claro.
+ *
+ * Sem isto, o teto criado para o carpete estava reprovando o caso que este
+ * ciclo existe para consertar.
+ */
+const WEAVE_MIN_LINES = 5;
 
-export function readScene(gray: Uint8Array): SceneSignals {
-  const mask = markMask(gray);
+export function readScene(gray: Uint8Array, forcedDelta?: number): SceneSignals {
+  const mask = markMask(gray, forcedDelta);
 
   const rowRuns = new Int32Array(SAMPLE_H);
   const written = new Uint8Array(SAMPLE_H);
@@ -604,8 +637,17 @@ function evidence(scene: SceneSignals): number {
 }
 
 /**
- * Below this many bands, the wide shot did not find enough to have an opinion.
- * At or above it, whatever it decided was a decision.
+ * Quando a vista aberta tem material suficiente para a recusa dela valer.
+ *
+ * Eram só duas faixas, e isso vetava cedo demais: um slide ocupando metade da
+ * largura dá sete linhas em duas faixas na vista aberta — quase nada — e mesmo
+ * assim a busca parava ali e o slide se perdia. O teclado, que é o caso para o
+ * qual o veto existe, dá cinquenta e nove linhas em oito faixas. A diferença
+ * entre os dois não é ter faixas, é ter escrita bastante para se pronunciar.
+ *
+ * Então a opinião exige as duas coisas: faixas separadas e linhas o bastante
+ * para o julgamento ser sobre a *qualidade* das marcas, e não sobre a falta
+ * delas.
  */
 const WIDE_SHOT_HAS_AN_OPINION = 2;
 
@@ -644,27 +686,51 @@ export function readBestScene(samples: (Uint8Array | null)[]): ScaledScene | nul
   readings.push(wideRead);
   const wide: ScaledScene = { ...wideRead, readings, tooSmall: false };
   if (wide.looksLikeClass) return wide;
-  if (wide.lines >= WIDE_SHOT_HAS_AN_OPINION) return wide;
+  // Dois jeitos de a vista aberta ter uma opinião. Ou ela achou escrita bastante
+  // para julgar a qualidade das marcas, ou ela achou marcas *demais* — um quadro
+  // em que quase toda fileira está marcada é uma cena, não uma superfície, e
+  // recortar uma cena movimentada sempre encontra pedaços que parecem quadro.
+  const opiniao =
+    (wide.lines >= WIDE_SHOT_HAS_AN_OPINION &&
+      wide.writtenRows >= SUGGEST_MIN_ROWS) ||
+    wide.writtenRows > MAX_WRITTEN_ROWS;
+  if (opiniao) return wide;
 
-  // Nothing to judge out here. Take the widest crop that does find a class, and
-  // failing that the one that found the most — the session gate is more
-  // forgiving than the suggestion, and a distant board still deserves capturing.
+  // Nothing to judge out here. Widen the search — first the tighter windows at
+  // the normal bar, then everything again at the rescue bar — and take the
+  // first reading that finds a class. Failing that, the one that found the
+  // most: the session gate is more forgiving than the suggestion, and a distant
+  // board still deserves capturing.
+  //
+  // The order matters. The rescue bar comes last so a scene that reads as a
+  // class at the normal bar is never described by the looser one, and the wide
+  // shot's veto above still runs first — a keyboard never reaches any of this.
   let best = wide;
   let bestScore = evidence(wide);
-  for (let i = 1; i < samples.length; i++) {
-    const sample = samples[i];
+  const tentativas: { index: number; delta?: number }[] = [];
+  for (let i = 1; i < samples.length; i++) tentativas.push({ index: i });
+  for (let i = 0; i < samples.length; i++)
+    tentativas.push({ index: i, delta: RESCUE_DELTA });
+
+  for (const { index, delta } of tentativas) {
+    const sample = samples[index];
     if (!sample) continue;
-    const read = readScene(sample);
+    const read = readScene(sample, delta);
     // The ceiling is applied here, once, so a window that fails it can never
     // offer a class — not as the pick, and not as the fallback either. It can
     // still be captured inside a session the student chose to start, which is
     // the same asymmetry the two gates have everywhere else.
-    const recusadaPorTrama = read.looksLikeClass && read.thinShare > CROP_MAX_THIN;
+    const ampliada = index > 0 || delta !== undefined;
+    const recusadaPorTrama =
+      read.looksLikeClass &&
+      ampliada &&
+      read.thinShare > CROP_MAX_THIN &&
+      read.lines >= WEAVE_MIN_LINES;
     const reading: SceneReading = {
       ...read,
       looksLikeClass: read.looksLikeClass && !recusadaPorTrama,
       verdict: recusadaPorTrama ? "trama-uniforme" : read.verdict,
-      scale: ANALYSIS_SCALES[i],
+      scale: ANALYSIS_SCALES[index],
     };
     readings.push(reading);
     if (reading.looksLikeClass) return { ...reading, readings, tooSmall: false };
