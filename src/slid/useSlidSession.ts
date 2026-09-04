@@ -15,6 +15,7 @@ import {
   sampleFrame,
 } from "./frameAnalysis";
 import { capturePhotoFromVideo } from "../camera/capturePhoto";
+import { coverWindow } from "../camera/aspect";
 
 export type SlidStatus = "idle" | "running" | "paused" | "finished";
 
@@ -352,6 +353,24 @@ export function useSlidSession({
     boundsHistoryRef.current = [];
   }, []);
 
+  /**
+   * O momento sai com o enquadramento que o estudante estava vendo.
+   *
+   * O visor usa `object-cover`, então ele já mostra menos do que o sensor
+   * entrega — num celular em pé, bem menos. Guardar o quadro inteiro fazia o
+   * momento vir mais largo do que a tela, com a parede e o teto que o estudante
+   * tinha deixado de fora ao mirar. A foto manual já compunha este recorte; o
+   * momento do SliD não, e essa era a diferença entre enquadrar e guardar.
+   */
+  const framingWindow = useCallback((video: HTMLVideoElement) => {
+    return coverWindow(
+      video.videoWidth,
+      video.videoHeight,
+      video.clientWidth,
+      video.clientHeight,
+    );
+  }, []);
+
   const takeCapture = useCallback(
     async (reason: MomentReason, sample: Uint8Array | null) => {
       const video = videoRef.current;
@@ -360,6 +379,7 @@ export function useSlidSession({
       try {
         const { blob } = await capturePhotoFromVideo(video, {
           zoom: zoomRef.current,
+          window: framingWindow(video),
         });
         const reference =
           sample ?? sampleFrame(video, zoomRef.current * scaleRef.current);
@@ -388,7 +408,7 @@ export function useSlidSession({
         capturingRef.current = false;
       }
     },
-    [videoRef],
+    [videoRef, framingWindow],
   );
 
   /**
@@ -404,6 +424,7 @@ export function useSlidSession({
       try {
         const { blob } = await capturePhotoFromVideo(video, {
           zoom: zoomRef.current,
+          window: framingWindow(video),
         });
         const reference =
           sample ?? sampleFrame(video, zoomRef.current * scaleRef.current);
@@ -433,7 +454,7 @@ export function useSlidSession({
         capturingRef.current = false;
       }
     },
-    [videoRef],
+    [videoRef, framingWindow],
   );
 
   // Contextual detection: looks for a board only when it could act on it.

@@ -131,3 +131,96 @@ positivos, 46 builds absorvidos como refinamento, 108 tremores absorvidos.**
 Tudo acima é quadro gravado processado fora do navegador. Prova que a regra
 decide certo quando recebe os quadros; não prova o que a câmera de um celular
 entrega numa sala de aula.
+
+---
+
+# Segunda rodada — a moldura, o enquadramento e a dica
+
+*Medido em 3 e 4 de setembro, com o modo de diagnóstico já no ar.*
+
+## A moldura estava dançando, e por três motivos diferentes
+
+O sintoma era um só — "a moldura fica pulando" — e por isso parecia um
+problema só. O `qa-moldura` separou os três: ele calcula, pela conta do
+`object-cover`, onde um slide de largura conhecida **deveria** cair na tela, e
+compara com o retângulo que foi de fato desenhado. Mede duas coisas:
+sobreposição e tremor entre quadros parados.
+
+| cena | sobreposição | tremor antes | tremor depois |
+|---|---|---|---|
+| slide 70 % | 100 % | — | 0 px |
+| slide 50 % | 100 % | — | 0 px |
+| slide 32 % | 90 % | — | 0 px |
+| slide 20 % | 84 % | *sem moldura* | 1 px |
+| slide 50 % sala clara | 100 % | 159 px | **7 px** |
+| slide 32 % com 2x | 100 % | — | 6 px |
+
+As três causas:
+
+1. **A janela mudava sozinha.** Um quadro parado era resolvido por 1x num tique
+   e por 2,6x no seguinte. As duas leituras estão certas; elas só descrevem a
+   mesma escrita com caixas diferentes.
+2. **Uma faixa fina sumia.** O slide a 20 % remapeava para 59,7 px de altura
+   contra um mínimo de 64 px, e a moldura simplesmente não era desenhada — a
+   câmera dizia ter achado uma aula e não mostrava onde.
+3. **A leitura oscilava.** Na sala clara a altura alternava entre 29 % e 80 %
+   do quadro **a cada tique**, sobre um slide parado.
+
+A terceira foi a que ensinou mais. A saída óbvia é suavizar, e suavizar estava
+errado: a média fica no meio das duas leituras, que é justamente onde a escrita
+não está. As duas leituras não valem o mesmo. A geometria diz qual: um slide
+centrado ocupa quase toda a janela de 2,6x, então a leitura de 80 % era a certa
+e a de 29 % era a análise perdendo faixas no pouco contraste. **Perder faixa é
+o erro que o pouco contraste comete; inventar faixa, não.** Por isso a caixa
+guarda a extensão dos últimos três tiques em vez da do último.
+
+## O momento saía com um enquadramento que ninguém tinha visto
+
+Achado ao auditar a pergunta "o momento do SliD usa o mesmo enquadramento que o
+usuário vê?". A resposta era **não**, e a diferença era grande.
+
+O visor usa `object-cover`: ele preenche a tela e descarta o resto. Num celular
+em pé recebendo um quadro deitado, o que fica de fora chega a dois terços da
+largura. A foto manual já compunha esse recorte — foi corrigido numa rodada
+anterior — mas o momento do SliD continuava salvando o **quadro inteiro do
+sensor**.
+
+| | antes | depois |
+|---|---|---|
+| momento salvo | 640×480 (paisagem) | 240×480 (retrato) |
+| proporção | 1.333 | 0.500 |
+| proporção do visor | 0.499 | 0.499 |
+
+Na prática: o estudante enquadrava o slide na tela e guardava uma imagem mais
+larga, com a parede e o teto que ele tinha tirado da mira de propósito.
+
+### O que ficou de fora, de propósito
+
+A **análise** continua lendo o quadro inteiro do sensor, e não a janela do
+visor. Isso é uma diferença conhecida, não um esquecimento: todos os limiares
+do classificador foram calibrados sobre essa amostra, e mexer na região lida
+recalibra a suíte inteira de falsos positivos. Para conteúdo centrado — que é
+como um slide ou uma lousa são enquadrados — as duas janelas concordam, e as
+seis cenas do `qa-moldura` confirmam. Para conteúdo encostado na borda do
+sensor, a análise enxerga o que a tela não mostra, e a moldura correspondente
+cai fora da vista (onde agora ela é descartada, em vez de desenhada no vazio).
+
+## A dica de enquadramento
+
+O `tooSmall` já existia e só aparecia no painel de diagnóstico. Agora ele vira
+uma linha na tela, ao lado do próprio botão de zoom que ela manda usar, e o
+texto acompanha o zoom em uso — "experimente 2x" para quem está em 1x, "3x"
+para quem já está em 2x, "chegue mais perto" para quem já esgotou o zoom.
+
+A regra que a mantém honesta: ela só fala quando a análise **viu escrita numa
+janela ampliada e não conseguiu concluir**. Sobre parede, carpete, teclado ou
+tela vazia não há sinal nenhum, e ela fica calada. Uma dica que aparece sobre
+qualquer coisa ensina o estudante a ignorá-la.
+
+## Continua sem validação em aparelho
+
+Vale o mesmo aviso da primeira rodada, com uma diferença: agora tudo acima
+passou **pela câmera do navegador**, com as cenas entrando por
+`--use-file-for-fake-video-capture`, e não por chamada direta às funções. É o
+mais perto de uma sala que dá para chegar sem uma sala. Não substitui apontar
+um celular para um projetor.
