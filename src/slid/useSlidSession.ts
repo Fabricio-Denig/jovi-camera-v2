@@ -87,6 +87,13 @@ const STABLE_TICKS = 2;
 /** Consecutive positive readings before the class suggestion appears. */
 const DETECTION_TICKS = 3;
 
+/**
+ * Quantos tiques de leitura a moldura carrega consigo. Três: o bastante para
+ * uma leitura magra não apagar a anterior, pouco o bastante para a caixa
+ * acompanhar uma troca de slide sem parecer presa ao slide de antes.
+ */
+const ENVELOPE_TICKS = 3;
+
 interface UseSlidSessionOptions {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   /** Contextual detection only runs while the camera is live and SliD is not already active. */
@@ -207,6 +214,29 @@ export function useSlidSession({
    * until the scene is lost.
    */
   const scaleRef = useRef(1);
+  /**
+   * A janela que a detecção usou por último. Diferente da travada da sessão:
+   * esta serve só para a moldura parar quieta antes de a aula começar.
+   */
+  const detectScaleRef = useRef<number | undefined>(undefined);
+  /**
+   * A caixa que está desenhada, suavizada.
+   *
+   * Uma cena de pouco contraste lida duas vezes seguidas devolve extensões
+   * diferentes para a mesma escrita — medido sobre um slide parado numa sala
+   * clara, a altura alternava entre 29 % e 80 % do quadro a cada tique, e o
+   * contorno pulava 159 px. Média não resolve isso: ela fica no meio, que é
+   * onde a escrita não está.
+   *
+   * O que resolve é notar que as duas leituras não têm o mesmo valor. A menor
+   * perdeu faixas que a maior enxergou — a geometria confirma: um slide
+   * centrado ocupa quase toda a janela de 2,6x, e era a leitura de 80 % que
+   * dizia isso. Perder faixa é o erro que o pouco contraste comete; inventar
+   * faixa, não. Então a caixa guarda a extensão dos últimos tiques em vez da
+   * do último, e alternar deixa de significar mexer.
+   */
+  const smoothBoundsRef = useRef<ContentBounds | null>(null);
+  const boundsHistoryRef = useRef<ContentBounds[]>([]);
 
   /**
    * O diagnóstico só é guardado quando alguém está olhando. Fora disso a
@@ -229,6 +259,54 @@ export function useSlidSession({
       ANALYSIS_SCALES.map((scale) => sampleFrame(video, zoomRef.current * scale)),
     [],
   );
+
+  /**
+   * A extensão que a cena mostrou nos últimos tiques, e não a do último.
+   *
+   * Uma leitura que perde metade da escrita não apaga a metade que a leitura
+   * anterior viu; ela precisa de três tiques seguidos concordando para a caixa
+   * encolher de verdade. Depois disso a caixa ainda caminha até o alvo em vez
+   * de saltar, o que dá o passo final de calma quando o alvo muda mesmo — um
+   * slide que troca.
+   */
+  const smoothBounds = useCallback((next: ContentBounds | null) => {
+    if (!next) return smoothBoundsRef.current;
+    const historico = [...boundsHistoryRef.current, next].slice(-ENVELOPE_TICKS);
+    boundsHistoryRef.current = historico;
+
+    const esquerda = Math.min(...historico.map((b) => b.x));
+    const topo = Math.min(...historico.map((b) => b.y));
+    const direita = Math.max(...historico.map((b) => b.x + b.width));
+    const base = Math.max(...historico.map((b) => b.y + b.height));
+    const alvo: ContentBounds = {
+      x: esquerda,
+      y: topo,
+      width: direita - esquerda,
+      height: base - topo,
+    };
+
+    const previous = smoothBoundsRef.current;
+    if (!previous) {
+      smoothBoundsRef.current = alvo;
+      return alvo;
+    }
+    const passo = 0.4;
+    const mistura = (a: number, b: number) => a + (b - a) * passo;
+    const eased: ContentBounds = {
+      x: mistura(previous.x, alvo.x),
+      y: mistura(previous.y, alvo.y),
+      width: mistura(previous.width, alvo.width),
+      height: mistura(previous.height, alvo.height),
+    };
+    smoothBoundsRef.current = eased;
+    return eased;
+  }, []);
+
+  /** Esquecer a caixa por inteiro: a cena que a justificava não está mais lá. */
+  const forgetBounds = useCallback(() => {
+    smoothBoundsRef.current = null;
+    boundsHistoryRef.current = [];
+  }, []);
 
   const takeCapture = useCallback(
     async (reason: MomentReason, sample: Uint8Array | null) => {
@@ -331,7 +409,7 @@ export function useSlidSession({
       if (suggestionDismissedRef.current) return;
       const video = videoRef.current;
       if (!video) return;
-      const scene = readBestScene(sampleAll(video));
+      const scene = readBestScene(sampleAll(video), detectScaleRef.current);
       if (!scene) return;
       publishDiagnostics(scene);
 
@@ -340,14 +418,22 @@ export function useSlidSession({
         // The window that found the class is the one the session will read
         // through, so it is chosen here and handed over by start().
         scaleRef.current = scene.scale;
+        detectScaleRef.current = scene.scale;
         // The bounds go up from the first positive read: what the camera is
         // weighing is worth seeing, not only what it concluded.
-        setContentBounds(boundsAtScale(scene.bounds, scene.scale));
+        //
+        // E uma leitura sem caixa não apaga a que estava lá. Uma janela pode
+        // reconhecer a aula sem conseguir delimitá-la, e piscar o contorno a
+        // cada tique desses é pior do que mantê-lo onde estava.
+        if (scene.bounds)
+          setContentBounds(smoothBounds(boundsAtScale(scene.bounds, scene.scale)));
         const confirmed = detectionCountRef.current >= DETECTION_TICKS;
         setBoardDetected(confirmed);
         setWeighing(!confirmed);
       } else {
         detectionCountRef.current = 0;
+        detectScaleRef.current = undefined;
+        forgetBounds();
         setBoardDetected(false);
         setWeighing(false);
         setContentBounds(null);
@@ -355,7 +441,14 @@ export function useSlidSession({
     }, TICK_MS);
 
     return () => clearInterval(interval);
-  }, [detectionEnabled, videoRef, sampleAll, publishDiagnostics]);
+  }, [
+    detectionEnabled,
+    videoRef,
+    sampleAll,
+    publishDiagnostics,
+    smoothBounds,
+    forgetBounds,
+  ]);
 
   // Session loop: two gates, in order — is this study material, and did the
   // content change? A frame that fails the first is never even compared.
@@ -389,7 +482,7 @@ export function useSlidSession({
         sceneOkRef.current++;
         if (!sceneArmedRef.current) scaleRef.current = scene.scale;
         boundsRef.current = scene.bounds;
-        setContentBounds(boundsAtScale(scene.bounds, scaleRef.current));
+        setContentBounds(smoothBounds(boundsAtScale(scene.bounds, scaleRef.current)));
         if (sceneOkRef.current >= SCENE_ARM_TICKS && !sceneArmedRef.current) {
           sceneArmedRef.current = true;
           setSceneReady(true);
@@ -402,6 +495,7 @@ export function useSlidSession({
           // The window was chosen for content that is no longer there; the next
           // scene gets to pick its own.
           scaleRef.current = 1;
+          forgetBounds();
           setSceneReady(false);
           setContentBounds(null);
         }
@@ -487,7 +581,15 @@ export function useSlidSession({
     }, TICK_MS);
 
     return () => clearInterval(interval);
-  }, [status, videoRef, takeCapture, sampleAll, publishDiagnostics]);
+  }, [
+    status,
+    videoRef,
+    takeCapture,
+    sampleAll,
+    publishDiagnostics,
+    smoothBounds,
+    forgetBounds,
+  ]);
 
   const start = useCallback(() => {
     // Arriving from the suggestion means the scene was already confirmed three
@@ -536,6 +638,7 @@ export function useSlidSession({
     setElapsedMs(0);
     suggestionDismissedRef.current = false;
     detectionCountRef.current = 0;
+    detectScaleRef.current = undefined;
     scaleRef.current = 1;
     setWeighing(false);
     sceneArmedRef.current = false;
