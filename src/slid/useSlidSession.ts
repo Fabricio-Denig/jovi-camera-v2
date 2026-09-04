@@ -88,6 +88,12 @@ const STABLE_TICKS = 2;
 const DETECTION_TICKS = 3;
 
 /**
+ * Tiques seguidos de "vi alguma coisa, mas pequena demais" antes de dizer isso
+ * em voz alta. Dois: uma dica que pisca é pior do que nenhuma.
+ */
+const HINT_TICKS = 2;
+
+/**
  * Quantos tiques de leitura a moldura carrega consigo. Três: o bastante para
  * uma leitura magra não apagar a anterior, pouco o bastante para a caixa
  * acompanhar uma troca de slide sem parecer presa ao slide de antes.
@@ -120,6 +126,20 @@ export interface SlidDiagnostics {
   lockedScale: number;
 }
 
+/**
+ * O que a câmera diria se pudesse falar sobre o enquadramento.
+ *
+ * Só existe um caso, e ele é o que o teste de campo mostra: o conteúdo está
+ * lá, a janela ampliada até reconhece escrita nele, mas não o bastante para
+ * afirmar que é aula. Isso não é um erro de leitura — é um slide longe demais,
+ * e o estudante tem o botão que resolve isso a um toque de distância.
+ *
+ * Nenhuma outra dica entra aqui sem um sinal que a sustente. Dizer "enquadre
+ * melhor" quando a câmera não sabe se há o que enquadrar é inventar conteúdo
+ * com outro nome.
+ */
+export type FramingHint = "distante";
+
 export interface SlidSession {
   status: SlidStatus;
   captures: SlidCapture[];
@@ -143,6 +163,12 @@ export interface SlidSession {
    * the camera faces a wall.
    */
   sceneReady: boolean;
+  /**
+   * A dica de enquadramento, quando há sinal que a justifique. `null` na
+   * imensa maioria dos tiques, que é o certo: uma câmera que comenta o tempo
+   * todo é uma câmera que ninguém lê.
+   */
+  framingHint: FramingHint | null;
   /** Preenchido só quando `diagnosing` está ligado. */
   diagnostics: SlidDiagnostics | null;
   start: () => void;
@@ -180,6 +206,7 @@ export function useSlidSession({
   const [contentBounds, setContentBounds] = useState<ContentBounds | null>(null);
   const [weighing, setWeighing] = useState(false);
   const [diagnostics, setDiagnostics] = useState<SlidDiagnostics | null>(null);
+  const [framingHint, setFramingHint] = useState<FramingHint | null>(null);
   const diagnosingRef = useRef(diagnosing);
   diagnosingRef.current = diagnosing;
 
@@ -197,6 +224,7 @@ export function useSlidSession({
   const sceneMissRef = useRef(0);
   const detectionCountRef = useRef(0);
   const suggestionDismissedRef = useRef(false);
+  const hintCountRef = useRef(0);
   const capturingRef = useRef(false);
   // Read inside the loops rather than closed over: changing the zoom must not
   // tear down and restart a session that is running.
@@ -300,6 +328,22 @@ export function useSlidSession({
     };
     smoothBoundsRef.current = eased;
     return eased;
+  }, []);
+
+  /**
+   * A dica só aparece depois de a cena repetir o mesmo recado, e some no
+   * primeiro tique que a contradiz. Reconhecer a aula é a contradição mais
+   * forte que existe: não há o que dizer sobre o enquadramento de um slide que
+   * já foi lido.
+   */
+  const noteFraming = useCallback((scene: ScaledScene | null) => {
+    if (!scene || scene.looksLikeClass || !scene.tooSmall) {
+      hintCountRef.current = 0;
+      setFramingHint(null);
+      return;
+    }
+    hintCountRef.current++;
+    if (hintCountRef.current >= HINT_TICKS) setFramingHint("distante");
   }, []);
 
   /** Esquecer a caixa por inteiro: a cena que a justificava não está mais lá. */
@@ -412,6 +456,7 @@ export function useSlidSession({
       const scene = readBestScene(sampleAll(video), detectScaleRef.current);
       if (!scene) return;
       publishDiagnostics(scene);
+      noteFraming(scene);
 
       if (scene.looksLikeClass) {
         detectionCountRef.current++;
@@ -448,6 +493,7 @@ export function useSlidSession({
     publishDiagnostics,
     smoothBounds,
     forgetBounds,
+    noteFraming,
   ]);
 
   // Session loop: two gates, in order — is this study material, and did the
@@ -469,7 +515,14 @@ export function useSlidSession({
         ? { ...readScene(sample), scale: scaleRef.current }
         : readBestScene(sampleAll(video));
       if (!scene) return;
-      if ("readings" in scene) publishDiagnostics(scene as ScaledScene);
+      if ("readings" in scene) {
+        publishDiagnostics(scene as ScaledScene);
+        noteFraming(scene as ScaledScene);
+      } else if (scene.isStudy) {
+        // A janela travada não devolve as outras leituras, e a sessão que já
+        // está lendo a aula não tem dica de enquadramento a dar.
+        noteFraming(null);
+      }
       const frame = sample ?? sampleFrame(video, zoomRef.current * scene.scale);
       if (!frame) return;
       setStats((prev) => ({ ...prev, analysed: prev.analysed + 1 }));
@@ -589,6 +642,7 @@ export function useSlidSession({
     publishDiagnostics,
     smoothBounds,
     forgetBounds,
+    noteFraming,
   ]);
 
   const start = useCallback(() => {
@@ -640,6 +694,8 @@ export function useSlidSession({
     detectionCountRef.current = 0;
     detectScaleRef.current = undefined;
     scaleRef.current = 1;
+    hintCountRef.current = 0;
+    setFramingHint(null);
     setWeighing(false);
     sceneArmedRef.current = false;
     sceneOkRef.current = 0;
@@ -666,6 +722,7 @@ export function useSlidSession({
     contentBounds,
     weighing,
     sceneReady,
+    framingHint,
     diagnostics,
     start,
     pause,
