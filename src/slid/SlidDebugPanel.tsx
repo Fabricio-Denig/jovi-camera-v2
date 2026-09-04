@@ -48,7 +48,7 @@ export function SlidDebugPanel({
       <button
         type="button"
         onClick={() => setAberto(true)}
-        className="pointer-events-auto absolute bottom-[132px] left-2 z-40 rounded-md bg-black/75 px-2 py-1 font-mono text-[10px] text-emerald-300"
+        className="pointer-events-auto absolute bottom-[268px] left-2 z-40 rounded-md bg-black/75 px-2 py-1 font-mono text-[10px] text-emerald-300"
       >
         debug
       </button>
@@ -58,7 +58,11 @@ export function SlidDebugPanel({
   return (
     <div
       data-slid-debug=""
-      className="pointer-events-auto absolute bottom-[132px] left-2 z-40 max-w-[70%] rounded-lg bg-black/80 p-2 font-mono text-[10px] leading-[1.45] text-white/90 backdrop-blur"
+      // Acima de toda a pilha de baixo, e não em cima dela: a 132 px o painel
+      // cobria as abas de modo, e o roteiro de teste em campo manda abrir o
+      // diagnóstico e *depois* tocar em SliD. Um diagnóstico que impede o gesto
+      // que ele existe para medir não é um diagnóstico.
+      className="pointer-events-auto absolute bottom-[268px] left-2 z-40 max-w-[70%] rounded-lg bg-black/80 p-2 font-mono text-[10px] leading-[1.45] text-white/90 backdrop-blur"
     >
       <div className="mb-1 flex items-center gap-2">
         <span className="font-semibold text-emerald-300">slid debug</span>

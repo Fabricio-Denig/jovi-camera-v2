@@ -224,3 +224,115 @@ passou **pela câmera do navegador**, com as cenas entrando por
 `--use-file-for-fake-video-capture`, e não por chamada direta às funções. É o
 mais perto de uma sala que dá para chegar sem uma sala. Não substitui apontar
 um celular para um projetor.
+
+---
+
+# Terceira rodada — a guarda de reenquadramento está engolindo trocas de slide
+
+*Medido em 4 de setembro. **Este defeito está diagnosticado e NÃO está
+corrigido.** A correção existe, foi medida, e reprovou numa cena de controle.
+Ela precisa da sua decisão, e está descrita no fim.*
+
+Este é o defeito mais sério encontrado até agora, e ele explica a metade do
+relato original que nunca teve explicação: **"às vezes não marca momentos que
+deveria"**.
+
+## Duas hipóteses erradas antes da certa
+
+Vale registrar as duas, porque acreditar numa medição feita na configuração
+errada é o erro que este documento existe para não repetir.
+
+**Primeira:** gerei os dois slides trocando só a semente do texto — mesmo
+retângulo, mesmas seis linhas nas mesmas alturas. Na amostra de 128×96 uma
+linha de texto tem dois pixels, e dois textos diferentes na mesma linha são a
+mesma mancha: **+0,2 % de marcas, −0,1 %**. O classificador estava certo e o
+teste é que pedia o impossível.
+
+**Segunda:** de uma medição forçada na janela de 1x, concluí que existia uma
+faixa cega entre 32 % e 70 % de largura de slide, e cheguei a escrever um aviso
+de zoom na tela por causa disso. Não existe faixa cega: a sessão não lê em 1x,
+ela trava na janela que reconheceu a cena, e nessa janela a troca aparece
+inteira. O aviso foi removido.
+
+## O defeito
+
+Antes de decidir se algo virou momento, a sessão pergunta se a **câmera** foi
+mexida — mexer o celular e trocar de slide produzem a mesma mudança de
+conteúdo. A prova usada é: mudou mais de 0,6 % do quadro *fora* da caixa do
+conteúdo? Então foi reenquadramento, e o tique é descartado.
+
+Esse limiar é uma fração do **quadro inteiro**, mas a região que ele mede varia
+de 5 % a 95 % do quadro. Quando a sessão trava numa janela ampliada — que é
+como um projetor distante é lido — a caixa do conteúdo ocupa quase toda a
+janela, e "fora" vira uma tira fina que contém a **borda iluminada do próprio
+slide**, cuja máscara de marcas pisca com o ruído do sensor a cada quadro.
+
+Medido sobre os quadros que o navegador realmente amostrou, sessão travada em
+2,6x, câmera absolutamente parada:
+
+```
+ s   dentro: +marcas -marcas   decisão de conteúdo   guarda
+ 4          0.9%     0.9%      nada                  ACUSOU
+ 8         24.7%    11.3%      novo-slide            ACUSOU
+11         24.7%    11.4%      novo-slide            ACUSOU
+14         24.7%    11.4%      novo-slide            ACUSOU
+18         24.7%    11.4%      novo-slide            ACUSOU
+19          0.8%     0.8%      nada                  ACUSOU
+```
+
+**A guarda acusa em todos os tiques, inclusive com a cena idêntica.** Os onze
+segundos em que o slide novo esteve na tela foram descartados um a um como "o
+estudante mexeu no celular". E como a guarda re-ancora a referência a cada três
+tiques, a comparação anda junto com a cena: a aula passa sem gerar o segundo
+momento.
+
+Confirmado no navegador, aula inteira: **1 momento onde deveriam ser 3.**
+
+## A correção medida — e por que ela ainda não foi para o ar
+
+O limiar absoluto não separa as duas coisas. O que separa é físico: **mexer a
+câmera mexe tudo, na mesma proporção; trocar o slide mexe só o que está no
+slide.** Por densidade de mudança (mudança ÷ área da região medida):
+
+| cena | dentro | fora | fora/dentro |
+|---|---|---|---|
+| troca de slide, câmera parada | 42,7 % | 32,4 % | **0,76** |
+| troca de slide, sala com porta e janela | 42,7 % | 32,2 % | **0,75** |
+| a sala inteira deslizando | 41,8 % | 73,5 % | **1,76** |
+
+Exigir que "fora" tenha mudado pelo menos tanto quanto "dentro" resolve o caso:
+implementado e verificado no navegador, a troca de slide a 1x passou de **1
+para 3 momentos**, com o build ainda refinando, o cursor, o reflexo e o
+professor ainda sem gerar nada, e a bateria inteira verde — adversárias,
+curadoria (3 trocas = 3 momentos), contexto, campo, interferência.
+
+**Reprovou numa cena só, e ela basta para segurar a mudança: o celular apoiado
+tremendo.** 4 momentos onde a regra antiga dava 1. O motivo é que a razão
+fora/dentro do tremor **oscila**:
+
+| tique | 5 | 8 | 10 | 13 | 16 | 19 | 21 | 24 |
+|---|---|---|---|---|---|---|---|---|
+| fora/dentro | 2,91 | 2,02 | 1,65 | 3,27 | 2,39 | 2,70 | 4,34 | **0,10** |
+
+Nenhum limiar de razão segura isso: basta um tique vazando para nascer um
+momento falso. A razão é o instrumento certo para a troca de slide e o
+instrumento errado para o tremor — tremor é *movimento*, e quem deveria pegá-lo
+é o portão de movimento (`MOTION_THRESHOLD`), que hoje deixa passar um
+deslocamento de 3 px.
+
+A correção completa são **duas** mudanças no núcleo, não uma. Uma delas mexe na
+sensibilidade a movimento, que é o que segura a rajada — o defeito que este
+produto mais não pode ter, e que a banca vai testar com o celular na mão. Não
+faço isso sozinho no fim de um ciclo.
+
+**O que está no ar continua sendo a regra antiga**: trocas de slide são
+engolidas quando a sessão trava numa janela ampliada. É o custo conhecido, e
+ele é menor que o de uma rajada.
+
+### O que eu recomendo
+
+Fazer as duas mudanças juntas, num ciclo próprio, com a bateria dinâmica
+(`qa-slid-dinamico`) como critério de aceite: troca de slide gera momento,
+tremor não gera, sala deslizando não gera. As cenas já existem e estão
+gravadas; a medição acima é o ponto de partida.
+

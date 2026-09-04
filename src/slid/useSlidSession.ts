@@ -272,8 +272,9 @@ export function useSlidSession({
    * chamada sai por uma comparação booleana, e a sessão normal não paga por um
    * painel que ninguém abriu.
    */
-  const publishDiagnostics = useCallback((scene: ScaledScene) => {
+  const publishDiagnostics = useCallback((montar: () => ScaledScene) => {
     if (!diagnosingRef.current) return;
+    const scene = montar();
     setDiagnostics({
       scene,
       streak: detectionCountRef.current,
@@ -476,7 +477,7 @@ export function useSlidSession({
       if (!video) return;
       const scene = readBestScene(sampleAll(video), detectScaleRef.current);
       if (!scene) return;
-      publishDiagnostics(scene);
+      publishDiagnostics(() => scene);
       noteFraming(scene);
 
       if (scene.looksLikeClass) {
@@ -536,10 +537,19 @@ export function useSlidSession({
         ? { ...readScene(sample), scale: scaleRef.current }
         : readBestScene(sampleAll(video));
       if (!scene) return;
-      if ("readings" in scene) {
-        publishDiagnostics(scene as ScaledScene);
-        noteFraming(scene as ScaledScene);
-      } else if (scene.isStudy) {
+      // O painel precisa continuar falando depois que a sessão trava a janela.
+      // Antes ele só era alimentado enquanto a cena ainda estava sendo
+      // procurada, então durante a aula inteira ele mostrava a última leitura
+      // de antes de começar — congelado, e parecendo câmera travada para quem
+      // estivesse testando em sala. A janela travada devolve uma leitura só, e
+      // é essa que vale.
+      publishDiagnostics(() =>
+        "readings" in scene
+          ? (scene as ScaledScene)
+          : { ...scene, readings: [{ ...scene, scale: scene.scale }], tooSmall: false },
+      );
+      if ("readings" in scene) noteFraming(scene as ScaledScene);
+      else if (scene.isStudy) {
         // A janela travada não devolve as outras leituras, e a sessão que já
         // está lendo a aula não tem dica de enquadramento a dar.
         noteFraming(null);

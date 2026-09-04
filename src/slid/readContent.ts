@@ -489,8 +489,8 @@ export function summariseClass({
   if (headings.length === 0) {
     return (
       `${subject} registrou ${count} em ${span}. ` +
-      "Alguns textos não foram reconhecidos com confiança, mas as capturas " +
-      "ficaram organizadas em ordem para revisão."
+      "O quadro não deu para dizer o assunto de cada um, mas eles ficaram " +
+      "em ordem, na hora em que aconteceram."
     );
   }
 
