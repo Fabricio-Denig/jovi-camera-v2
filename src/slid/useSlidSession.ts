@@ -3,6 +3,7 @@ import { decideMoment, REFRAME_TICKS, REFRAMED } from "./momentPolicy";
 import {
   ANALYSIS_SCALES,
   type ContentBounds,
+  type ScaledScene,
   boundsAtScale,
   contentDelta,
   frameDifference,
@@ -97,6 +98,19 @@ interface UseSlidSessionOptions {
    * looking at the wide shot.
    */
   zoom?: number;
+  /** Liga a coleta do diagnóstico. Desligado, nada é guardado nem renderizado. */
+  diagnosing?: boolean;
+}
+
+/** O que o painel de diagnóstico mostra. Só existe com ?debug=slid. */
+export interface SlidDiagnostics {
+  /** A leitura escolhida no último tique, com todas as janelas lidas. */
+  scene: ScaledScene | null;
+  /** Quantos tiques seguidos de aula até aqui, e quantos faltam para sugerir. */
+  streak: number;
+  needed: number;
+  /** A janela travada da sessão, quando ela já armou. 0 quando ainda não armou. */
+  lockedScale: number;
 }
 
 export interface SlidSession {
@@ -122,6 +136,8 @@ export interface SlidSession {
    * the camera faces a wall.
    */
   sceneReady: boolean;
+  /** Preenchido só quando `diagnosing` está ligado. */
+  diagnostics: SlidDiagnostics | null;
   start: () => void;
   pause: () => void;
   resume: () => void;
@@ -142,6 +158,7 @@ export function useSlidSession({
   videoRef,
   detectionEnabled,
   zoom = 1,
+  diagnosing = false,
 }: UseSlidSessionOptions): SlidSession {
   const [status, setStatus] = useState<SlidStatus>("idle");
   const [captures, setCaptures] = useState<SlidCapture[]>([]);
@@ -155,6 +172,9 @@ export function useSlidSession({
   const [sceneReady, setSceneReady] = useState(false);
   const [contentBounds, setContentBounds] = useState<ContentBounds | null>(null);
   const [weighing, setWeighing] = useState(false);
+  const [diagnostics, setDiagnostics] = useState<SlidDiagnostics | null>(null);
+  const diagnosingRef = useRef(diagnosing);
+  diagnosingRef.current = diagnosing;
 
   const startedAtRef = useRef(0);
   const pausedTotalRef = useRef(0);
@@ -187,6 +207,21 @@ export function useSlidSession({
    * until the scene is lost.
    */
   const scaleRef = useRef(1);
+
+  /**
+   * O diagnóstico só é guardado quando alguém está olhando. Fora disso a
+   * chamada sai por uma comparação booleana, e a sessão normal não paga por um
+   * painel que ninguém abriu.
+   */
+  const publishDiagnostics = useCallback((scene: ScaledScene) => {
+    if (!diagnosingRef.current) return;
+    setDiagnostics({
+      scene,
+      streak: detectionCountRef.current,
+      needed: DETECTION_TICKS,
+      lockedScale: sceneArmedRef.current ? scaleRef.current : 0,
+    });
+  }, []);
 
   /** Every window of one frame, in the order the analysis expects them. */
   const sampleAll = useCallback(
@@ -298,6 +333,7 @@ export function useSlidSession({
       if (!video) return;
       const scene = readBestScene(sampleAll(video));
       if (!scene) return;
+      publishDiagnostics(scene);
 
       if (scene.looksLikeClass) {
         detectionCountRef.current++;
@@ -319,7 +355,7 @@ export function useSlidSession({
     }, TICK_MS);
 
     return () => clearInterval(interval);
-  }, [detectionEnabled, videoRef]);
+  }, [detectionEnabled, videoRef, sampleAll, publishDiagnostics]);
 
   // Session loop: two gates, in order — is this study material, and did the
   // content change? A frame that fails the first is never even compared.
@@ -340,6 +376,7 @@ export function useSlidSession({
         ? { ...readScene(sample), scale: scaleRef.current }
         : readBestScene(sampleAll(video));
       if (!scene) return;
+      if ("readings" in scene) publishDiagnostics(scene as ScaledScene);
       const frame = sample ?? sampleFrame(video, zoomRef.current * scene.scale);
       if (!frame) return;
       setStats((prev) => ({ ...prev, analysed: prev.analysed + 1 }));
@@ -450,7 +487,7 @@ export function useSlidSession({
     }, TICK_MS);
 
     return () => clearInterval(interval);
-  }, [status, videoRef, takeCapture, sampleAll]);
+  }, [status, videoRef, takeCapture, sampleAll, publishDiagnostics]);
 
   const start = useCallback(() => {
     // Arriving from the suggestion means the scene was already confirmed three
@@ -526,6 +563,7 @@ export function useSlidSession({
     contentBounds,
     weighing,
     sceneReady,
+    diagnostics,
     start,
     pause,
     resume,
