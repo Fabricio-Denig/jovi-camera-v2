@@ -58,18 +58,27 @@ export function SlidDebugPanel({
   return (
     <div
       data-slid-debug=""
-      // Acima de toda a pilha de baixo, e não em cima dela: a 132 px o painel
-      // cobria as abas de modo, e o roteiro de teste em campo manda abrir o
-      // diagnóstico e *depois* tocar em SliD. Um diagnóstico que impede o gesto
-      // que ele existe para medir não é um diagnóstico.
-      className="pointer-events-auto absolute bottom-[268px] left-2 z-40 max-w-[70%] rounded-lg bg-black/80 p-2 font-mono text-[10px] leading-[1.45] text-white/90 backdrop-blur"
+      /*
+       * Atravessável, e é isso que importa mais que a posição.
+       *
+       * O painel cobria as abas de modo, e o roteiro de teste em campo manda
+       * abrir o diagnóstico e *depois* tocar em SliD — um diagnóstico que
+       * impede o gesto que ele existe para medir não é um diagnóstico. Subir
+       * o painel só trocava a vítima: mais acima ele engolia o controle de
+       * zoom, que é o outro gesto do roteiro. Numa tela de celular não existe
+       * canto livre.
+       *
+       * Então ele deixa de disputar: os toques passam por ele e chegam no
+       * controle que está embaixo. Só os botões dele mesmo capturam.
+       */
+      className="pointer-events-none absolute bottom-[268px] left-2 z-40 max-w-[70%] rounded-lg bg-black/80 p-2 font-mono text-[10px] leading-[1.45] text-white/90 backdrop-blur"
     >
       <div className="mb-1 flex items-center gap-2">
         <span className="font-semibold text-emerald-300">slid debug</span>
         <button
           type="button"
           onClick={copiar}
-          className="rounded bg-white/15 px-1.5 py-0.5 text-[9.5px]"
+          className="pointer-events-auto rounded bg-white/15 px-1.5 py-0.5 text-[9.5px]"
         >
           {copiado ? "copiado" : "copiar"}
         </button>
@@ -77,7 +86,7 @@ export function SlidDebugPanel({
           type="button"
           onClick={() => setAberto(false)}
           aria-label="Esconder diagnóstico"
-          className="rounded bg-white/15 px-1.5 py-0.5 text-[9.5px]"
+          className="pointer-events-auto rounded bg-white/15 px-1.5 py-0.5 text-[9.5px]"
         >
           ✕
         </button>
