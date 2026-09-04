@@ -336,3 +336,19 @@ Fazer as duas mudanças juntas, num ciclo próprio, com a bateria dinâmica
 tremor não gera, sala deslizando não gera. As cenas já existem e estão
 gravadas; a medição acima é o ponto de partida.
 
+
+## Falha conhecida na dica de enquadramento
+
+A dica diz "Conteúdo distante — experimente 2x" sobre uma **mesa de madeira de
+veio marcado**. Ela cala corretamente sobre parede, carpete, teclado e tela
+vazia, e sobre aula já reconhecida — a mesa é a única superfície que escapa.
+
+O caso **só reproduz no navegador**: no amostrador offline a mesma cena lê
+"nenhuma escrita" nas três janelas e não pede zoom. É mais uma vez a diferença
+entre o redimensionador bilinear do navegador e um amostrador de caixa, e mais
+uma vez o navegador é quem vale.
+
+Corrigir isso é mexer no `tooSmall`, que é nível de detector. Fica congelado
+até a medição em aparelho real, junto com a guarda de reenquadramento: as duas
+decisões dependem de saber como o classificador se comporta com pixels de
+câmera de verdade, e não com pixels que eu desenhei.

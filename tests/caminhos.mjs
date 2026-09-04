@@ -15,3 +15,21 @@ export const APP = process.env.SLID_APP ?? "http://localhost:4173";
 /** O Chromium que o Playwright instalou. */
 export const CHROMIUM =
   process.env.SLID_CHROMIUM ?? "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
+
+/**
+ * O ruído de sensor dos quadros, com semente.
+ *
+ * Ele era `Math.random()`, e isso tornava as cenas irreprodutíveis: cada
+ * geração dava um ruído diferente, e o ruído muda a máscara de marcas o
+ * bastante para virar o veredito de uma cena de fronteira. Medido, a mesma
+ * mesa de madeira saía "nenhuma escrita" numa geração e "só uma linha" na
+ * seguinte. Um teste que muda de resposta sem o código mudar não serve para
+ * decidir nada.
+ */
+export function ruido(semente = 20260904) {
+  let s = semente >>> 0;
+  return () => {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+}

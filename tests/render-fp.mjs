@@ -3,7 +3,10 @@
 import { writeFileSync } from "node:fs";
 const W = 640, H = 480, FRAMES = 60;
 const { raw, names } = await import("./cenas-fp.mjs");
-import { CENAS } from "./caminhos.mjs";
+import { CENAS, ruido } from "./caminhos.mjs";
+
+/** Ruído de sensor com semente: a mesma cena sai igual em qualquer máquina. */
+const rnd16 = ruido();
 const slug = (n) => n.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
   .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 for (const n of names) {
@@ -15,7 +18,7 @@ for (const n of names) {
     const y = Buffer.alloc(W * H);
     // um tremor de sensor por quadro: a cena está parada, o celular não
     for (let i = 0; i < y.length; i++)
-      y[i] = Math.max(0, Math.min(255, Math.round(g[i] + (Math.random() - 0.5) * 3)));
+      y[i] = Math.max(0, Math.min(255, Math.round(g[i] + (rnd16() - 0.5) * 3)));
     parts.push(Buffer.from("FRAME\n"), y, uv, uv);
   }
   writeFileSync(`${CENAS}/fp-${slug(n)}.y4m`, Buffer.concat(parts));

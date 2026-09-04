@@ -3,7 +3,10 @@
 import { writeFileSync } from "node:fs";
 const { W, H, slide, comCursor, comReflexo, comPessoa, comTremor } = await import("./cenas-dinamicas.mjs");
 import { join } from "node:path";
-import { CENAS } from "./caminhos.mjs";
+import { CENAS, ruido } from "./caminhos.mjs";
+
+/** Ruído de sensor com semente: a mesma cena sai igual em qualquer máquina. */
+const rnd16 = ruido();
 // O Chromium toca o arquivo no ritmo do dispositivo falso — 30 quadros por
 // segundo — e não no que o cabeçalho declara. Medido: um arquivo de 600
 // quadros gerado como 15 fps volta ao começo a cada 20 s, e não a cada 40 s.
@@ -18,7 +21,7 @@ function grava(nome, segundos, quadro) {
     const g = quadro(f / FPS);
     const y = Buffer.alloc(W * H);
     for (let i = 0; i < y.length; i++)
-      y[i] = Math.max(0, Math.min(255, Math.round(g[i] + (Math.random() - 0.5) * 4)));
+      y[i] = Math.max(0, Math.min(255, Math.round(g[i] + (rnd16() - 0.5) * 4)));
     parts.push(Buffer.from("FRAME\n"), y, uv, uv);
   }
   writeFileSync(join(CENAS, `${nome}.y4m`), Buffer.concat(parts));
