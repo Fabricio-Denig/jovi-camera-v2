@@ -16,9 +16,13 @@ tomando como oficial, pelo nome e pela posição no canvas.
 | Reeconhecimento slid | `312:322` | ✅ |
 | Usando slid | `321:296` | ✅ |
 | Resumo | `339:611` | ❌ limite do plano |
-| Galeria | `339:540` | ❌ limite do plano |
+| Galeria | `339:540` | ✅ **lida em 5/set** |
 | Modos | `337:443` | ❌ limite do plano |
 | Filtros | `333:169` | ❌ limite do plano |
+
+O limite do Starter libera **uma chamada por janela**: em 5/set consegui a
+Galeria e a chamada seguinte já voltou bloqueada. As três restantes continuam
+na fila, uma por vez.
 
 O MCP do Figma corta as chamadas no plano Starter. As quatro que faltam ficam
 para a próxima janela. **Nada abaixo é palpite sobre tela que eu não abri.**
@@ -82,3 +86,59 @@ Por impacto visível, na ordem:
 5. **"Enquadre melhor"** — e essa não é só visual: é o retorno que faltava para
    o estudante ajustar o enquadramento em vez de descobrir depois que a aula
    saiu ruim.
+
+
+---
+
+## Galeria — `Galeria v2` (`339:540`)
+
+Lida em 5 de setembro. Frame de **412 × 917**. Todas as medidas abaixo saem do
+metadata do próprio nó, em pixels do frame — não são estimativas de captura.
+
+### Estrutura da tela
+
+O Figma mostra **uma página que rola, com seções**, e não um corpo que troca
+inteiro conforme o chip. De cima para baixo: título · chips · `ÁLBUNS DE AULA`
+(grade de 2 colunas) · `RECENTES` + "Ver tudo" (grade de 3 colunas) · rodapé de
+contagem · navegação.
+
+| Elemento | Figma | App atual | Diferença | Ação |
+|---|---|---|---|---|
+| Título "Galeria" | x=25, y=77, 76×27 | `text-2xl` em `px-5 pt-5` | próximo | manter |
+| Sino (notificações) | x=360, y=77, 24×24 | não existe | falta ícone à direita do título | avaliar — pode não ter função real |
+| Subtítulo | não existe | `<p>` com contagem | **app tem a mais** | avaliar remoção |
+| **Chips** | 4: `SliD` · `Todas` · `Favoritos` · `Vídeos` | 6: Fotos · Vídeos · SliD · Favoritos · Todas · Lixeira | conjunto e ordem | ver nota abaixo |
+| Chip: altura | 28 px | `min-h-9` = 36 px | 8 px a mais | manter 36 (alvo de toque) |
+| Chip: espaçamento | 8 px | `gap-1.5` = 6 px | 2 px | ajustar para 8 |
+| Chip: margem esquerda | x=29 | `px-5` = 20 px | 9 px | ajustar para 24 |
+| Ponto no chip SliD | ellipse 6×6 em x=84 | não existe | indicador dentro do chip ativo | avaliar |
+| **Seção `ÁLBUNS DE AULA`** | rótulo caixa alta, x=25, y=177, 13 px de altura | **não existe** | falta a seção inteira | **implementar** |
+| **Cards de aula** | grade 2 col, **175×131**, gap 9 (col) / 28 (linha) | lista vertical, linha com miniatura de 68 px | **estrutura completamente diferente** | **implementar** |
+| Card: ícone | vetor 27×23, 15 px do canto sup. esq. | não existe | falta | implementar |
+| Card: menu "..." | 21×28, canto sup. dir. | não existe | falta | ver nota abaixo |
+| Card: título | y=286 → **59 % da altura do card**, sobre a imagem | fora da imagem, ao lado | sobreposto vs. ao lado | implementar |
+| Card: data · contagem | y=310 → 78 % da altura, com ponto de 3 px entre eles | mesma linha, com status e matéria juntos | app mostra mais | manter dados, ajustar forma |
+| **Seção `RECENTES`** | rótulo + "Ver tudo" + chevron (x=312/384, y=527) | não existe | falta a seção | **implementar** |
+| Grade de recentes | 3 col, altura 102, gap ≈ 19 | `grid-cols-3 gap-1` | próximo | ajustar altura/gap |
+| Selo na miniatura | ellipse 12×12 no canto sup. dir. | não existe | falta | avaliar função |
+| Rodapé | "120 captura SliD" + "Sincronizado com a galeria do sistema" | não existe | falta | ver nota abaixo |
+| Navegação | Modos · Câmera · Galeria — ícones 32×32 em x≈70/190/310, rótulo 12 px em y=887 | existe | conferir medidas | conferir |
+
+### Duas decisões que o Figma não resolve sozinho
+
+**1. Não existe chip "Fotos" no Figma.** Os quatro chips são SliD, Todas,
+Favoritos e Vídeos. Mas a regra de produto é explícita: a galeria abre em Fotos,
+e Fotos são só as fotos tiradas com o dedo — momento automático de aula nunca se
+mistura. As duas coisas não cabem juntas sem escolha. A leitura que respeita as
+duas: manter **Fotos** (regra de produto) e usar a ordem relativa do Figma para
+o resto → `Fotos · SliD · Todas · Favoritos · Vídeos`. **Fica marcado como
+decisão em aberto.**
+
+**2. O "..." do card não tem comportamento no Figma.** É um nó de texto, sem
+estado nem tela de destino. Implementar um menu agora seria inventar produto a
+partir de três pontinhos. Fica registrado como pendente, e o card sai sem ele
+até haver decisão — um botão que não faz nada é pior que um botão ausente.
+
+**3. "Sincronizado com a galeria do sistema" é uma promessa que o app não
+cumpre.** Um app web não escreve no rolo do sistema. A frase não entra: é a
+única linha do Figma que, copiada, seria mentira na tela.

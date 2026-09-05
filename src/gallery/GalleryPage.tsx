@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { CaptureViewer } from "../camera/CaptureViewer";
-import { ClassCard, formatDate } from "./ClassCard";
+import { formatDate } from "../shared/lib/time";
+import { ClassAlbumCard } from "./ClassAlbumCard";
 import { type Chip, FilterChips } from "./FilterChips";
 import { DisciplineManager } from "../slid/DisciplineManager";
 import { CLASS_STATUSES, STATUS_STYLES, type ClassStatus } from "../slid/status";
@@ -178,15 +179,22 @@ export function GalleryPage({
 
   const trashCount = trashedMedia.length + trashedClasses.length;
 
-  // Fotos primeiro porque é onde a galeria abre, e SliD em terceiro porque o
-  // trilho rola: um chip que só existe depois de arrastar é um chip que a
-  // banca não encontra.
+  /*
+   * A ordem sai do Figma — SliD · Todas · Favoritos · Vídeos —, com duas
+   * ressalvas registradas na auditoria.
+   *
+   * O Figma não tem chip "Fotos", e a regra de produto é que a galeria abre
+   * nele: momento automático de aula nunca se mistura com o que o estudante
+   * fotografou. Então Fotos entra na frente e o resto segue a ordem do Figma.
+   * A Lixeira também não está no Figma, e fica no fim, onde não disputa
+   * atenção com o que o estudante veio ver.
+   */
   const chips: Chip[] = [
     { id: "fotos", label: "Fotos", count: photos.length },
-    { id: "videos", label: "Vídeos", count: videos.length },
     { id: "slid", label: "SliD", count: classes.length },
-    { id: "favoritos", label: "Favoritos", count: favorites.length },
     { id: "todas", label: "Todas", count: media?.length ?? 0 },
+    { id: "favoritos", label: "Favoritos", count: favorites.length },
+    { id: "videos", label: "Vídeos", count: videos.length },
     { id: "lixeira", label: "Lixeira", count: trashCount },
   ];
 
@@ -201,7 +209,7 @@ export function GalleryPage({
 
   return (
     <div className="flex h-full flex-col overflow-y-auto bg-canvas">
-      <header className="px-5 pb-3 pt-[max(20px,env(safe-area-inset-top))]">
+      <header className="px-6 pb-3 pt-[max(20px,env(safe-area-inset-top))]">
         <h1 className="text-2xl font-semibold text-ink">Galeria</h1>
         <p className="mt-0.5 mb-3 text-[13px] text-ink-muted">
           {media === null ? "Carregando…" : describe(view, grid.length, classes.length, trashCount)}
@@ -408,7 +416,10 @@ function SlidView({
           it needs somewhere to be. Beside the filters it feeds is the one place
           a student looks for it. */}
       <div className="flex items-center gap-2 px-5 pb-3 pt-1">
-        <div className="min-w-0 flex-1">
+        {/* `overflow-hidden` porque o trilho de chips sangra 24 px para os
+            dois lados, e do lado direito ele passava por baixo do botão de
+            matérias — o chip sumia atrás dele em vez de parar antes. */}
+        <div className="min-w-0 flex-1 overflow-hidden">
           <FilterChips
             chips={chips}
             active={active}
@@ -435,17 +446,29 @@ function SlidView({
               : "Nenhuma aula nesta matéria."}
         </p>
       ) : (
-        <ul className="flex flex-col gap-2 px-4 pb-6">
-          {classes.map((record, index) => (
-            <li
-              key={record.id}
-              className="animate-[slid-enter_280ms_ease-out_both]"
-              style={{ animationDelay: `${Math.min(index, 6) * 34}ms` }}
-            >
-              <ClassCard record={record} onOpen={() => onOpenClass(record.id)} />
-            </li>
-          ))}
-        </ul>
+        <>
+          {/*
+           * O rótulo de seção do Figma. Ele não é enfeite: com a aula virando
+           * card de imagem, sem um título a grade fica indistinguível do rolo
+           * de fotos que vem logo abaixo na mesma tela.
+           */}
+          <h2 className="px-6 pb-2 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
+            Álbuns de aula
+          </h2>
+          {/* Grade de 2 colunas, como no `339:540`: cards de 175×131 com 9 px
+              entre colunas e 28 px entre linhas, em margens de 25 px. */}
+          <ul className="grid grid-cols-2 gap-x-2 gap-y-4 px-6 pb-6">
+            {classes.map((record, index) => (
+              <li
+                key={record.id}
+                className="animate-[slid-enter_280ms_ease-out_both]"
+                style={{ animationDelay: `${Math.min(index, 6) * 34}ms` }}
+              >
+                <ClassAlbumCard record={record} onOpen={() => onOpenClass(record.id)} />
+              </li>
+            ))}
+          </ul>
+        </>
       )}
     </>
   );
