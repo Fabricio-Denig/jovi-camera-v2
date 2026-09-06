@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { CaptureViewer } from "../camera/CaptureViewer";
 import { formatDate } from "../shared/lib/time";
 import { ClassAlbumCard } from "./ClassAlbumCard";
+import { groupByDay } from "./groupByDay";
 import { type Chip, FilterChips } from "./FilterChips";
 import { DisciplineManager } from "../slid/DisciplineManager";
 import { CLASS_STATUSES, STATUS_STYLES, type ClassStatus } from "../slid/status";
@@ -249,19 +250,39 @@ export function GalleryPage({
           {grid.length === 0 ? (
             <EmptyState view={view} />
           ) : (
-            <ul key={view} className="grid grid-cols-3 gap-1 px-1 pb-6">
-              {grid.map((item, index) => (
-                <li
-                  key={item.id}
-                  className="animate-[slid-enter_260ms_ease-out_both]"
-                  // Escalonado só nas primeiras linhas: depois disso o atraso
-                  // vira espera, e ninguém espera para ver a própria galeria.
-                  style={{ animationDelay: `${Math.min(index, 8) * 22}ms` }}
-                >
-                  <GalleryThumb media={item} onOpen={() => setSelected(item)} />
-                </li>
+            /*
+             * Seções por data, com a mais nova chamada "Recentes" — o rótulo
+             * que o Figma põe sobre a grade. Um rolo sem divisão é uma parede
+             * de miniaturas; a data é a única divisão que um rolo de câmera
+             * tem de verdade.
+             */
+            <div key={view} className="pb-6">
+              {groupByDay(grid).map((grupo, ordem) => (
+                <section key={grupo.id}>
+                  <h2 className="px-6 pb-2 pt-1 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
+                    {grupo.label}
+                  </h2>
+                  {/* 3 colunas com 8 px de folga, como no `339:540`. */}
+                  <ul className="mb-4 grid grid-cols-3 gap-2 px-6">
+                    {grupo.items.map((item, index) => (
+                      <li
+                        key={item.id}
+                        className="animate-[slid-enter_260ms_ease-out_both]"
+                        // Escalonado só nas primeiras linhas da primeira seção:
+                        // depois disso o atraso vira espera, e ninguém espera
+                        // para ver a própria galeria.
+                        style={{
+                          animationDelay:
+                            ordem === 0 ? `${Math.min(index, 8) * 22}ms` : "0ms",
+                        }}
+                      >
+                        <GalleryThumb media={item} onOpen={() => setSelected(item)} />
+                      </li>
+                    ))}
+                  </ul>
+                </section>
               ))}
-            </ul>
+            </div>
           )}
         </>
       )}
@@ -694,7 +715,7 @@ function GalleryThumb({
       type="button"
       onClick={onOpen}
       aria-label={`Abrir ${media.kind === "photo" ? "foto" : "vídeo"}`}
-      className="relative block aspect-square w-full overflow-hidden bg-surface-2 transition-transform duration-150 ease-out active:scale-95 active:opacity-80"
+      className="relative block aspect-square w-full overflow-hidden rounded-lg bg-surface-2 transition-transform duration-150 ease-out active:scale-95 active:opacity-80"
     >
       {url &&
         (media.kind === "photo" ? (
