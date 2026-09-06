@@ -90,9 +90,28 @@ const DETECTION_TICKS = 3;
 
 /**
  * Tiques seguidos de "vi alguma coisa, mas pequena demais" antes de dizer isso
- * em voz alta. Dois: uma dica que pisca é pior do que nenhuma.
+ * em voz alta.
+ *
+ * Eram dois, e dois era pouco: a dica apareceu sobre uma mesa com caneca na
+ * tela principal da câmera. O sinal `tooSmall` pisca em qualquer superfície com
+ * textura fraca, e medido tique a tique (1 = pediu 2x, 16 tiques cada):
+ *
+ *   mesa com caneca      11.1.1111.1111.1    maior sequência  4
+ *   mesa de madeira      111111.11...1111    maior sequência  6
+ *   parede rebocada      .......1........    maior sequência  1
+ *   slide a 12 %         11111111111111.1    maior sequência 14
+ *   slide a 16 %         .1.1..11..1111.1    maior sequência  4
+ *
+ * Sete separa o que dá para separar: nenhuma das três superfícies chega lá, e
+ * o slide realmente distante — o caso que a dica existe para resolver — passa
+ * folgado. O slide a 16 % fica de fora junto, e isso é o preço aceito: uma
+ * dica muda é o erro barato, uma dica que fala sobre a mesa do estudante
+ * ensina a ignorar todas as outras.
+ *
+ * Isto é só a régua de *falar*. Não decide o que é aula, o que vira momento,
+ * nem qual janela é lida — mexer nisso não pede revalidação do projetor.
  */
-const HINT_TICKS = 2;
+const HINT_TICKS = 7;
 
 /**
  * Quantos tiques de leitura a moldura carrega consigo. Três: o bastante para

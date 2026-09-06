@@ -7,7 +7,7 @@ const D = CENAS;
 let fail = 0;
 const check = (ok, l, e = "") => { console.log(`${ok ? "[ok]  " : "[FAIL]"} ${l}${e ? " — " + e : ""}`); if (!ok) fail++; };
 
-async function dica(cena, { zoom = 1, segundos = 11 } = {}) {
+async function dica(cena, { zoom = 1, segundos = 16 } = {}) {
   const b = await chromium.launch({ executablePath: CHROMIUM,
     args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream",
       `--use-file-for-fake-video-capture=${D}/${cena}`] });
@@ -31,10 +31,15 @@ async function dica(cena, { zoom = 1, segundos = 11 } = {}) {
   return { visto, sugeriu };
 }
 
+/*
+ * Só o slide realmente distante. O de 16 % saiu desta lista de propósito:
+ * medido tique a tique, o sinal dele pisca igual ao de uma mesa de madeira
+ * (sequência máxima 4 nos dois), e a régua que cala sobre a mesa cala sobre
+ * ele junto. Uma dica muda é o erro barato.
+ */
 console.log("-- deve falar: conteúdo lá, pequeno demais para concluir --");
-for (const [cena, rot] of [["fp-slide-fundo-da-sala.y4m", "slide no fundo da sala (12%)"],
-                           ["fp-slide-quase-longe.y4m", "slide quase longe (16%)"]]) {
-  const { visto, sugeriu } = await dica(cena);
+for (const [cena, rot] of [["fp-slide-fundo-da-sala.y4m", "slide no fundo da sala (12%)"]]) {
+  const { visto, sugeriu } = await dica(cena, { segundos: 20 });
   check(!!visto || sugeriu, `${rot}: dica ou detecção`, visto ?? (sugeriu ? "detectou direto" : "silêncio"));
   if (visto) check(/2x/.test(visto), `${rot}: aponta o 2x`, visto);
 }
@@ -46,18 +51,20 @@ console.log("\n-- e o texto acompanha o zoom que já está em uso --");
 }
 
 console.log("\n-- deve calar: não há conteúdo de estudo nenhum --");
-for (const [cena, rot] of [["fp-parede-rebocada-textura-forte.y4m", "parede"],
+for (const [cena, rot] of [["fp-mesa-com-caneca-e-caneta.y4m", "mesa com caneca"],
+                           ["fp-mesa-de-madeira-veio-marcado.y4m", "mesa de madeira"],
+                           ["fp-parede-rebocada-textura-forte.y4m", "parede"],
                            ["fp-tecido-carpete.y4m", "carpete"],
                            ["fp-teclado-do-notebook.y4m", "teclado"],
                            ["fp-tela-ligada-sem-conteudo.y4m", "tela vazia"]]) {
-  const { visto } = await dica(cena, { segundos: 9 });
+  const { visto } = await dica(cena, { segundos: 16 });
   check(!visto, `${rot}: sem dica`, visto ?? "silêncio");
 }
 
 console.log("\n-- e cala quando a aula foi reconhecida --");
 for (const [cena, rot] of [["fp-slide-perto.y4m", "slide perto"],
                            ["fp-aula-lousa-branca-escrita.y4m", "lousa escrita"]]) {
-  const { visto } = await dica(cena, { segundos: 9 });
+  const { visto } = await dica(cena, { segundos: 16 });
   check(!visto, `${rot}: sem dica`, visto ?? "silêncio");
 }
 
