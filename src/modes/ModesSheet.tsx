@@ -215,7 +215,9 @@ function ModeCard({
        * que escapa do próprio card não é só feio, ele quebra o painel.
        */
       className={`flex aspect-[105/113] w-full flex-col items-start overflow-hidden rounded-2xl border p-2.5 text-left transition-transform duration-150 active:scale-[0.95] ${
-        active ? "border-accent bg-accent-soft" : "border-line bg-surface-2"
+        active
+          ? "border-accent bg-accent-soft ring-1 ring-accent/60"
+          : "border-line bg-surface-2"
       }`}
     >
       <span className={active ? "text-accent" : "text-ink"}>
@@ -229,15 +231,34 @@ function ModeCard({
         {mode.summary}
       </p>
       {/*
-       * O selo de fidelidade fica: um card que parece igual aos outros e abre
-       * uma explicação em vez de capturar é o "botão morto" que este painel
-       * não pode ter. Dizer antes é mais honesto que explicar depois.
+       * O selo fica: um card que parece igual aos outros e abre uma explicação
+       * em vez de capturar é o "botão morto" que este painel não pode ter.
+       * Dizer antes é mais honesto que explicar depois.
+       *
+       * "Prévia" e não "parcial": a segunda é a palavra de quem escreve o
+       * código, e a banca lê a primeira sem precisar de tradução.
        */}
-      {mode.fidelity !== "real" && (
-        <span className="mt-auto shrink-0 rounded-full bg-white/10 px-1.5 py-px text-[8.5px] font-medium uppercase tracking-wide text-ink-muted">
-          {mode.fidelity === "partial" ? "parcial" : "prévia"}
+      {mode.fidelity !== "real" && !active && (
+        <span className="mt-auto shrink-0 rounded-full bg-white/10 px-1.5 py-px text-[9px] font-medium text-ink-muted">
+          Prévia
+        </span>
+      )}
+      {/* O modo em uso se anuncia: só a borda azul some numa tela ao sol. */}
+      {active && (
+        <span className="mt-auto flex shrink-0 items-center gap-1 rounded-full bg-accent px-1.5 py-px text-[9px] font-semibold text-accent-ink">
+          <CheckIcon />
+          Ativo
         </span>
       )}
     </button>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m5 13 4 4L19 7" />
+    </svg>
   );
 }
