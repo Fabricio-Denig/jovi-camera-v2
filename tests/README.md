@@ -38,6 +38,7 @@ semente (`ruido()` em `caminhos.mjs`). `SLID_CENAS`, `SLID_APP` e
 | `qa-moldura` | a moldura cai **em cima** do slide — calculado pela conta do `object-cover` — e fica parada quando a cena está parada? |
 | `qa-dica` | a dica de enquadramento fala quando o conteúdo está pequeno demais, e **cala** sobre parede, carpete, teclado e tela vazia? |
 | `qa-enquadramento` | o momento guardado tem o enquadramento que estava na tela, e não o quadro inteiro do sensor? |
+| `qa-modos` | o painel de modos é uma folha sobre a câmera, com grade de 3 colunas, card de sugestão maior, e **nenhum selo de detecção quando não há aula na frente**? |
 | `qa-virar` | o botão de virar câmera está na fileira do obturador, à direita, como no Figma? Forja um segundo dispositivo de vídeo, porque a câmera falsa do Chromium expõe só um e o app — corretamente — esconde o botão. |
 
 ## Os geradores
