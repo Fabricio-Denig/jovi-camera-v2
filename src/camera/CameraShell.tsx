@@ -16,6 +16,7 @@ import { useTorch } from "./useTorch";
 import { useCamera } from "./useCamera";
 import { useZoom } from "./useZoom";
 import { ZoomControl } from "./ZoomControl";
+import { FlipButton } from "./FlipButton";
 import { FramingHint } from "../slid/FramingHint";
 import { useVideoRecorder } from "./useVideoRecorder";
 import { Viewfinder } from "./Viewfinder";
@@ -449,11 +450,8 @@ export function CameraShell({
       {isReady && !isSlid && (
         <>
           <TopBar
-            canSwitchFacing={canSwitchFacing}
-            onSwitchFacing={switchFacing}
             isRecording={recorder.isRecording}
             elapsedMs={recorder.elapsedMs}
-            isSwitching={isSwitching}
             torchAvailable={torch.available}
             torchOn={torch.on}
             onToggleTorch={torch.toggle}
@@ -522,7 +520,16 @@ export function CameraShell({
                   disabled={mode.fidelity === "simulated"}
                 />
               </div>
-              <div />
+              {/* A terceira coluna do Figma, que estava vazia. */}
+              {canSwitchFacing ? (
+                <FlipButton
+                  onSwitch={switchFacing}
+                  disabled={recorder.isRecording || isSwitching}
+                  isSwitching={isSwitching}
+                />
+              ) : (
+                <div />
+              )}
             </div>
 
             {isSaving && (

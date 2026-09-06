@@ -31,16 +31,21 @@ para a próxima janela. **Nada abaixo é palpite sobre tela que eu não abri.**
 
 ## Câmera — `Camera inicial v2`
 
-| elemento no Figma | no app hoje | lacuna |
+*Revisada em 6/set contra captura do app. A tabela original desta seção estava
+vencida: barra superior, zoom e tira de filtros entraram em ciclos posteriores
+e continuavam marcados como ausentes.*
+
+| elemento no Figma | no app hoje | situação |
 |---|---|---|
-| ⚡ flash, à esquerda no topo | ausente | **falta** |
-| ⏱ temporizador · `4:3` proporção · ✨, em pílulas no topo | ausente | **falta** |
-| ⚙ configurações, à direita no topo | ausente | **falta** |
-| pílula de zoom `1x` única, centralizada acima dos filtros | trilho `1x 2x 3x` no rodapé | **posição e forma diferentes** |
-| **tira de filtros** com miniaturas ao vivo — Nenhum, Vivid, Cinema, Suave, P&B, Quente — sob o rótulo "Filtros ˅" | ausente | **falta, e é o elemento mais visível da tela** |
-| abas `Retrato · Foto · Vídeo · SliD· · ⋯` | `Foto · Vídeo · SliD · ⋯` | falta Retrato na fileira |
-| miniatura · obturador · **botão de virar câmera** na fileira | miniatura · obturador · vazio | virar câmera está no topo |
+| ⏱ temporizador · `4:3` proporção, em pílulas no topo | existe | ✅ |
+| ⚙ configurações, à direita no topo | existe | ✅ |
+| pílula de zoom acima dos filtros | trilho `1x 2x 3x` acima dos filtros | ✅ posição; forma é trilho, não pílula única |
+| **tira de filtros** com miniaturas ao vivo sob "Filtros ˅" | existe, com as seis | ✅ |
+| miniatura · obturador · **virar câmera** na fileira | **corrigido em 6/set** | ✅ |
 | nav `Modos · Câmera · Galeria` | igual | ✅ |
+| ⚡ flash, à esquerda no topo | lanterna existe em Ajustes | **falta no topo** |
+| ✨ no topo | ausente | **falta** — sem função conhecida |
+| abas `Retrato · Foto · Vídeo · SliD· · ⋯` | `Foto · Vídeo · SliD · ⋯` | **falta Retrato** |
 
 ## Detecção — `Reeconhecimento slid v2`
 

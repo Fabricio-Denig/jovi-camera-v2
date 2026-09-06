@@ -4,11 +4,8 @@ export type TimerSeconds = 0 | 3 | 10;
 export const TIMER_STEPS: TimerSeconds[] = [0, 3, 10];
 
 interface TopBarProps {
-  canSwitchFacing: boolean;
-  onSwitchFacing: () => void;
   isRecording: boolean;
   elapsedMs: number;
-  isSwitching: boolean;
   torchAvailable: boolean;
   torchOn: boolean;
   onToggleTorch: () => void;
@@ -45,11 +42,8 @@ function formatElapsed(ms: number): string {
  * ausência dele: quem toca e não vê nada acontecer conclui que o app quebrou.
  */
 export function TopBar({
-  canSwitchFacing,
-  onSwitchFacing,
   isRecording,
   elapsedMs,
-  isSwitching,
   torchAvailable,
   torchOn,
   onToggleTorch,
@@ -115,19 +109,6 @@ export function TopBar({
       )}
 
       <div className="flex shrink-0 items-center gap-1.5">
-        {canSwitchFacing && (
-          <button
-            type="button"
-            onClick={onSwitchFacing}
-            disabled={isRecording || isSwitching}
-            aria-label="Trocar câmera"
-            className="flex size-11 items-center justify-center rounded-full bg-black/40 text-white active:opacity-70 disabled:opacity-30"
-          >
-            <span className={isSwitching ? "animate-spin" : undefined}>
-              <FlipIcon />
-            </span>
-          </button>
-        )}
         <button
           type="button"
           onClick={onOpenSettings}
@@ -180,14 +161,3 @@ function GearIcon() {
   );
 }
 
-function FlipIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M17 2.1 21 6l-4 3.9" />
-      <path d="M3 12.2V12a9 9 0 0 1 15-6.7l3 2.7" />
-      <path d="M7 21.9 3 18l4-3.9" />
-      <path d="M21 11.8v.2a9 9 0 0 1-15 6.7l-3-2.7" />
-    </svg>
-  );
-}
