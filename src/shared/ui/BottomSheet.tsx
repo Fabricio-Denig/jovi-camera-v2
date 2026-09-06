@@ -4,6 +4,12 @@ interface BottomSheetProps {
   open: boolean;
   title: string;
   subtitle?: string;
+  /**
+   * `tall` para o painel que o Figma desenha quase cobrindo a câmera — os
+   * modos, que são dezesseis e não cabem em três quartos de tela sem virar
+   * uma lista de rolagem infinita.
+   */
+  size?: "auto" | "tall";
   onClose: () => void;
   children: ReactNode;
 }
@@ -21,6 +27,7 @@ export function BottomSheet({
   open,
   title,
   subtitle,
+  size = "auto",
   onClose,
   children,
 }: BottomSheetProps) {
@@ -48,10 +55,20 @@ export function BottomSheet({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="relative max-h-[78%] overflow-y-auto rounded-t-3xl border-t border-line bg-surface pb-[max(20px,env(safe-area-inset-bottom))]"
+        /*
+         * O painel alto termina atrás da navegação inferior, que fica por
+         * cima dele — sem essa folga, a última fileira de cards nasce
+         * inalcançável. Medido: a navegação tem ~64 px mais a área segura.
+         */
+        className={`relative overflow-y-auto rounded-t-3xl border-t border-line bg-surface ${
+          size === "tall"
+            ? "h-[92%] pb-[max(84px,calc(env(safe-area-inset-bottom)+84px))]"
+            : "max-h-[78%] pb-[max(20px,env(safe-area-inset-bottom))]"
+        }`}
       >
         <div className="sticky top-0 z-10 rounded-t-3xl bg-surface px-5 pb-3 pt-3">
-          <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/25" />
+          {/* 68 px de largura, como a alça do `337:443`. */}
+          <div className="mx-auto mb-4 h-1 w-[68px] rounded-full bg-white/25" />
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-lg font-semibold text-ink">{title}</h2>

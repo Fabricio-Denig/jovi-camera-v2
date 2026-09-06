@@ -180,6 +180,20 @@ y=85.
 | … modos | Pro (com selo `PRO` 50×24) · Time Lapse · Câmera lenta | simulados | — | manter simulado, deixar o estado claro |
 | Navegação | igual à Galeria: x≈70/190/310, ícones 32×32, rótulos em y=887 | existe | conferir medidas | conferir |
 
+### O que foi implementado em 6/set
+
+| Elemento | Situação |
+|---|---|
+| painel sobre a câmera, alça de 68 px | ✅ — a câmera continua visível acima |
+| busca "Busque um modo da câmera…" | ✅ — reaproveita a busca por apelido que já existia |
+| `SUGERIDOS AGORA` com card grande | ✅ — 161 px contra 110 px dos comuns, medido |
+| selo contextual | ✅ — **"Aula detectada"**, ver nota |
+| `FREQUENTES` em grade de 3 colunas | ✅ |
+| cards 105×113 com ícone, nome e 2 linhas | ✅ |
+| `AVANÇADOS` | ✅ |
+| seções extras `CRIATIVOS` e `FERRAMENTAS` | o app tem modos que o wireframe não lista; ficam depois de Avançados |
+| "Fechar" como texto no topo | app usa ✕ redondo, com fechar por toque no fundo e por Escape |
+
 ### Notas
 
 **O card do SliD é o dobro dos outros, e tem selo de estado.** 163×134 contra
@@ -193,3 +207,14 @@ mobília. Fica registrada e sai da fila até o conjunto de modos crescer.
 
 **A descrição do card "Food" no wireframe diz "Capture paisagens amplas".** É
 descuido do wireframe, não um modo. Não copiar.
+
+**O selo diz "Aula detectada", não "Lousa detectada". `[decidido]`** É o mesmo
+sinal que acende a pílula do visor, e ele reconhece lousa, slide projetado,
+caderno e folha. Estreitar isso num selo que só fala de lousa contradiz o
+produto e a própria pílula.
+
+**A seção de sugestão só existe quando há detecção real.** O wireframe desenha
+o SliD sempre em `SUGERIDOS AGORA`. Apontado para uma parede, isso seria uma
+recomendação inventada — então sem detecção a seção não aparece e o SliD fica
+na lista normal, com o selo de fidelidade. Não há detecção paralela: o painel
+lê o mesmo `boardDetected` do visor.
