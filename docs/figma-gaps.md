@@ -16,9 +16,13 @@ tomando como oficial, pelo nome e pela posição no canvas.
 | Reeconhecimento slid | `312:322` | ✅ |
 | Usando slid | `321:296` | ✅ |
 | Resumo | `339:611` | ❌ limite do plano |
-| Galeria | `339:540` | ❌ limite do plano |
-| Modos | `337:443` | ❌ limite do plano |
+| Galeria | `339:540` | ✅ **lida em 5/set** |
+| Modos | `337:443` | ✅ **lida em 6/set** |
 | Filtros | `333:169` | ❌ limite do plano |
+
+O limite do Starter libera **uma chamada por janela**: em 5/set consegui a
+Galeria e a chamada seguinte já voltou bloqueada; em 6/set consegui Modos.
+Resumo e Filtros continuam na fila, uma por vez.
 
 O MCP do Figma corta as chamadas no plano Starter. As quatro que faltam ficam
 para a próxima janela. **Nada abaixo é palpite sobre tela que eu não abri.**
@@ -82,3 +86,105 @@ Por impacto visível, na ordem:
 5. **"Enquadre melhor"** — e essa não é só visual: é o retorno que faltava para
    o estudante ajustar o enquadramento em vez de descobrir depois que a aula
    saiu ruim.
+
+
+---
+
+## Galeria — `Galeria v2` (`339:540`)
+
+Lida em 5 de setembro. Frame de **412 × 917**. Todas as medidas abaixo saem do
+metadata do próprio nó, em pixels do frame — não são estimativas de captura.
+
+### Estrutura da tela
+
+O Figma mostra **uma página que rola, com seções**, e não um corpo que troca
+inteiro conforme o chip. De cima para baixo: título · chips · `ÁLBUNS DE AULA`
+(grade de 2 colunas) · `RECENTES` + "Ver tudo" (grade de 3 colunas) · rodapé de
+contagem · navegação.
+
+| Elemento | Figma | App atual | Diferença | Ação |
+|---|---|---|---|---|
+| Título "Galeria" | x=25, y=77, 76×27 | `text-2xl` em `px-5 pt-5` | próximo | manter |
+| Sino (notificações) | x=360, y=77, 24×24 | não existe | falta ícone à direita do título | avaliar — pode não ter função real |
+| Subtítulo | não existe | `<p>` com contagem | **app tem a mais** | avaliar remoção |
+| **Chips** | 4: `SliD` · `Todas` · `Favoritos` · `Vídeos` | 6: Fotos · Vídeos · SliD · Favoritos · Todas · Lixeira | conjunto e ordem | ver nota abaixo |
+| Chip: altura | 28 px | `min-h-9` = 36 px | 8 px a mais | manter 36 (alvo de toque) |
+| Chip: espaçamento | 8 px | `gap-1.5` = 6 px | 2 px | ajustar para 8 |
+| Chip: margem esquerda | x=29 | `px-5` = 20 px | 9 px | ajustar para 24 |
+| Ponto no chip SliD | ellipse 6×6 em x=84 | não existe | indicador dentro do chip ativo | avaliar |
+| **Seção `ÁLBUNS DE AULA`** | rótulo caixa alta, x=25, y=177, 13 px de altura | **não existe** | falta a seção inteira | **implementar** |
+| **Cards de aula** | grade 2 col, **175×131**, gap 9 (col) / 28 (linha) | lista vertical, linha com miniatura de 68 px | **estrutura completamente diferente** | **implementar** |
+| Card: ícone | vetor 27×23, 15 px do canto sup. esq. | não existe | falta | implementar |
+| Card: menu "..." | 21×28, canto sup. dir. | não existe | falta | ver nota abaixo |
+| Card: título | y=286 → **59 % da altura do card**, sobre a imagem | fora da imagem, ao lado | sobreposto vs. ao lado | implementar |
+| Card: data · contagem | y=310 → 78 % da altura, com ponto de 3 px entre eles | mesma linha, com status e matéria juntos | app mostra mais | manter dados, ajustar forma |
+| **Seção `RECENTES`** | rótulo + "Ver tudo" + chevron (x=312/384, y=527) | não existe | falta a seção | **implementar** |
+| Grade de recentes | 3 col, altura 102, gap ≈ 19 | `grid-cols-3 gap-1` | próximo | ajustar altura/gap |
+| Selo na miniatura | ellipse 12×12 no canto sup. dir. | não existe | falta | avaliar função |
+| Rodapé | "120 captura SliD" + "Sincronizado com a galeria do sistema" | não existe | falta | ver nota abaixo |
+| Navegação | Modos · Câmera · Galeria — ícones 32×32 em x≈70/190/310, rótulo 12 px em y=887 | existe | conferir medidas | conferir |
+
+### Duas decisões que o Figma não resolve sozinho
+
+**1. Não existe chip "Fotos" no Figma — e ele fica assim mesmo. `[decidido]`**
+Os quatro chips do wireframe são SliD, Todas, Favoritos e Vídeos. A regra de
+produto é mais forte: a galeria abre em Fotos, e Fotos são só as fotos tiradas
+com o dedo — momento automático de aula nunca se mistura.
+
+**Regra geral que sai daqui:** quando o wireframe conflita com uma regra de
+produto já validada, a regra funcional prevalece e o visual se adapta. Ordem
+final: `Fotos · SliD · Todas · Favoritos · Vídeos`.
+
+**2. O "..." do card não tem comportamento no Figma.** É um nó de texto, sem
+estado nem tela de destino. Implementar um menu agora seria inventar produto a
+partir de três pontinhos. Fica registrado como pendente, e o card sai sem ele
+até haver decisão — um botão que não faz nada é pior que um botão ausente.
+
+**3. "Sincronizado com a galeria do sistema" é uma promessa que o app não
+cumpre.** Um app web não escreve no rolo do sistema. A frase não entra: é a
+única linha do Figma que, copiada, seria mentira na tela.
+
+
+---
+
+## Modos — `Modos v2` (`337:443`)
+
+Lida em 6 de setembro. Frame de **412 × 917**. É um **painel sobre a câmera**,
+não uma tela própria: a captura da câmera aparece por baixo até y=632, e o
+painel (`Rectangle 39`) cobre de y=64 para baixo, com uma alça de 68 px em
+y=85.
+
+### Estrutura
+
+| Elemento | Figma | App atual | Diferença | Ação |
+|---|---|---|---|---|
+| Forma | painel sobre a câmera, alça de arrastar em y=85 | painel de modos | conferir se é folha com alça | conferir |
+| **Busca** | campo 357×31 em x=27, y=112, ícone 18×18, "Busque um modo da câmera..." | **não existe** | falta | avaliar — só vale com muitos modos |
+| Título | "Todos os modos" x=27, y=165 | conferir | — | conferir |
+| "Fechar" | texto x=338, y=166 | conferir | — | conferir |
+| **`SUGERIDOS AGORA`** | rótulo caixa alta x=27, y=192 | não existe | falta a seção | **implementar** |
+| Card do SliD | **163×134** em x=27, y=230 — o dobro dos outros | não existe | o SliD tem destaque próprio | **implementar** |
+| … ícone | 35×31 em x=43, y=246 | — | — | — |
+| … selo "Lousa detectada" | 90×19 em x=43, y=283 | não existe | **o selo é contextual** | ver nota |
+| … descrição | "Captura inteligente de aulas com organização por matérias automática." | — | — | — |
+| **`FREQUENTES`** | rótulo x=27, y=379 | não existe | falta a seção | **implementar** |
+| Cards de modo | **105×113**, 3 colunas, gap ≈ 21, linhas em y=410 e y=536 (gap 13) | conferir | — | **implementar** |
+| … conteúdo | ícone 32×32, nome a +46, descrição de 2 linhas a +68 | conferir | — | — |
+| … modos | Foto · Vídeo · Retrato · Noturno · Food · `+ Editar` | Foto · Vídeo · SliD + simulados | conjunto diferente | avaliar |
+| **`AVANÇADOS`** | rótulo x=27, y=675 | não existe | falta a seção | **implementar** |
+| … modos | Pro (com selo `PRO` 50×24) · Time Lapse · Câmera lenta | simulados | — | manter simulado, deixar o estado claro |
+| Navegação | igual à Galeria: x≈70/190/310, ícones 32×32, rótulos em y=887 | existe | conferir medidas | conferir |
+
+### Notas
+
+**O card do SliD é o dobro dos outros, e tem selo de estado.** 163×134 contra
+105×113, dentro de `SUGERIDOS AGORA`, com o selo "Lousa detectada". Isso não é
+hierarquia decorativa: o painel de modos do Figma **reage ao que a câmera está
+vendo**. É o mesmo sinal que hoje acende a pílula de sugestão na câmera — dá
+para alimentar o selo com ele, sem inventar nada.
+
+**A busca só se justifica com muitos modos.** Com seis, um campo de busca é
+mobília. Fica registrada e sai da fila até o conjunto de modos crescer.
+
+**A descrição do card "Food" no wireframe diz "Capture paisagens amplas".** É
+descuido do wireframe, não um modo. Não copiar.

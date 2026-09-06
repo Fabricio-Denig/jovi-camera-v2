@@ -33,7 +33,9 @@ export function FilterChips({
       aria-label={label}
       // The negative margin lets the row bleed to the screen edge while the
       // first chip still lines up with the heading above it.
-      className="-mx-5 flex gap-1.5 overflow-x-auto px-5 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      // 8 px entre chips e 24 px de margem: medido no `339:540`, onde os chips
+      // começam em x=29 e ficam 8 px um do outro.
+      className="-mx-6 flex gap-2 overflow-x-auto px-6 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       {chips.map((chip) => {
         const selected = chip.id === active;

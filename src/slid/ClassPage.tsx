@@ -17,6 +17,7 @@ import {
 } from "./classes";
 import { KIND_NAMES, type ContentKind } from "./readContent";
 import { formatClock } from "../shared/lib/time";
+import { formatDate } from "../shared/lib/time";
 
 interface ClassPageProps {
   classId: string;
@@ -325,9 +326,3 @@ function nameKind(kind: string, count: number): string {
   return names ? names[count === 1 ? 0 : 1] : "";
 }
 
-function formatDate(at: number): string {
-  return new Date(at).toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "short",
-  });
-}
