@@ -48,7 +48,7 @@ export function BottomSheet({
         type="button"
         aria-label="Fechar"
         onClick={onClose}
-        className="absolute inset-0 size-full bg-black/50"
+        className="absolute inset-0 size-full animate-[slid-fade-in_200ms_ease-out] bg-black/50"
       />
 
       <div
@@ -60,7 +60,7 @@ export function BottomSheet({
          * cima dele — sem essa folga, a última fileira de cards nasce
          * inalcançável. Medido: a navegação tem ~64 px mais a área segura.
          */
-        className={`relative overflow-y-auto rounded-t-3xl border-t border-line bg-surface ${
+        className={`relative animate-[slid-sheet-up_260ms_cubic-bezier(0.22,1,0.36,1)] overflow-y-auto rounded-t-3xl border-t border-line bg-surface ${
           size === "tall"
             ? "h-[92%] pb-[max(84px,calc(env(safe-area-inset-bottom)+84px))]"
             : "max-h-[78%] pb-[max(20px,env(safe-area-inset-bottom))]"

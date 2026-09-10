@@ -29,8 +29,15 @@ export function FilterStrip({
   mirrored: boolean;
 }) {
   return (
-    <div className="pointer-events-auto w-full">
-      <div className="-mx-1 flex items-start gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    /*
+     * A lista rola; a porta para o painel não.
+     *
+     * Ela já esteve dentro da rolagem, no fim da fila, e ali ficava fora da
+     * tela: com sete filtros a 390 px, "Mais" nascia invisível, e uma porta que
+     * só aparece depois de arrastar não é uma porta.
+     */
+    <div className="pointer-events-auto flex w-full items-start gap-2 pr-3">
+      <div className="flex min-w-0 flex-1 items-start gap-2 overflow-x-auto py-0.5 pl-4 pr-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {CAMERA_FILTERS.map((filtro) => {
           const selecionado = filtro.id === active;
           return (
@@ -76,26 +83,27 @@ export function FilterStrip({
           );
         })}
 
-        {/*
-         * A porta do painel completo, no fim da tira e do tamanho de uma
-         * miniatura. É onde a mão já está quando a tira não bastou — e é uma
-         * interação que qualquer câmera tem, não uma inventada para justificar
-         * o painel.
-         */}
-        <button
-          type="button"
-          onClick={onOpenPanel}
-          aria-label="Abrir todos os filtros e efeitos"
-          className="shrink-0 transition-transform duration-150 active:scale-95"
-        >
-          <span className="flex size-14 items-center justify-center rounded-xl border-2 border-dashed border-white/30 bg-black/40 text-[18px] leading-none text-white/80">
-            +
-          </span>
-          <span className="mt-1 block text-center text-[10px] font-medium text-white/65">
-            Mais
-          </span>
-        </button>
       </div>
+
+      {/*
+       * A porta do painel completo, encostada na tira e do tamanho de uma
+       * miniatura. É onde a mão já está quando a tira não bastou — e é uma
+       * interação que qualquer câmera tem, não uma inventada para justificar o
+       * painel.
+       */}
+      <button
+        type="button"
+        onClick={onOpenPanel}
+        aria-label="Abrir todos os filtros e efeitos"
+        className="shrink-0 pt-0.5 transition-transform duration-150 active:scale-95"
+      >
+        <span className="flex size-14 items-center justify-center rounded-xl border-2 border-dashed border-white/35 bg-black/55 text-[19px] leading-none text-white/85 backdrop-blur">
+          +
+        </span>
+        <span className="mt-1 block text-center text-[10px] font-medium text-white/65">
+          Mais
+        </span>
+      </button>
     </div>
   );
 }

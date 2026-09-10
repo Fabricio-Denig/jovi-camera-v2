@@ -119,6 +119,39 @@ body {
   }
 }
 
+/* Um painel subindo pelo rodapé, e o escurecido aparecendo junto. Sem isso,
+ * ele nasce pronto na tela e a pessoa não vê de onde veio. */
+@keyframes slid-sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes slid-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* O estalo de favoritar: um pulo curto, que é o que a mão espera do gesto. */
+@keyframes slid-pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.32);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
 /*
  * O efeito "Tremor": a mão de quem filma, e não um solavanco.
  *

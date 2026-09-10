@@ -95,7 +95,28 @@ export function FiltersSheet({
                   </span>
                 </span>
               </button>
-              {/* Favoritar sem escolher: o coração não troca o filtro em uso. */}
+
+              {/*
+               * O selo do escolhido, como no `333:169`: um círculo de 20 px no
+               * canto superior direito. A borda de destaque sozinha some numa
+               * grade de quatro colunas vista de relance.
+               */}
+              {escolhido && (
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute right-1 top-1 flex size-5 animate-[slid-pop_260ms_ease-out] items-center justify-center rounded-full bg-accent text-[11px] font-bold text-accent-ink"
+                >
+                  ✓
+                </span>
+              )}
+
+              {/*
+               * Favoritar sem escolher: a estrela não troca o filtro em uso.
+               *
+               * Ela fica embaixo, e não no canto de cima, porque lá mora o selo
+               * do escolhido — dois círculos no mesmo canto viram um só, e o
+               * dedo acertaria o errado.
+               */}
               {filtro.id !== "nenhum" && (
                 <button
                   type="button"
@@ -106,9 +127,16 @@ export function FiltersSheet({
                       : `Favoritar ${filtro.label}`
                   }
                   aria-pressed={favoritos.includes(filtro.id)}
-                  className="absolute right-1 top-1 flex size-7 items-center justify-center rounded-full bg-black/55 text-[12px] text-white backdrop-blur transition-transform active:scale-90"
+                  className="absolute bottom-9 left-1 flex size-7 items-center justify-center rounded-full bg-black/55 text-[12px] text-white backdrop-blur transition-transform active:scale-90"
                 >
-                  {favoritos.includes(filtro.id) ? "★" : "☆"}
+                  <span
+                    key={favoritos.includes(filtro.id) ? "on" : "off"}
+                    className={
+                      favoritos.includes(filtro.id) ? "animate-[slid-pop_300ms_ease-out]" : ""
+                    }
+                  >
+                    {favoritos.includes(filtro.id) ? "★" : "☆"}
+                  </span>
                 </button>
               )}
             </li>

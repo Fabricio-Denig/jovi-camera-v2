@@ -507,6 +507,29 @@ console.log("\n== favoritos, no próprio aparelho ==");
 console.log("\n== no celular ==");
 for (const largura of [375, 390, 430]) {
   const { b, p, erros } = await abrir("cor-mesa-de-estudo.y4m", { largura });
+  /*
+   * A porta do painel tem de estar na tela SEM arrastar a tira.
+   *
+   * Ela já esteve no fim da fila rolável, e ali nascia fora da tela a 390 px:
+   * uma porta que só aparece depois de arrastar não é uma porta.
+   */
+  const porta = await p.evaluate(() => {
+    const b = [...document.querySelectorAll("button")].find((x) =>
+      /abrir todos os filtros/i.test(x.getAttribute("aria-label") ?? ""),
+    );
+    if (!b) return null;
+    const r = b.getBoundingClientRect();
+    const meio = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+    return { direita: r.right, tela: innerWidth, alcanca: b.contains(meio) || meio === b };
+  });
+  check(porta !== null, `${largura}px: a porta do painel existe na tira`);
+  check(
+    porta && porta.direita <= porta.tela + 0.5,
+    `${largura}px: e está na tela sem precisar arrastar a tira`,
+    porta ? `direita em ${porta.direita.toFixed(0)}px de ${porta.tela}px` : "",
+  );
+  check(porta && porta.alcanca, `${largura}px: e nada está por cima dela`);
+
   await p.locator("button[aria-label='Filtro P&B']").click();
   await p.waitForTimeout(250);
   await abrirPainel(p);
