@@ -98,6 +98,52 @@ console.log("\n== os cards funcionam ==");
   await b.close();
 }
 
+console.log("\n== o modo em uso se anuncia, e continua anunciado ao reabrir ==");
+{
+  const { b, p, erros } = await abrir("fp-parede-rebocada-textura-forte.y4m", 4000);
+  const ativo = async () => p.evaluate(() => {
+    const cards = [...document.querySelectorAll("[role=dialog] li button")];
+    const marcado = cards.find((x) => x.getAttribute("aria-pressed") === "true");
+    return marcado
+      ? { nome: marcado.innerText.split("\n")[0], diz: /Ativo/.test(marcado.innerText) }
+      : null;
+  });
+  const inicial = await ativo();
+  check(inicial?.nome === "Foto", "abre com Foto marcado", inicial?.nome ?? "nenhum");
+  check(inicial?.diz === true, "e o card diz 'Ativo', não só uma borda azul");
+
+  await p.getByRole("dialog").getByRole("button", { name: /^Vídeo/ }).first().click();
+  await p.waitForTimeout(900);
+  await p.getByRole("button", { name: "Modos", exact: true }).click();
+  await p.waitForTimeout(800);
+  const depois = await ativo();
+  check(depois?.nome === "Vídeo", "ao reabrir, Vídeo está marcado", depois?.nome ?? "nenhum");
+  check(depois?.diz === true, "e também diz 'Ativo'");
+
+  // Um só de cada vez: dois cards marcados seria pior que nenhum.
+  const quantos = await p.evaluate(() =>
+    [...document.querySelectorAll("[role=dialog] li button")]
+      .filter((x) => x.getAttribute("aria-pressed") === "true").length);
+  check(quantos === 1, "e apenas um card marcado", `${quantos}`);
+  check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
+  await b.close();
+}
+
+console.log("\n== o vocabulário é do estudante, não do desenvolvedor ==");
+{
+  const { b, p } = await abrir("fp-parede-rebocada-textura-forte.y4m", 4000);
+  const texto = await p.getByRole("dialog").innerText();
+  check(!/\bparcial\b/i.test(texto), "nenhum card diz 'parcial'");
+  check(/Prévia/.test(texto), "modos não reais dizem 'Prévia'");
+  // O SliD foi validado em projetor real; não pode aparecer como prévia.
+  const slid = await p.evaluate(() => {
+    const c = [...document.querySelectorAll("[role=dialog] li button")].find((x) => /^SliD/.test(x.innerText));
+    return c ? c.innerText : "";
+  });
+  check(!/Prévia/.test(slid), "o SliD não aparece como prévia", slid.replace(/\n/g, " · "));
+  await b.close();
+}
+
 console.log("\n== um modo simulado não é botão morto ==");
 {
   const { b, p, erros } = await abrir("fp-parede-rebocada-textura-forte.y4m", 4000);

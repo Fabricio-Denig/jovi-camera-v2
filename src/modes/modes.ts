@@ -6,6 +6,14 @@ import type { CaptureKind } from "../types/camera";
  * the original Jovi camera already labels AI-processed shots, and inheriting
  * that honesty is cheaper than explaining it on stage.
  */
+/**
+ * Quão fielmente um modo é reproduzido no navegador.
+ *
+ * Aparece na interface para que um modo simulado nunca finja ser o real. A
+ * palavra que o estudante lê é "Prévia" — "parcial" é vocabulário de quem
+ * escreve o código, e um selo que soa a painel de QA na mão da banca é ruído
+ * mesmo quando é verdade.
+ */
 export type ModeFidelity = "real" | "partial" | "simulated";
 
 export type ModeSection = "frequentes" | "criativos" | "avancados" | "ferramentas";
@@ -65,7 +73,10 @@ export const MODES: CameraMode[] = [
     whenToUse:
       "Aulas longas: em vez de escolher entre prestar atenção e registrar, você só assiste.",
     kind: "photo",
-    fidelity: "partial",
+    // Validado em projetor de sala, celular real, 2x — ver
+    // `docs/validacao-aparelho.md`. Ele detecta, abre sessão, guarda os
+    // momentos e fecha a aula; era "parcial" antes dessa medição existir.
+    fidelity: "real",
     section: "frequentes",
     pinned: true,
     aliases: ["aula", "lousa", "quadro", "slide", "estudo", "see listen identify"],
