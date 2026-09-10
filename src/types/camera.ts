@@ -21,6 +21,16 @@ export interface CapturedMedia {
   /** Marked by the student, and the only reason a capture ever gets promoted. */
   favorite?: boolean;
   /**
+   * De onde a captura veio, quando não foi o obturador comum.
+   *
+   * `scanner` é documento capturado no modo Documento. Ele entra na galeria
+   * como mídia manual — não é aula e não vira aula —, mas a origem fica
+   * registrada para a galeria poder dizer o que é sem adivinhar.
+   */
+  source?: "scanner";
+  /** A aparência escolhida na revisão do documento: Original, Documento, P&B. */
+  look?: string;
+  /**
    * When it was thrown away. Set rather than deleted, so the trash can give it
    * back: a lecture is not something to lose to one stray tap.
    */

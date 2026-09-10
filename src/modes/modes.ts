@@ -227,15 +227,16 @@ export const MODES: CameraMode[] = [
   {
     id: "scanner",
     label: "Scanner",
-    summary: "Digitaliza documentos, corrige a perspectiva e realça o texto.",
+    summary: "Recorta a folha e deixa o texto legível.",
     whenToUse:
       "Uma folha, um comprovante, um quadro solto — captura pontual, não a aula inteira.",
     kind: "photo",
-    fidelity: "simulated",
+    // Fase 1 no ar: detecta a folha, recorta, deixa ajustar a margem, aplica
+    // aparência e salva na galeria. Perspectiva e OCR ainda não.
+    fidelity: "real",
     section: "ferramentas",
     pinned: false,
-    controls: ["Recorte automático", "Correção de perspectiva", "Extrair texto"],
-    aliases: ["documento", "digitalizar", "ultra hd", "papel", "ocr"],
+    aliases: ["documento", "digitalizar", "ultra hd", "papel", "ocr", "scanner"],
   },
 ];
 

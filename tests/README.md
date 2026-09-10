@@ -12,11 +12,13 @@ npm run build && npm run preview &     # o app em http://localhost:4173
 node tests/render-fp.mjs               # cenas paradas (adversárias e slides)
 node tests/render-longe.mjs            # slides no fundo da sala
 node tests/render-dinamico.mjs         # cenas que mudam com o tempo
+node tests/render-documento.mjs        # folha sobre a mesa, para o Scanner
 node tests/qa-slid-realworld.mjs
 node tests/qa-slid-dinamico.mjs
 node tests/qa-moldura.mjs
 node tests/qa-dica.mjs
 node tests/qa-enquadramento.mjs
+node tests/qa-scanner.mjs
 ```
 
 As cenas são geradas em `tests/cenas/` e **não vão para o repositório** — são
@@ -38,6 +40,7 @@ semente (`ruido()` em `caminhos.mjs`). `SLID_CENAS`, `SLID_APP` e
 | `qa-moldura` | a moldura cai **em cima** do slide — calculado pela conta do `object-cover` — e fica parada quando a cena está parada? |
 | `qa-dica` | a dica de enquadramento fala quando o conteúdo está pequeno demais, e **cala** sobre parede, carpete, teclado e tela vazia? |
 | `qa-enquadramento` | o momento guardado tem o enquadramento que estava na tela, e não o quadro inteiro do sensor? |
+| `qa-scanner` | o modo Documento de ponta a ponta: entra pelos Modos, acha a folha, captura, revisa, escolhe aparência, salva e aparece na galeria **sem virar aula**. É o critério de pronto da fase 1 escrito como teste. |
 | `qa-modos` | o painel de modos é uma folha sobre a câmera, com grade de 3 colunas, card de sugestão maior, e **nenhum selo de detecção quando não há aula na frente**? |
 | `qa-virar` | o botão de virar câmera está na fileira do obturador, à direita, como no Figma? Forja um segundo dispositivo de vídeo, porque a câmera falsa do Chromium expõe só um e o app — corretamente — esconde o botão. |
 
