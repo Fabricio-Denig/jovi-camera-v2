@@ -18,11 +18,11 @@ tomando como oficial, pelo nome e pela posição no canvas.
 | Resumo | `339:611` | ❌ limite do plano |
 | Galeria | `339:540` | ✅ **lida em 5/set** |
 | Modos | `337:443` | ✅ **lida em 6/set** |
-| Filtros | `333:169` | ❌ limite do plano |
+| Filtros | `333:169` | ✅ **lida em 10/set** |
 
 O limite do Starter libera **uma chamada por janela**: em 5/set consegui a
 Galeria e a chamada seguinte já voltou bloqueada; em 6/set consegui Modos.
-Resumo e Filtros continuam na fila, uma por vez.
+Filtros saiu em 10/set. **Só o Resumo (`339:611`) continua na fila.**
 
 O MCP do Figma corta as chamadas no plano Starter. As quatro que faltam ficam
 para a próxima janela. **Nada abaixo é palpite sobre tela que eu não abri.**
@@ -218,3 +218,53 @@ o SliD sempre em `SUGERIDOS AGORA`. Apontado para uma parede, isso seria uma
 recomendação inventada — então sem detecção a seção não aparece e o SliD fica
 na lista normal, com o selo de fidelidade. Não há detecção paralela: o painel
 lê o mesmo `boardDetected` do visor.
+
+
+---
+
+## Filtros — `Filtros v2` (`333:169`)
+
+Lida em 10 de setembro. Frame de **412 × 917**. Como a de Modos, é um **painel
+sobre a câmera**: a captura aparece por baixo até y=632, o painel cobre de y=64
+com alça de 68 px em y=85.
+
+### Estrutura
+
+| Elemento | Figma | App atual | Diferença | Ação |
+|---|---|---|---|---|
+| Forma | painel sobre a câmera, alça de 68 px | tira horizontal no rodapé da câmera | **forma completamente diferente** | ver nota |
+| Título | "Filtros" x=27, y=105 · "Aplicar" à direita x=338 | rótulo "Filtros ⌄" que abre a tira | — | — |
+| Subtítulo | "Aplique ao vivo no viewfinder" | não existe | falta | fácil |
+| **Cards de filtro** | **84×134**, grade de 4 colunas, gap 8, linhas em y=160 e y=304 (gap 10) | miniaturas menores em fileira rolável | grade × tira | ver nota |
+| … miniatura | 80×96 dentro do card, no topo | miniatura ao vivo | ✅ o app já mostra a cena real |
+| … nome | y=260 (100 px do topo do card) | existe | ✅ |
+| … **sublegenda** | y=276 — "Original", "Tons frios", "Cores fortes", "Clareza para texto", "Tom quente", "Sem cores" | **não existe** | falta | fácil, e vale |
+| … selecionado | selo circular de 20 px no canto sup. dir. | borda/realce | conferir | — |
+| **Filtros do wireframe** | Nenhum · Vivid · Cinema · **Leitura** · Suave · P&B + "Mais (6 filtros)" | Nenhum · Vivid · Cinema · Suave · P&B · **Quente** | **falta "Leitura"**, sobra "Quente" | ver nota |
+| **`INTENSIDADE`** | rótulo x=28, y=462, com "70%" à direita e trilho de x=31 a x=386, botão de 22 px | **não existe** | falta — o app aplica o filtro em intensidade fixa | **maior lacuna funcional** |
+| **`PREVIEW AO VIVO`** | comparação partida com divisor arrastável (alça de 30 px) — antes à esquerda, depois à direita | não existe | falta | avaliar |
+| **`Filtros favoritos`** | 4 miniaturas de 78×78 com botão circular de 16 px (marcar favorito) e pílulas de rótulo | não existe | falta | avaliar |
+| … os quatro | "Suave", "Automático", "Raio de sol", "Tremor" | — | **não são todos filtros** | ver nota |
+| Navegação | igual às outras telas | existe | ✅ |
+
+### Notas
+
+**"Leitura — clareza para texto" é o achado da tela.** É um filtro que o
+wireframe tem e o app não, e é justamente o que serve para material de estudo —
+e para o modo Documento do Scanner. Os dois podem compartilhar a mesma
+transformação: alto contraste com branco limpo.
+
+**"Raio de sol" e "Tremor" não são filtros de cor.** São transformações
+estilísticas — efeito, na distinção que o produto faz. Ficam registrados como
+tal e não entram junto dos filtros de aparência.
+
+**A intensidade é a maior lacuna funcional desta tela.** Hoje cada filtro é uma
+string de CSS fixa; o Figma tem um controle contínuo com valor em porcentagem.
+Como a pipeline já aplica a mesma string ao visor e à foto, interpolar
+intensidade é mexer num lugar só.
+
+**Grade × tira: decisão em aberto.** O wireframe põe os filtros num painel de
+página inteira; o app tem uma tira no rodapé com miniaturas ao vivo, que é
+mais rápida de usar durante uma captura e já foi validada em teste. A grade é
+mais fiel; a tira interrompe menos. Fica registrada para decidir com o Fabricio
+antes de trocar algo que funciona.

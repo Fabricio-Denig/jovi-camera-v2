@@ -17,6 +17,10 @@ import { useCamera } from "./useCamera";
 import { useZoom } from "./useZoom";
 import { ZoomControl } from "./ZoomControl";
 import { FlipButton } from "./FlipButton";
+import { useDocumentScan } from "../scanner/useDocumentScan";
+import { DocumentFrame } from "../scanner/DocumentFrame";
+import { ScannerReview } from "../scanner/ScannerReview";
+import type { ContentBounds } from "../slid/frameAnalysis";
 import { FramingHint } from "../slid/FramingHint";
 import { useVideoRecorder } from "./useVideoRecorder";
 import { Viewfinder } from "./Viewfinder";
@@ -98,6 +102,15 @@ export function CameraShell({
 
   const isSlid = mode.id === "slid";
   /*
+   * O Scanner é captura pontual, e por isso vive fora do laço do SliD: ele só
+   * procura a folha enquanto o modo Documento está na frente, e o que ele
+   * produz passa por uma tela de revisão antes de virar arquivo.
+   */
+  const isScanner = mode.id === "scanner";
+  const [scanned, setScanned] = useState<
+    { foto: Blob; regiao: ContentBounds | null } | null
+  >(null);
+  /*
    * Nenhum filtro sobre uma aula. Um momento em P&B ou com sépia é a câmera
    * mudando o que ela guardou de uma lousa, e o material de estudo não pode
    * carregar uma escolha estética feita antes da aula começar.
@@ -106,10 +119,16 @@ export function CameraShell({
   const slid = useSlidSession({
     videoRef,
     // Only look for a board when the suggestion could actually be acted on.
-    detectionEnabled: status === "ready" && !isSlid && mode.fidelity === "real",
+    detectionEnabled:
+      status === "ready" && !isSlid && !isScanner && mode.fidelity === "real",
     zoom: zoom.digital,
     diagnosing: slidDebug,
   });
+
+  const documento = useDocumentScan(
+    videoRef,
+    status === "ready" && isScanner && scanned === null,
+  );
 
   useEffect(() => {
     onBoardDetected(slid.boardDetected);
@@ -211,6 +230,28 @@ export function CameraShell({
     });
   }
 
+  /**
+   * O disparo do Scanner: captura o quadro inteiro e leva para a revisão.
+   *
+   * O quadro inteiro, e não já recortado, porque a revisão deixa mexer na
+   * margem — recortar antes jogaria fora justamente o que a pessoa pode
+   * querer de volta.
+   */
+  async function dispararDocumento() {
+    if (!videoRef.current) return;
+    const { blob } = await capturePhotoFromVideo(videoRef.current, {
+      zoom: zoom.digital,
+      window: photoWindow(
+        aspect,
+        videoRef.current.videoWidth,
+        videoRef.current.videoHeight,
+        videoRef.current.clientWidth,
+        videoRef.current.clientHeight,
+      ),
+    });
+    setScanned({ foto: blob, regiao: documento.region });
+  }
+
   async function handleShutterPress() {
     setCaptureError(null);
     try {
@@ -218,6 +259,11 @@ export function CameraShell({
       // something matters even when the board hasn't changed.
       if (isSlid) {
         await slid.captureManually();
+        return;
+      }
+
+      if (isScanner) {
+        await dispararDocumento();
         return;
       }
 
@@ -318,7 +364,7 @@ export function CameraShell({
 
       {/* The camera showing its work before it has anything to offer: without
           it, the first seconds of the demo are an ordinary viewfinder. */}
-      {isReady && slid.weighing && !isSlid && (
+      {isReady && slid.weighing && !isSlid && !isScanner && (
         <ContentFrame
           bounds={slid.contentBounds}
           videoRef={videoRef}
@@ -330,7 +376,7 @@ export function CameraShell({
 
       {/* The detection is drawn on the thing it detected, so the claim can be
           checked instead of believed. */}
-      {isReady && slid.boardDetected && !isSlid && (
+      {isReady && slid.boardDetected && !isSlid && !isScanner && (
         <ContentFrame
           bounds={slid.contentBounds}
           videoRef={videoRef}
@@ -350,10 +396,46 @@ export function CameraShell({
         />
       )}
 
-      {isReady && slid.boardDetected && !isSlid && (
+      {/* `!isScanner` porque a sugestão sobrevive à troca de modo: a detecção
+          para, mas o estado já levantado continua de pé. Uma pílula dizendo
+          "Aula detectada" dentro do modo Documento confunde as duas coisas
+          que este ciclo existe para separar. */}
+      {isReady && slid.boardDetected && !isSlid && !isScanner && (
         <SlidSuggestion
           onAccept={() => onSelectMode("slid")}
           onDismiss={slid.dismissSuggestion}
+        />
+      )}
+
+      {isReady && isScanner && scanned === null && (
+        <DocumentFrame
+          region={documento.region}
+          confidence={documento.confidence}
+          videoRef={videoRef}
+        />
+      )}
+
+      {scanned && (
+        <ScannerReview
+          foto={scanned.foto}
+          detectado={scanned.regiao}
+          onRefazer={() => setScanned(null)}
+          onSalvar={async (arquivo, aparencia) => {
+            await persist({
+              id: crypto.randomUUID(),
+              kind: "photo",
+              blob: arquivo,
+              mimeType: arquivo.type,
+              createdAt: Date.now(),
+              width: 0,
+              height: 0,
+              // Documento entra na galeria como mídia manual, com a origem
+              // registrada. Não é aula, e não vira aula.
+              source: "scanner",
+              look: aparencia,
+            });
+            setScanned(null);
+          }}
         />
       )}
 
@@ -478,7 +560,7 @@ export function CameraShell({
               </>
             )}
 
-            {mode.kind === "photo" && (
+            {mode.kind === "photo" && !isScanner && (
               <div className="flex w-full flex-col items-center gap-1.5">
                 <button
                   type="button"
