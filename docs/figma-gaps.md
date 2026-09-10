@@ -286,7 +286,7 @@ tirar a cena da frente; o painel é onde se ajusta. A porta entre elas é a
 | **Grade de 4 colunas**, cards com miniatura no topo | ✅ com a cena real, uma amostra para os dois | `FiltersSheet.tsx` · `useFrameSample.ts` |
 | **Filtros favoritos** | ✅ com estrela por card e seção própria, em `localStorage` | `useFilterFavorites.ts` |
 | "Raio de sol" e "Tremor" no meio dos favoritos | ✅ **corrigido**: são efeitos, e têm seção própria | `filters.ts` · `EffectLayer.tsx` |
-| Selo circular de 20 px no card escolhido | ➖ o app usa borda de destaque | — |
+| Selo circular de 20 px no card escolhido | ✅ com a estrela de favoritar movida para o canto de baixo, para os dois não dividirem o mesmo canto | `FiltersSheet.tsx` |
 | Botão **"Aplicar"** no topo | ➖ **não vai existir** | ver nota |
 | **`PREVIEW AO VIVO`** com divisor arrastável | ⏳ não feito | ver nota |
 
