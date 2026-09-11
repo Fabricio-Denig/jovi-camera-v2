@@ -2,6 +2,11 @@ import { STATUS_STYLES } from "./status";
 import { overviewWithStatus } from "./readContent";
 import { formatClock, formatDate } from "../shared/lib/time";
 import type { ClassRecord } from "./classes";
+import type { TranscriptSegment } from "../shared/lib/mediaStore";
+import {
+  acharDestaques,
+  frasesRepresentativas,
+} from "../listen/speechInsights";
 
 /** Chave frouxa para comparar duas leituras da mesma linha. */
 const chave = (linha: string) => linha.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -24,7 +29,8 @@ export function linesWithoutTitle(momento: {
   if (limpas.length > 0) return limpas;
   // Sobrou nada: o momento leu só o próprio título. A legenda ainda pode
   // trazer algo, desde que não seja o título de novo.
-  if (momento.detail && chave(momento.detail) !== titulo) return [momento.detail];
+  if (momento.detail && chave(momento.detail) !== titulo)
+    return [momento.detail];
   return [];
 }
 
@@ -36,7 +42,10 @@ export function linesWithoutTitle(momento: {
  * Nenhuma linha aqui é gerada para preencher espaço — um momento sem leitura
  * aparece com o horário e o título e mais nada, que é a verdade sobre ele.
  */
-export function classAsText(record: ClassRecord): string {
+export function classAsText(
+  record: ClassRecord,
+  transcript: TranscriptSegment[] = [],
+): string {
   const partes: string[] = [];
 
   partes.push(record.subject);
@@ -63,6 +72,30 @@ export function classAsText(record: ClassRecord): string {
   if (record.topics.length > 0) {
     partes.push("", "NESTA AULA");
     for (const topico of record.topics) partes.push(`• ${topico}`);
+  }
+
+  /*
+   * A fala entra no texto copiado como entra na tela — e pelo mesmo motivo.
+   *
+   * Quem copia a aula quer colar a aula, não a metade dela que a câmera leu.
+   * Numa aula de quadro ilegível, isto é a única coisa que o "copiar" tem
+   * para dar; omitir seria devolver um arquivo quase vazio de uma aula que
+   * está inteira no banco.
+   */
+  const falado = frasesRepresentativas(
+    transcript,
+    record.moments.map((m) => m.atMs),
+  );
+  if (falado.length > 0) {
+    partes.push("", "O QUE FOI DITO");
+    for (const frase of falado) partes.push(`• ${frase}`);
+  }
+
+  const destaques = acharDestaques(transcript, 6);
+  if (destaques.length > 0) {
+    partes.push("", "O PROFESSOR MARCOU");
+    for (const d of destaques)
+      partes.push(`★ [${formatClock(d.atMs)}] ${d.text}`);
   }
 
   const comLeitura = record.moments.filter((m) => m.lines.length > 0);

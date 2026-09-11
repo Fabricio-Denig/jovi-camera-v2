@@ -5,6 +5,11 @@ import { overviewWithStatus } from "./readContent";
 import { STATUS_STYLES } from "./status";
 import { formatClock, formatDate } from "../shared/lib/time";
 import type { ClassMoment, ClassRecord } from "./classes";
+import type { TranscriptSegment } from "../shared/lib/mediaStore";
+import {
+  acharDestaques,
+  frasesRepresentativas,
+} from "../listen/speechInsights";
 
 /**
  * A aula em folha, para o "Salvar PDF" do `Resumo v2` (`339:662`).
@@ -30,10 +35,19 @@ import type { ClassMoment, ClassRecord } from "./classes";
 export function LessonPrintSheet({
   record,
   temAudio,
+  transcript = [],
 }: {
   record: ClassRecord;
   temAudio: boolean;
+  /** A fala reconhecida. O som não cabe no PDF; o que foi dito, cabe. */
+  transcript?: TranscriptSegment[];
 }) {
+  const falado = frasesRepresentativas(
+    transcript,
+    record.moments.map((m) => m.atMs),
+  );
+  const destaques = acharDestaques(transcript, 6);
+
   return createPortal(
     <div className="folha-de-impressao" aria-hidden="true">
       <h1>{record.subject}</h1>
@@ -71,6 +85,33 @@ export function LessonPrintSheet({
         </>
       )}
 
+      {/* A parte falada, antes dos momentos: numa aula de quadro ilegível é
+          ela que carrega o conteúdo, e um PDF que a deixasse no fim
+          esconderia a única coisa que a folha tem para dizer. */}
+      {falado.length > 0 && (
+        <>
+          <h2>O que foi dito</h2>
+          <ul>
+            {falado.map((frase) => (
+              <li key={frase}>{frase}</li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      {destaques.length > 0 && (
+        <>
+          <h2>O professor marcou</h2>
+          <ul>
+            {destaques.map((d) => (
+              <li key={`${d.atMs}-${d.marca}`}>
+                <strong>{formatClock(d.atMs)}</strong> — {d.text}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
       <h2>Momentos</h2>
       {record.moments.map((momento) => (
         <MomentoImpresso key={momento.media.id} momento={momento} />
@@ -78,7 +119,7 @@ export function LessonPrintSheet({
 
       <p className="folha-rodape">
         Gerado pelo SliD · {formatDate(Date.now())} · o conteúdo vem do que a
-        câmera leu durante a aula
+        câmera leu e do que foi falado durante a aula
       </p>
     </div>,
     document.body,

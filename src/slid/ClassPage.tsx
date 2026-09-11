@@ -49,7 +49,9 @@ interface ClassPageProps {
  * recalculado e nenhuma imagem é lida de novo.
  */
 export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
-  const [record, setRecord] = useState<ClassRecord | null | undefined>(undefined);
+  const [record, setRecord] = useState<ClassRecord | null | undefined>(
+    undefined,
+  );
   /** Index of the moment being reviewed, or null when the timeline is showing. */
   const [reviewing, setReviewing] = useState<number | null>(null);
   const [name, setName] = useState("");
@@ -129,6 +131,15 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
   const comLeitura = record.moments.filter(
     (m) => linesWithoutTitle(m).length > 0,
   ).length;
+  /*
+   * A fala reconhecida desta aula, se houve.
+   *
+   * Ela viaja junto do áudio e não da aula: são as duas coisas que nascem do
+   * mesmo microfone e que o estudante descarta juntas. Uma aula sem gravação
+   * simplesmente não tem esta fonte, e a aba Texto continua sendo a aba Texto.
+   */
+  const transcript = audio?.transcript ?? [];
+  const falado = transcript.filter((s) => s.final && s.text.trim()).length;
 
   /* Sem confirmação, de propósito: esta é a ação reversível. A aula vai
      inteira para a lixeira e volta inteira, e dizer isso vale mais que um
@@ -220,7 +231,9 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
                 label="Como ficou essa aula para você?"
                 onChange={(status: ClassStatus | null) => {
                   setRecord({ ...record, status });
-                  void setClassStatus(record.id, status).then(() => onChanged?.());
+                  void setClassStatus(record.id, status).then(() =>
+                    onChanged?.(),
+                  );
                 }}
               />
             </div>
@@ -246,11 +259,17 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
           onSelect={setTab}
           counts={{
             imagens: record.moments.length,
-            texto: comLeitura,
+            // A aba Texto tem duas fontes, e o contador conta as duas: com o
+            // quadro ilegível e a fala transcrita, marcá-la como vazia
+            // esconderia a única leitura que a aula tem.
+            texto: comLeitura + falado,
+            // A fala conta: uma aula cujo quadro não deu resumo mas cuja
+            // transcrição deu não pode ter a aba marcada como vazia.
             resumo:
               (record.overview ? 1 : 0) +
               record.topics.length +
-              record.kinds.length,
+              record.kinds.length +
+              falado,
           }}
         />
       </header>
@@ -288,6 +307,8 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
         {tab === "texto" && (
           <ClassTextTab
             record={record}
+            transcript={transcript}
+            transcriptStatus={audio?.transcriptStatus}
             onOuvir={
               audio
                 ? (atMs) => setSeekTo(Math.max(0, atMs - audio.startedAtMs))
@@ -299,6 +320,8 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
           <ClassSummaryTab
             record={record}
             temAudio={Boolean(audio)}
+            transcript={transcript}
+            transcriptStatus={audio?.transcriptStatus}
             onExcluir={excluir}
             onOuvir={
               audio
@@ -328,12 +351,17 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
       {/* A folha de impressão vive fora da tela e só existe quando alguém
           manda imprimir. Ela precisa estar no documento — não dá para montá-la
           durante o `print()`. */}
-      <LessonPrintSheet record={record} temAudio={Boolean(audio)} />
+      <LessonPrintSheet
+        record={record}
+        temAudio={Boolean(audio)}
+        transcript={transcript}
+      />
 
       {reviewing !== null && (
         <ClassReview
           record={record}
           startAt={reviewing}
+          transcript={transcript}
           onClose={() => setReviewing(null)}
         />
       )}

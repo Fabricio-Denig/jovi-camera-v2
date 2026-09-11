@@ -34,6 +34,13 @@ fonte, está escrito que não diz.
 
 **Nada abaixo é palpite sobre tela que eu não abri.**
 
+> **Como ler este documento.** As tabelas são registros datados de auditoria e
+> **não** são atualizadas quando uma lacuna é fechada — reescrevê-las apagaria
+> a razão de cada decisão. O estado atual está nos blocos **"Situação em
+> 11/set"**, um depois das telas de câmera/SliD e outro depois da Galeria, com
+> o arquivo onde cada item foi implementado. Uma linha marcada "falta" numa
+> tabela pode estar feita; o bloco de situação é quem responde.
+
 ---
 
 ## Câmera — `Camera inicial v2`
@@ -102,6 +109,44 @@ Por impacto visível, na ordem:
 
 ---
 
+## Situação em 11/set — as lacunas acima, conferidas no código
+
+As tabelas desta seção são o registro da auditoria de **31/ago**, e ficam como
+estão: um documento que se reescreve some com a história da decisão. O que
+mudou desde então está aqui, e conferi cada linha no código antes de escrever.
+
+**A lista "o que mais pesa para a banca" está inteira fechada.**
+
+| lacuna de 31/ago | situação | onde |
+|---|---|---|
+| 1. Tira de filtros na câmera | **feito** (ciclo de 10/set) | `camera/FilterStrip.tsx`, `camera/FiltersSheet.tsx` |
+| 2. Trilha de miniaturas durante o SliD | **feito** | `slid/SlidOverlay.tsx`, quatro últimas na borda direita |
+| 3. Barra superior (lanterna, temporizador, proporção, ajustes) | **feito** | `camera/TopBar.tsx` |
+| 4. Pílula de detecção no topo, não cartão no rodapé | **feito** | `slid/SlidSuggestion.tsx`, ancorada em `top-` |
+| 5. "Enquadre melhor" | **feito** | `slid/FramingHint.tsx` |
+| Cartão informativo com "Saiba mais" | **feito**, e abre ali mesmo | `slid/SlidSuggestion.tsx` |
+| Moldura com cantos em colchete | **feito** | `slid/ContentFrame.tsx` |
+
+Sobre os colchetes, que eram o conflito registrado acima: eles foram
+implementados, e o comentário do `ContentFrame.tsx` passou a explicar por que
+eles **não** fazem do SliD um scanner — um colchete que assenta e para é
+confirmação, não varredura. A decisão que o texto de 31/ago pedia que fosse sua
+foi tomada pela fidelidade ao Figma, e o motivo original ficou registrado no
+código em vez de ser apagado.
+
+**Duas lacunas continuam abertas, e de propósito:**
+
+- **A aba `Retrato` na tira de modos da câmera.** O modo existe
+  (`modes.ts`, `id: "portrait"`) e está no catálogo de Modos, mas fora das
+  abas principais. Ele é `fidelity: "simulated"` — desfoque de fundo sem
+  segmentação real —, e as abas de cima são o lugar dos modos que fazem o que
+  prometem. Fica no catálogo, onde o cartão diz o que ele é.
+- **O ✨ no topo.** Continua sem função conhecida, e essa é a razão de não
+  existir: `TODO elemento visível deve fazer alguma coisa real`. Um botão de
+  brilhos que não faz nada é o oposto disso.
+
+---
+
 ## Galeria — `Galeria v2` (`339:540`)
 
 Lida em 5 de setembro. Frame de **412 × 917**. Todas as medidas abaixo saem do
@@ -156,6 +201,23 @@ até haver decisão — um botão que não faz nada é pior que um botão ausent
 cumpre.** Um app web não escreve no rolo do sistema. A frase não entra: é a
 única linha do Figma que, copiada, seria mentira na tela.
 
+### Situação em 11/set
+
+| lacuna de 31/ago | situação | onde |
+|---|---|---|
+| Seção `ÁLBUNS DE AULA` | **feito** | `GalleryPage.tsx`, rótulo "Álbuns de aula" |
+| Cards de aula em grade 2 col, título sobre a imagem | **feito** | `ClassAlbumCard`, `grid-cols-2 gap-x-2 gap-y-4 px-6` |
+| Seção de recentes em grade de 3 colunas | **feito** | `GalleryPage.tsx`, "Fotos e vídeos" em `grid-cols-3` |
+
+O rótulo da segunda seção é **"Fotos e vídeos"** e não "Recentes", porque é o
+que ela contém: fotos tiradas com o dedo e vídeos, nunca momentos de aula. É a
+mesma regra que decidiu o chip "Fotos" logo acima — o nome do Figma descreveria
+errado o conteúdo que a regra de produto põe ali.
+
+**Continuam abertos, e cada um por um motivo escrito:** o sino (sem função
+conhecida), o menu "..." do card (sem comportamento no Figma), o rodapé
+"Sincronizado com a galeria do sistema" (seria mentira), e os ajustes finos de
+2–9 px nos chips.
 
 ---
 

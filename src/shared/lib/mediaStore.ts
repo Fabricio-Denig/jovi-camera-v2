@@ -160,8 +160,14 @@ export async function restoreCaptures(
   await updateWhere(match, ({ deletedAt: _discarded, ...media }) => media);
 }
 
-export async function setFavorite(id: string, favorite: boolean): Promise<void> {
-  await updateWhere((media) => media.id === id, (media) => ({ ...media, favorite }));
+export async function setFavorite(
+  id: string,
+  favorite: boolean,
+): Promise<void> {
+  await updateWhere(
+    (media) => media.id === id,
+    (media) => ({ ...media, favorite }),
+  );
 }
 
 /** The only irreversible operation in the app, and it is always confirmed first. */
@@ -200,6 +206,34 @@ export interface LessonAudio {
   /** Quando a gravação começou, em ms desde o início da sessão. */
   startedAtMs: number;
   createdAt: number;
+  /**
+   * O que foi dito, em trechos ancorados no relógio da sessão.
+   *
+   * Guardado junto do áudio e não junto dos momentos porque é da aula
+   * inteira, como a gravação — e porque os dois só fazem sentido juntos: o
+   * trecho diz o que foi falado, o áudio deixa ouvir de novo.
+   */
+  transcript?: TranscriptSegment[];
+  /**
+   * Como a transcrição terminou, para a aula reaberta poder dizer a verdade
+   * em vez de fingir que ninguém tentou.
+   */
+  transcriptStatus?: "ok" | "indisponivel" | "desligada";
+}
+
+/**
+ * Um trecho de fala, ancorado no relógio da sessão.
+ *
+ * Mora aqui, e não no gancho que o produz, porque o que define a forma é o que
+ * precisa sobreviver ao fechar do app. `listen/useTranscript` reexporta daqui.
+ */
+export interface TranscriptSegment {
+  /** Milissegundos desde o início da sessão — o mesmo eixo de `capture.atMs`. */
+  startMs: number;
+  endMs: number;
+  text: string;
+  final: boolean;
+  confidence?: number;
 }
 
 export async function saveLessonAudio(audio: LessonAudio): Promise<void> {
@@ -223,12 +257,15 @@ export async function getLessonAudio(
   sessionId: string,
 ): Promise<LessonAudio | undefined> {
   const db = await openDb();
-  const found = await new Promise<LessonAudio | undefined>((resolve, reject) => {
-    const tx = db.transaction(AUDIO_STORE, "readonly");
-    const request = tx.objectStore(AUDIO_STORE).get(sessionId);
-    request.onsuccess = () => resolve(request.result as LessonAudio | undefined);
-    request.onerror = () => reject(request.error);
-  });
+  const found = await new Promise<LessonAudio | undefined>(
+    (resolve, reject) => {
+      const tx = db.transaction(AUDIO_STORE, "readonly");
+      const request = tx.objectStore(AUDIO_STORE).get(sessionId);
+      request.onsuccess = () =>
+        resolve(request.result as LessonAudio | undefined);
+      request.onerror = () => reject(request.error);
+    },
+  );
   db.close();
   return found;
 }
