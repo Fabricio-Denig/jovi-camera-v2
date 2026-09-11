@@ -200,6 +200,28 @@ export interface LessonAudio {
   /** Quando a gravação começou, em ms desde o início da sessão. */
   startedAtMs: number;
   createdAt: number;
+  /**
+   * O que foi dito, em trechos ancorados no relógio da sessão.
+   *
+   * Guardado junto do áudio e não junto dos momentos porque é da aula
+   * inteira, como a gravação — e porque os dois só fazem sentido juntos: o
+   * trecho diz o que foi falado, o áudio deixa ouvir de novo.
+   */
+  transcript?: TranscriptSegment[];
+  /**
+   * Como a transcrição terminou, para a aula reaberta poder dizer a verdade
+   * em vez de fingir que ninguém tentou.
+   */
+  transcriptStatus?: "ok" | "indisponivel" | "desligada";
+}
+
+/** Um trecho de fala. Espelha `listen/useTranscript`, sem importar dele. */
+export interface TranscriptSegment {
+  startMs: number;
+  endMs: number;
+  text: string;
+  final: boolean;
+  confidence?: number;
 }
 
 export async function saveLessonAudio(audio: LessonAudio): Promise<void> {
