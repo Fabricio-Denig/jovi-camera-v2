@@ -36,6 +36,8 @@ import { SlidDebugPanel } from "../slid/SlidDebugPanel";
 import { SlidSummary } from "../slid/SlidSummary";
 import { useSlidSession } from "../slid/useSlidSession";
 import { useListen } from "../listen/useListen";
+import { useTimelapse } from "../timelapse/useTimelapse";
+import { TimelapseBar } from "../timelapse/TimelapseBar";
 import { ListenBadge, SeeListenIdentify } from "../listen/ListenBadge";
 import {
   getLatestCapture,
@@ -126,6 +128,8 @@ export function CameraShell({
    * produz passa por uma tela de revisão antes de virar arquivo.
    */
   const isScanner = mode.id === "scanner";
+  /** O modo Intervalo tem o seu próprio ciclo de gravação, e não o do vídeo. */
+  const isTimelapse = mode.id === "timelapse";
   const [scanned, setScanned] = useState<
     { foto: Blob; regiao: ContentBounds | null } | null
   >(null);
@@ -161,6 +165,7 @@ export function CameraShell({
    * poder quebrá-lo. Se a gravação falhar, falha sozinha.
    */
   const listen = useListen();
+  const timelapse = useTimelapse(videoRef);
   /** O que foi gravado da aula, esperando a hora de ser guardado com ela. */
   const [gravacao, setGravacao] = useState<{
     blob: Blob;
@@ -287,6 +292,29 @@ export function CameraShell({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slid.status]);
 
+  /*
+   * Sair do modo Intervalo no meio da gravação guarda o que já foi montado.
+   *
+   * Descartar seria perder minutos — às vezes horas — de captura por causa de
+   * um toque na barra de modos, que é o tipo de perda que não se desfaz.
+   */
+  useEffect(() => {
+    if (isTimelapse || !timelapse.gravando) return;
+    void timelapse.stop().then((feito) => {
+      if (!feito) return;
+      void persist({
+        id: crypto.randomUUID(),
+        kind: "video",
+        blob: feito.blob,
+        mimeType: feito.mimeType,
+        createdAt: Date.now(),
+        width: feito.width,
+        height: feito.height,
+      });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isTimelapse]);
+
   /* Sair do SliD sem encerrar pela tela de resumo também solta o microfone. */
   useEffect(() => {
     if (!isSlid && listen.gravando) listen.disable();
@@ -400,6 +428,32 @@ export function CameraShell({
 
       if (isScanner) {
         await dispararDocumento();
+        return;
+      }
+
+      if (isTimelapse) {
+        if (!timelapse.gravando) {
+          timelapse.start();
+          return;
+        }
+        const feito = await timelapse.stop();
+        if (feito) {
+          await persist({
+            id: crypto.randomUUID(),
+            kind: "video",
+            blob: feito.blob,
+            mimeType: feito.mimeType,
+            createdAt: Date.now(),
+            width: feito.width,
+            height: feito.height,
+          });
+        } else {
+          // Menos de dois quadros não é vídeo. Dizer isso é melhor que salvar
+          // um arquivo que não toca.
+          setCaptureError(
+            "Poucos quadros para montar um vídeo. Deixe gravando mais tempo.",
+          );
+        }
         return;
       }
 
@@ -742,6 +796,19 @@ export function CameraShell({
               </>
             )}
 
+            {isTimelapse && (
+              <TimelapseBar
+                status={timelapse.status}
+                intervalo={timelapse.intervalo}
+                onIntervalo={timelapse.setIntervalo}
+                quadros={timelapse.quadros}
+                decorridoMs={timelapse.decorridoMs}
+                duracaoFinalMs={timelapse.duracaoFinalMs}
+                aceleracao={timelapse.aceleracao}
+                ultima={timelapse.ultima}
+              />
+            )}
+
             {mode.kind === "photo" && !isScanner && (
               <div className="flex w-full flex-col items-center gap-1.5">
                 <button
@@ -780,7 +847,7 @@ export function CameraShell({
               <div className="flex justify-center">
                 <ShutterButton
                   mode={mode.kind}
-                  isRecording={recorder.isRecording}
+                  isRecording={isTimelapse ? timelapse.gravando : recorder.isRecording}
                   onPress={handleShutterPress}
                   disabled={mode.fidelity === "simulated"}
                 />
