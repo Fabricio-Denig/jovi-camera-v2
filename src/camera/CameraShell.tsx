@@ -303,9 +303,13 @@ export function CameraShell({
   // Proves persistence works across reloads: the last capture made in a
   // previous session is already visible as soon as the app opens.
   useEffect(() => {
-    void getLatestCapture().then((media) => {
-      if (media) setLastCapture(media);
-    });
+    // O `catch` não é zelo: em janela anônima o banco recusa abrir, e uma
+    // rejeição sem dono aqui derrubava a montagem da câmera inteira.
+    void getLatestCapture()
+      .then((media) => {
+        if (media) setLastCapture(media);
+      })
+      .catch(() => {});
   }, []);
 
   async function persist(media: CapturedMedia) {

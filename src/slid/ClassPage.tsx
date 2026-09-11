@@ -69,11 +69,18 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
 
   useEffect(() => {
     let active = true;
-    void getClassById(classId).then((found) => {
-      if (!active) return;
-      setRecord(found);
-      setName(found?.subject ?? "");
-    });
+    void getClassById(classId)
+      .then((found) => {
+        if (!active) return;
+        setRecord(found);
+        setName(found?.subject ?? "");
+      })
+      // Banco recusado vira "esta aula não está mais salva", que é o estado
+      // que já existe e diz a verdade. Sem isto, a tela ficava em "Abrindo a
+      // aula…" para sempre.
+      .catch(() => {
+        if (active) setRecord(null);
+      });
     // O áudio vem de um armazém próprio e falha sozinho: uma aula sem
     // gravação abre igual, e uma leitura que der errado não pode impedir a
     // aula de abrir.
