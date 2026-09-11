@@ -348,6 +348,32 @@ export function CameraShell({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSlid]);
 
+  /*
+   * Fechar a aba no meio de uma aula é a pior perda possível deste app.
+   *
+   * Uma sessão de quarenta minutos com áudio vive inteira na memória até o
+   * resumo salvar — e um gesto de fechar a aba, um toque no botão de voltar,
+   * ou um recarregar sem querer levam tudo. O navegador não deixa impedir
+   * isso, mas deixa perguntar, e perguntar é o que existe.
+   *
+   * Só enquanto há aula correndo: um aviso ao sair da câmera parada seria o
+   * tipo de diálogo que ensina a pessoa a ignorar diálogos.
+   */
+  useEffect(() => {
+    const rodando = isSlid && (slid.status === "running" || slid.status === "paused");
+    const gravandoIntervalo = timelapse.gravando;
+    if (!rodando && !gravandoIntervalo) return;
+
+    const aoSair = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      // O texto é ignorado pelos navegadores modernos, que mostram o deles.
+      // O que importa é o evento ser cancelado.
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", aoSair);
+    return () => window.removeEventListener("beforeunload", aoSair);
+  }, [isSlid, slid.status, timelapse.gravando]);
+
   useEffect(() => {
     requestCamera();
     // Runs once on mount. requestCamera is stable enough for this purpose and
