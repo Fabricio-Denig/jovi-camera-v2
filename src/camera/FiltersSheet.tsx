@@ -142,15 +142,27 @@ export function FiltersSheet({
                       : `Favoritar ${filtro.label}`
                   }
                   aria-pressed={favoritos.includes(filtro.id)}
-                  className="absolute bottom-9 left-1 flex size-7 items-center justify-center rounded-full bg-black/55 text-[12px] text-white backdrop-blur transition-transform active:scale-90"
+                  /*
+                   * O alvo tem 36 px; o círculo visível continua com 28. Um
+                   * botão de 28×28 é pequeno demais para um dedo — e crescer o
+                   * círculo cobriria metade da miniatura, que é justamente o
+                   * que o card existe para mostrar. O alvo cresce por fora.
+                   */
+                  className="absolute bottom-7 left-0 flex size-9 items-center justify-center transition-transform active:scale-90"
                 >
                   <span
-                    key={favoritos.includes(filtro.id) ? "on" : "off"}
-                    className={
-                      favoritos.includes(filtro.id) ? "animate-[slid-pop_300ms_ease-out]" : ""
-                    }
+                    className="flex size-7 items-center justify-center rounded-full bg-black/55 text-[12px] text-white backdrop-blur"
                   >
-                    {favoritos.includes(filtro.id) ? "★" : "☆"}
+                    <span
+                      key={favoritos.includes(filtro.id) ? "on" : "off"}
+                      className={
+                        favoritos.includes(filtro.id)
+                          ? "animate-[slid-pop_300ms_ease-out]"
+                          : ""
+                      }
+                    >
+                      {favoritos.includes(filtro.id) ? "★" : "☆"}
+                    </span>
                   </span>
                 </button>
               )}
