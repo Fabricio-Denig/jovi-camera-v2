@@ -114,7 +114,17 @@ export async function semearAula(page, aula = AULA) {
             ["formula", 2],
             ["lista", 1],
           ],
-          overview: `Esta aula de ${a.discipline} teve ${a.momentos.length} momentos em 10 min, com 2 fórmulas.`,
+          /*
+           * A visão geral que a sessão teria escrito. `overview: ""` na
+           * fixture reproduz a aula em que a leitura não deu nada — o estado
+           * em que a tela diz, com razão, que não deu para montar um resumo.
+           * Sem isto o seeder sempre escrevia um texto, e o estado vazio de
+           * verdade ficava impossível de testar.
+           */
+          overview:
+            a.overview !== undefined
+              ? a.overview
+              : `Esta aula de ${a.discipline} teve ${a.momentos.length} momentos em 10 min, com 2 fórmulas.`,
           favorite: false,
         },
       });
