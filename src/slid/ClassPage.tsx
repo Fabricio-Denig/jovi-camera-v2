@@ -361,6 +361,7 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
         <ClassReview
           record={record}
           startAt={reviewing}
+          transcript={transcript}
           onClose={() => setReviewing(null)}
         />
       )}

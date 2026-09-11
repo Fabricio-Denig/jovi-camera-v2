@@ -2,10 +2,15 @@ import { useState } from "react";
 import type { ClassRecord } from "./classes";
 import { useObjectUrl } from "../shared/hooks/useObjectUrl";
 import { formatClock } from "../shared/lib/time";
+import { MicIcon } from "../listen/MicIcon";
+import { legendaDaFala } from "../listen/speechInsights";
+import type { TranscriptSegment } from "../shared/lib/mediaStore";
 
 interface ClassReviewProps {
   record: ClassRecord;
   startAt: number;
+  /** A fala da aula, para dizer o que estava sendo dito neste momento. */
+  transcript?: TranscriptSegment[];
   onClose: () => void;
 }
 
@@ -14,15 +19,34 @@ interface ClassReviewProps {
  *
  * A grid asks the student to hunt; the class had a sequence and reviewing it
  * should follow that sequence. Each moment shows the frame and what the camera
- * recognised — the same label it decided during the class, never a transcript
- * and never anything about how it was read.
+ * recognised — the same label it decided during the class, never the raw OCR
+ * output and never anything about how it was read.
+ *
+ * A linha de fala que entrou depois não é exceção a isso, e a diferença
+ * importa: ela não é texto extraído de uma imagem, é uma frase que alguém
+ * disse. Mostrar "o que estava sendo dito aqui" é contar a aula; mostrar o
+ * despejo do reconhecimento de imagem seria mostrar o encanamento.
  */
-export function ClassReview({ record, startAt, onClose }: ClassReviewProps) {
+export function ClassReview({
+  record,
+  startAt,
+  transcript = [],
+  onClose,
+}: ClassReviewProps) {
   const [index, setIndex] = useState(
     Math.min(Math.max(startAt, 0), record.moments.length - 1),
   );
   const moment = record.moments[index];
   const url = useObjectUrl(moment.media.blob);
+  /*
+   * O que estava sendo dito quando este quadro foi guardado.
+   *
+   * Na revisão em tela cheia é onde a legenda vale mais: o estudante está
+   * olhando uma imagem só, e a pergunta que ele tem é "o que estava
+   * acontecendo aqui". A imagem responde metade; esta linha responde a outra
+   * metade — e some quando não há resposta, em vez de inventar uma.
+   */
+  const legenda = legendaDaFala(transcript, moment.atMs);
 
   const atStart = index === 0;
   const atEnd = index === record.moments.length - 1;
@@ -64,6 +88,15 @@ export function ClassReview({ record, startAt, onClose }: ClassReviewProps) {
         {moment.detail && (
           <p className="mt-1 text-[13.5px] leading-snug text-white/70">
             {moment.detail}
+          </p>
+        )}
+
+        {legenda && (
+          <p className="mt-2.5 flex gap-1.5 text-[12.5px] italic leading-snug text-white/55">
+            <span className="mt-px text-accent">
+              <MicIcon size={13} />
+            </span>
+            <span className="min-w-0 flex-1">{legenda}</span>
           </p>
         )}
 

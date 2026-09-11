@@ -24,7 +24,7 @@ import { semearAula } from "./semear-aula.mjs";
 import {
   AULA_REACT,
   AULA_SO_FALA,
-  comoSegmentos,
+  FALA_REACT,
   semearAudio,
 } from "./semear-fala.mjs";
 
@@ -47,7 +47,9 @@ async function abrir() {
     viewport: { width: 390, height: 844 },
     isMobile: true,
     hasTouch: true,
-    permissions: ["camera", "microphone"],
+    // "clipboard-read" porque um dos blocos confere o que o botão copiar
+    // realmente pôs na área de transferência — e não só que ele mudou de cor.
+    permissions: ["camera", "microphone", "clipboard-read", "clipboard-write"],
   });
   const p = await ctx.newPage();
   const erros = [];
@@ -236,6 +238,122 @@ console.log("\n== aula sem transcrição: nada muda, nada quebra ==");
     "sem chip de uma fonte que não existe",
   );
   check(/useState/.test(corpo), "e o texto do quadro continua inteiro");
+  check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
+  await b.close();
+}
+
+console.log("\n== o resumo usa o que foi dito ==");
+{
+  const { b, p, erros } = await abrir();
+  await semearAula(p, AULA_REACT);
+  await semearAudio(p, { sessionId: AULA_REACT.id });
+  await p.reload({ waitUntil: "networkidle" });
+  await p.waitForTimeout(1800);
+  await abrirAula(p, "React");
+  await irPara(p, "Resumo");
+
+  const resumo = await p.locator("[role=tabpanel]").innerText();
+  check(/O que foi dito/i.test(resumo), "há uma seção do que foi falado");
+  check(
+    /O professor marcou/i.test(resumo),
+    "e outra do que o professor marcou",
+  );
+  check(
+    /useState|useEffect|estado/i.test(resumo),
+    "e o conteúdo dela fala da aula que aconteceu",
+  );
+
+  /*
+   * A verificação que vale mais que todas: cada linha de "O que foi dito" tem
+   * de existir, literalmente, na transcrição. Uma frase plausível que ninguém
+   * disse é o defeito que este produto inteiro existe para não cometer, e é
+   * o mais difícil de perceber olhando a tela — porque ela parece certa.
+   */
+  const secao = p
+    .locator("section")
+    .filter({ hasText: "O que foi dito" })
+    .locator("li");
+  const linhas = await secao.allInnerTexts();
+  const ditas = FALA_REACT.map(([, , t]) => t);
+  const inventadas = linhas.filter(
+    (l) => !ditas.some((d) => d.includes(l.replace(/^•\s*/, "").trim())),
+  );
+  check(
+    linhas.length > 0,
+    `a seção tem linhas (${linhas.length})`,
+  );
+  check(
+    inventadas.length === 0,
+    "e nenhuma foi inventada — todas estão na transcrição",
+    inventadas[0] ?? "",
+  );
+  check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
+  await b.close();
+}
+
+console.log("\n== a legenda do momento vem da fala de perto dele ==");
+{
+  const { b, p, erros } = await abrir();
+  await semearAula(p, AULA_REACT);
+  await semearAudio(p, { sessionId: AULA_REACT.id });
+  await p.reload({ waitUntil: "networkidle" });
+  await p.waitForTimeout(1800);
+  await abrirAula(p, "React");
+  await irPara(p, "Texto");
+  await p.getByRole("tab", { name: "Texto do quadro" }).click();
+  await p.waitForTimeout(500);
+
+  /*
+   * O momento "Estado imutável" está em 01:02. A janela pega o "isso cai na
+   * prova o estado no React é imutável" de 00:59 — que é a frase certa, dita
+   * três segundos antes de a câmera guardar o quadro. É o comportamento que
+   * a janela assimétrica existe para produzir: quem explica começa a falar
+   * antes de o slide estar pronto.
+   */
+  const bloco = p.locator("article").filter({ hasText: "Estado imutável" });
+  const texto = await bloco.innerText();
+  check(
+    /imutável/i.test(texto) && /cai na prova/i.test(texto),
+    "o momento carrega a fala que aconteceu junto dele",
+    texto.replace(/\n/g, " · ").slice(0, 140),
+  );
+
+  // E o primeiro momento (00:12) NÃO pode carregar a frase de 00:59.
+  const primeiro = await p
+    .locator("article")
+    .filter({ hasText: "useState" })
+    .first()
+    .innerText();
+  check(
+    !/cai na prova/i.test(primeiro),
+    "e um momento distante não rouba a fala de outro",
+  );
+  check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
+  await b.close();
+}
+
+console.log("\n== copiar a aula leva a parte falada junto ==");
+{
+  const { b, p, erros } = await abrir();
+  await semearAula(p, AULA_SO_FALA);
+  await semearAudio(p, { sessionId: AULA_SO_FALA.id });
+  await p.reload({ waitUntil: "networkidle" });
+  await p.waitForTimeout(1800);
+  await abrirAula(p, "sem quadro");
+  await irPara(p, "Resumo");
+
+  await p.getByRole("button", { name: /Copiar a aula inteira/i }).click();
+  await p.waitForTimeout(700);
+  const copiado = await p.evaluate(() => navigator.clipboard.readText());
+  check(
+    /O QUE FOI DITO/.test(copiado),
+    "o texto copiado tem a seção do que foi falado",
+  );
+  check(
+    /useState/.test(copiado),
+    "com o conteúdo da aula dentro",
+    copiado.slice(0, 100).replace(/\n/g, " · "),
+  );
   check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
   await b.close();
 }
