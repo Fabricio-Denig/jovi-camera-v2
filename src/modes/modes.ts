@@ -117,10 +117,16 @@ export const MODES: CameraMode[] = [
   {
     id: "food",
     label: "Comida",
-    summary: "Realça cor e textura dos pratos.",
+    summary: "Realça cor e textura do prato, no visor e na foto.",
     whenToUse: "Fotografar comida sem que ela pareça sem graça.",
     kind: "photo",
-    fidelity: "simulated",
+    /*
+     * Real: um modo de comida **é** uma aparência, e a máquina que aplica a
+     * mesma string ao visor e à foto já existe desde os Filtros. O que o
+     * torna um modo, e não mais uma opção da tira, é ele definir a aparência
+     * — do mesmo jeito que o SliD define "nenhuma".
+     */
+    fidelity: "real",
     section: "criativos",
     pinned: false,
     controls: ["Intensidade do realce", "Temperatura de cor"],

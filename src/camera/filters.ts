@@ -123,11 +123,38 @@ export const CAMERA_FILTERS: CameraFilter[] = [
   },
 ];
 
+/**
+ * A aparência do modo Comida, fora da lista de filtros de propósito.
+ *
+ * Ela não é uma oitava opção da tira: é o que **define** aquele modo, do mesmo
+ * jeito que "nenhuma aparência" define o SliD. Pôr na tira faria o modo
+ * Comida ser um modo que escolhe um filtro que já estava lá, e daria ao
+ * `Filtros v2` uma opção que o wireframe não tem.
+ *
+ * A conta é a de qualquer modo de comida de celular, e não tem mistério: mais
+ * saturação para a cor do prato, um empurrão de calor porque luz de
+ * restaurante é amarela e a câmera compensa demais, e um pouco de contraste
+ * para a textura aparecer. Nada aqui inventa pixel — é a mesma interpolação
+ * dos outros filtros, aplicada ao visor e à foto pela mesma string.
+ */
+export const FOOD_LOOK: CameraFilter = {
+  id: "comida",
+  label: "Comida",
+  hint: "Cor e textura do prato",
+  steps: [
+    { fn: "saturate", from: 1, to: 1.42 },
+    { fn: "contrast", from: 1, to: 1.14 },
+    { fn: "sepia", from: 0, to: 0.12 },
+    { fn: "brightness", from: 1, to: 1.05 },
+  ],
+};
+
 export const NO_FILTER = CAMERA_FILTERS[0];
 /** A intensidade com que um filtro entra quando é escolhido. */
 export const DEFAULT_INTENSITY = 70;
 
 export function findFilter(id: string): CameraFilter {
+  if (id === FOOD_LOOK.id) return FOOD_LOOK;
   return CAMERA_FILTERS.find((f) => f.id === id) ?? NO_FILTER;
 }
 
