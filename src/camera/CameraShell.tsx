@@ -190,6 +190,17 @@ export function CameraShell({
    * aponta para o instante certo da gravação.
    */
   const audioComecouEmRef = useRef(0);
+  /*
+   * O estudante desligou o áudio à mão, e isso vale para o resto da sessão.
+   *
+   * Sem esta marca havia um caminho por onde o microfone voltava sozinho: o
+   * efeito que pede o microfone depende do estado da câmera, e trocar de
+   * câmera durante a aula leva o estado por `requesting` e de volta a `ready`
+   * — o que fazia o efeito rodar de novo e encontrar o Listen "parado", como
+   * se ninguém tivesse dito nada. Religar uma gravação que a pessoa desligou é
+   * exatamente o que este recurso não pode fazer.
+   */
+  const audioDispensadoRef = useRef(false);
 
   const slid = useSlidSession({
     videoRef,
@@ -261,7 +272,13 @@ export function CameraShell({
    * SliD continua vendo e identificando.
    */
   useEffect(() => {
-    if (isSlid && status === "ready" && listen.status === "parado" && !gravacao) {
+    if (
+      isSlid &&
+      status === "ready" &&
+      listen.status === "parado" &&
+      !gravacao &&
+      !audioDispensadoRef.current
+    ) {
       const naSessao = slid.elapsedMs;
       void listen.start().then((deu) => {
         if (deu) audioComecouEmRef.current = naSessao;
@@ -326,6 +343,8 @@ export function CameraShell({
   /* Sair do SliD sem encerrar pela tela de resumo também solta o microfone. */
   useEffect(() => {
     if (!isSlid && listen.gravando) listen.disable();
+    // Sair do SliD fecha a sessão; a próxima começa com a pergunta em aberto.
+    if (!isSlid) audioDispensadoRef.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSlid]);
 
@@ -713,8 +732,15 @@ export function CameraShell({
               status={listen.status}
               elapsedMs={listen.elapsedMs}
               level={listen.level}
-              onDesligar={listen.disable}
-              onTentarDeNovo={() => void listen.start()}
+              onDesligar={() => {
+                audioDispensadoRef.current = true;
+                listen.disable();
+              }}
+              // Tocar em "Ativar" é mudar de ideia, e desfaz a dispensa.
+              onTentarDeNovo={() => {
+                audioDispensadoRef.current = false;
+                void listen.start();
+              }}
             />
           }
           promessa={

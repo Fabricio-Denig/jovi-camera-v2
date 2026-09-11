@@ -21,6 +21,7 @@ const check = (ok, l, e = "") => {
 async function abrir({
   microfone = true,
   semMediaRecorder = false,
+  duasCameras = false,
   cena = "fp-aula-slide-projetado.y4m",
 } = {}) {
   const b = await chromium.launch({
@@ -39,6 +40,33 @@ async function abrir({
     // navegador — que é exatamente o caminho que o teste do "negado" percorre.
     permissions: microfone ? ["camera", "microphone"] : ["camera"],
   });
+  if (duasCameras) {
+    /*
+     * A câmera falsa do Chromium expõe um dispositivo só, e sem um segundo o
+     * app esconde o botão de virar — corretamente. Forjar o segundo é o único
+     * jeito de exercitar a troca de câmera, que é o caminho por onde o ciclo
+     * `requesting → ready` acontece de verdade.
+     */
+    await ctx.addInitScript(() => {
+      const real = navigator.mediaDevices.enumerateDevices.bind(navigator.mediaDevices);
+      navigator.mediaDevices.enumerateDevices = async () => {
+        const d = await real();
+        const cam = d.find((x) => x.kind === "videoinput");
+        if (!cam) return d;
+        return [
+          ...d,
+          {
+            deviceId: "fake_device_1",
+            kind: "videoinput",
+            label: "front camera",
+            groupId: cam.groupId,
+            toJSON: () => ({}),
+          },
+        ];
+      };
+    });
+  }
+
   const p = await ctx.newPage();
   const erros = [];
   p.on("pageerror", (e) => erros.push(String(e)));
@@ -285,6 +313,62 @@ console.log("\n== a aula reaberta ainda tem o áudio ==");
   }));
   console.log(`        currentTime ${antes.toFixed(2)}s → ${depois.t.toFixed(2)}s`);
   check(depois.t > antes, "e tocar nele move o player para aquele ponto", `${depois.t.toFixed(2)}s`);
+
+  check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
+  await b.close();
+}
+
+console.log("\n== desligar o áudio à mão vale para o resto da aula ==");
+{
+  const { b, p, erros } = await abrir({ duasCameras: true });
+  await entrarNoSlid(p);
+  check(/Ouvindo/i.test(await p.locator("body").innerText()), "começa ouvindo");
+
+  await p.getByRole("button", { name: /desligar o áudio desta aula/i }).click();
+  await p.waitForTimeout(900);
+  check(
+    !/Ouvindo/i.test(await p.locator("body").innerText()),
+    "o ✕ desliga a gravação",
+  );
+
+  /*
+   * O caminho por onde o microfone voltava sozinho: trocar de câmera leva o
+   * estado da câmera por `requesting` e de volta a `ready`, e o efeito que
+   * pede o microfone rodava de novo encontrando o Listen "parado" — como se
+   * ninguém tivesse desligado nada. Religar uma gravação que a pessoa
+   * desligou é exatamente o que este recurso não pode fazer.
+   */
+  // Em repouso o SliD não tem controles; o toque no visor é o que os traz.
+  const mostrar = p.getByRole("button", { name: "Mostrar controles" });
+  if ((await mostrar.count()) > 0) await mostrar.click();
+  await p.waitForTimeout(700);
+
+  const trocar = p.getByRole("button", { name: /trocar câmera/i });
+  check(
+    (await trocar.count()) === 1,
+    "há como trocar de câmera nesta sessão (o caminho que reproduzia o defeito)",
+  );
+  await trocar.click();
+  await p.waitForTimeout(3500);
+
+  check(
+    !/Ouvindo/i.test(await p.locator("body").innerText()),
+    "e ele NÃO volta sozinho depois de a câmera se reacomodar",
+    (await p.locator("body").innerText()).split("\n").slice(0, 3).join(" · "),
+  );
+
+  // Mudar de ideia continua possível.
+  const ativar = p.getByRole("button", { name: /^Ativar$/ });
+  if ((await ativar.count()) > 0) {
+    await ativar.click();
+    await p.waitForTimeout(1500);
+    check(
+      /Ouvindo/i.test(await p.locator("body").innerText()),
+      "mas 'Ativar' religa quando a pessoa pede",
+    );
+  } else {
+    check(true, "(sem botão Ativar neste estado — o áudio ficou desligado)");
+  }
 
   check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
   await b.close();
