@@ -460,10 +460,15 @@ export function CameraShell({
   /* Sair do SliD sem encerrar pela tela de resumo também solta o microfone. */
   useEffect(() => {
     if (!isSlid && listen.gravando) listen.disable();
-    // O reconhecimento sai junto. Deixá-lo vivo fora da sessão seria um
-    // microfone aberto sem aula — exatamente a impressão que o Listen não
-    // pode dar.
-    if (!isSlid) transcript.disable();
+    /*
+     * O reconhecimento sai junto — e a fala da aula anterior sai com ele.
+     *
+     * `reset` e não `disable`: sair do SliD fecha a aula, e a próxima não pode
+     * começar com trechos da anterior colados no começo. Dentro da sessão vale
+     * o contrário — desligar e religar o áudio preserva o que já foi
+     * transcrito, porque quem religa quer continuar, não recomeçar.
+     */
+    if (!isSlid) transcript.reset();
     // Sair do SliD fecha a sessão; a próxima começa com a pergunta em aberto.
     if (!isSlid) audioDispensadoRef.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -928,6 +933,11 @@ export function CameraShell({
           stats={slid.stats}
           elapsedMs={slid.elapsedMs}
           audioMs={gravacao?.durationMs ?? 0}
+          /* Direto do gancho, e não de `gravacao`: `stop()` já devolveu os
+             trechos, mas `gravacao` só existe depois de o `MediaRecorder`
+             fechar o arquivo — e o resumo abre antes disso. O estado do
+             gancho guarda a fala desde o primeiro resultado. */
+          transcript={transcript.segments}
           onSave={async ({
             subject,
             discipline,

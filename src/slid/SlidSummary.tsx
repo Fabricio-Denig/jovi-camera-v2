@@ -16,6 +16,9 @@ import {
   type ContentKind,
 } from "./readContent";
 import { useOcr } from "./useOcr";
+import { MicIcon } from "../listen/MicIcon";
+import { contarTermos, tituloDaFala } from "../listen/speechInsights";
+import type { TranscriptSegment } from "../shared/lib/mediaStore";
 import { formatClock } from "../shared/lib/time";
 import type { SlidCapture, SlidStats } from "./useSlidSession";
 
@@ -53,6 +56,14 @@ interface SlidSummaryProps {
   elapsedMs: number;
   /** Quanto de áudio a sessão gravou, em ms. Zero quando não houve gravação. */
   audioMs?: number;
+  /**
+   * A fala reconhecida durante a aula.
+   *
+   * Chega aqui para nomear momentos que o quadro não nomeou. Vazia é o caso
+   * normal em navegador sem reconhecimento, e nesse caso esta tela se comporta
+   * exatamente como antes de a transcrição existir.
+   */
+  transcript?: TranscriptSegment[];
   onSave: (aula: SavedClass) => void;
   onDiscard: () => void;
 }
@@ -76,6 +87,7 @@ export function SlidSummary({
   stats,
   elapsedMs,
   audioMs = 0,
+  transcript = [],
   onSave,
   onDiscard,
 }: SlidSummaryProps) {
@@ -108,6 +120,13 @@ export function SlidSummary({
 
   // Described once, here, and then stored: reopening the class must never
   // depend on reading the page again.
+  /*
+   * Os termos que a aula inteira repetiu. Calculados uma vez porque o título
+   * de cada momento os consulta, e recontar a aula por momento seria varrer a
+   * transcrição doze vezes para achar as mesmas doze palavras.
+   */
+  const termosDaAula = useMemo(() => contarTermos(transcript), [transcript]);
+
   const described = useMemo(
     () =>
       captures.map((capture, index) => ({
@@ -122,7 +141,9 @@ export function SlidSummary({
         ...describeMoment(capture.reason, {
           text: readByCapture.get(capture.id)?.text,
           previousText:
-            index > 0 ? readByCapture.get(captures[index - 1].id)?.text : undefined,
+            index > 0
+              ? readByCapture.get(captures[index - 1].id)?.text
+              : undefined,
           confidence: readByCapture.get(capture.id)?.confidence,
           // Where the moment sits and whether the surface kept filling up —
           // the only things known about a page that would not read.
@@ -134,13 +155,41 @@ export function SlidSummary({
     [captures, readByCapture],
   );
 
+  /*
+   * Um título melhor quando a fala sustenta um.
+   *
+   * "Início da aula" é o que sobra quando a câmera não conseguiu ler nada do
+   * quadro — honesto, e inútil para achar o momento meses depois. Se o
+   * professor estava dizendo "useState" ali, o momento pode se chamar
+   * **useState**, e isso não é invenção: é uma palavra que foi dita, perto
+   * daquele instante, e que a aula inteira repetiu.
+   *
+   * Três travas, e cada uma corta um jeito diferente de errar:
+   *
+   * 1. Só onde o quadro não deu título. Uma linha que o professor **escreveu**
+   *    vence qualquer palavra que ele falou — alguém decidiu escrevê-la.
+   * 2. Nunca em momento marcado à mão. "Você marcou este momento" é o registro
+   *    de um gesto do estudante, e trocá-lo apagaria a informação.
+   * 3. Só com termo recorrente. Uma palavra dita uma vez perto do momento é
+   *    coincidência; `tituloDaFala` exige que ela seja um termo da aula.
+   */
+  const comTituloDaFala = useMemo(
+    () =>
+      described.map((m) => {
+        if (m.heading || m.capture.reason === "manual") return m;
+        const daFala = tituloDaFala(transcript, m.capture.atMs, termosDaAula);
+        return daFala ? { ...m, label: daFala } : m;
+      }),
+    [described, transcript, termosDaAula],
+  );
+
   const kinds = useMemo(() => {
     const counts = new Map<ContentKind, number>();
-    for (const { kind } of described) {
+    for (const { kind } of comTituloDaFala) {
       if (kind) counts.set(kind, (counts.get(kind) ?? 0) + 1);
     }
     return [...counts.entries()].sort((a, b) => b[1] - a[1]);
-  }, [described]);
+  }, [comTituloDaFala]);
 
   const minutes = Math.round(elapsedMs / 60000);
 
@@ -149,13 +198,13 @@ export function SlidSummary({
       summariseClass({
         moments: captures.length,
         durationMs: elapsedMs,
-        headings: described
+        headings: comTituloDaFala
           .map((moment) => moment.heading)
           .filter((heading): heading is string => Boolean(heading)),
         kinds,
         discipline,
       }),
-    [captures.length, elapsedMs, described, kinds, discipline],
+    [captures.length, elapsedMs, comTituloDaFala, kinds, discipline],
   );
 
   return (
@@ -228,10 +277,35 @@ export function SlidSummary({
              */}
             {audioMs > 0 && (
               <p className="flex items-center gap-2 rounded-xl bg-surface-2 px-3 py-2 text-[13px] text-ink">
-                <MicSummaryIcon />
+                <span className="text-accent">
+                  <MicIcon />
+                </span>
                 <span>
                   {formatClock(audioMs)} de áudio gravados, guardados com a aula
                   neste aparelho.
+                </span>
+              </p>
+            )}
+
+            {/*
+              A fala reconhecida, dita com precisão.
+
+              Duas frases porque são duas coisas diferentes, e juntá-las seria
+              a imprecisão que este produto não pode cometer: o **arquivo** é
+              gravado pelo app e fica no aparelho; a **transcrição** é feita
+              pelo reconhecimento do navegador, e no Chrome isso significa
+              áudio indo para um serviço do Google. Não escolhemos isso e não
+              temos como impedir — o que dá para fazer é não chamar de local
+              uma coisa que não controlamos.
+            */}
+            {transcript.length > 0 && (
+              <p className="rounded-xl bg-surface-2 px-3 py-2 text-[12.5px] leading-snug text-ink-muted">
+                A fala da aula também foi transcrita, em {transcript.length}{" "}
+                {transcript.length === 1 ? "trecho" : "trechos"} com horário.
+                <br />
+                <span className="text-ink-muted/75">
+                  A transcrição é feita pelo reconhecimento de voz do navegador;
+                  o que ele faz com o som é decisão dele.
                 </span>
               </p>
             )}
@@ -288,22 +362,24 @@ export function SlidSummary({
                   aria-hidden="true"
                   className="absolute bottom-4 left-[5px] top-3 w-px bg-line"
                 />
-                {described.map(({ capture, label, detail, kind }, index) => (
-                  <li
-                    key={capture.id}
-                    className="animate-[slid-enter_300ms_ease-out_both]"
-                    style={{ animationDelay: `${Math.min(index, 8) * 40}ms` }}
-                  >
-                    <MomentRow
-                      atMs={capture.atMs}
-                      label={label}
-                      detail={detail}
-                      category={kind ? KIND_TAGS[kind] : null}
-                      spanMs={capture.completedAtMs - capture.atMs}
-                      blob={capture.blob}
-                    />
-                  </li>
-                ))}
+                {comTituloDaFala.map(
+                  ({ capture, label, detail, kind }, index) => (
+                    <li
+                      key={capture.id}
+                      className="animate-[slid-enter_300ms_ease-out_both]"
+                      style={{ animationDelay: `${Math.min(index, 8) * 40}ms` }}
+                    >
+                      <MomentRow
+                        atMs={capture.atMs}
+                        label={label}
+                        detail={detail}
+                        category={kind ? KIND_TAGS[kind] : null}
+                        spanMs={capture.completedAtMs - capture.atMs}
+                        blob={capture.blob}
+                      />
+                    </li>
+                  ),
+                )}
               </ol>
             </section>
           </div>
@@ -338,68 +414,73 @@ export function SlidSummary({
             Voltar para a câmera
           </button>
         ) : (
-        <>
-        {/*
-         * A leitura rodava em silêncio, e isso custava texto sem avisar.
-         *
-         * Quem tocasse em "Salvar aula" antes de ela terminar guardava a aula
-         * com legendas de reserva e sem nenhuma linha lida — e a aba Texto
-         * abria dizendo "a câmera não conseguiu ler", que é mentira: ela
-         * conseguiria, só não tinha terminado.
-         *
-         * A barra não bloqueia o botão. Esperar é decisão de quem está com o
-         * celular na mão; o que não pode é decidir sem saber.
-         */}
-        {ocr.status === "running" && (
-          <div className="mb-2.5">
-            <div className="flex items-center justify-between text-[11.5px] text-ink-muted">
-              <span>Lendo o que está nos momentos…</span>
-              <span className="font-mono tabular-nums">
-                {Math.round(ocr.progress * captures.length)}/{captures.length}
-              </span>
-            </div>
-            <div className="mt-1 h-1 overflow-hidden rounded-full bg-surface-2">
-              <div
-                className="h-full rounded-full bg-accent transition-[width] duration-300"
-                style={{ width: `${Math.round(ocr.progress * 100)}%` }}
-              />
-            </div>
-          </div>
-        )}
+          <>
+            {/*
+             * A leitura rodava em silêncio, e isso custava texto sem avisar.
+             *
+             * Quem tocasse em "Salvar aula" antes de ela terminar guardava a aula
+             * com legendas de reserva e sem nenhuma linha lida — e a aba Texto
+             * abria dizendo "a câmera não conseguiu ler", que é mentira: ela
+             * conseguiria, só não tinha terminado.
+             *
+             * A barra não bloqueia o botão. Esperar é decisão de quem está com o
+             * celular na mão; o que não pode é decidir sem saber.
+             */}
+            {ocr.status === "running" && (
+              <div className="mb-2.5">
+                <div className="flex items-center justify-between text-[11.5px] text-ink-muted">
+                  <span>Lendo o que está nos momentos…</span>
+                  <span className="font-mono tabular-nums">
+                    {Math.round(ocr.progress * captures.length)}/
+                    {captures.length}
+                  </span>
+                </div>
+                <div className="mt-1 h-1 overflow-hidden rounded-full bg-surface-2">
+                  <div
+                    className="h-full rounded-full bg-accent transition-[width] duration-300"
+                    style={{ width: `${Math.round(ocr.progress * 100)}%` }}
+                  />
+                </div>
+              </div>
+            )}
 
-        {/* Falhou é diferente de não terminou, e a aula continua salvável. */}
-        {ocr.status === "error" && (
-          <p className="mb-2.5 text-[11.5px] leading-snug text-warn">
-            Não consegui ler o texto dos momentos neste aparelho. As imagens da
-            aula estão inteiras e podem ser salvas.
-          </p>
-        )}
+            {/* Falhou é diferente de não terminou, e a aula continua salvável. */}
+            {ocr.status === "error" && (
+              <p className="mb-2.5 text-[11.5px] leading-snug text-warn">
+                Não consegui ler o texto dos momentos neste aparelho. As imagens
+                da aula estão inteiras e podem ser salvas.
+              </p>
+            )}
 
-        <button
-          type="button"
-          onClick={() =>
-            onSave({
-              subject: subjectValue.trim() || UNTITLED,
-              discipline,
-              status,
-              moments: described.map(({ capture, label, detail, kind, lines }) => ({
-                id: capture.id,
-                label,
-                detail,
-                category: kind ? KIND_TAGS[kind] : null,
-                spanMs: capture.completedAtMs - capture.atMs,
-                lines,
-              })),
-              topics,
-              kinds: kinds.map(([kind, count]) => [kind, count]),
-              overview,
-            })
-          }
-          className="min-h-11 w-full rounded-xl bg-accent py-3 text-sm font-medium text-accent-ink transition-transform duration-150 active:scale-[0.98] active:opacity-80"
-        >
-          {ocr.status === "running" ? "Salvar aula mesmo assim" : "Salvar aula"}
-        </button>
-        </>
+            <button
+              type="button"
+              onClick={() =>
+                onSave({
+                  subject: subjectValue.trim() || UNTITLED,
+                  discipline,
+                  status,
+                  moments: comTituloDaFala.map(
+                    ({ capture, label, detail, kind, lines }) => ({
+                      id: capture.id,
+                      label,
+                      detail,
+                      category: kind ? KIND_TAGS[kind] : null,
+                      spanMs: capture.completedAtMs - capture.atMs,
+                      lines,
+                    }),
+                  ),
+                  topics,
+                  kinds: kinds.map(([kind, count]) => [kind, count]),
+                  overview,
+                })
+              }
+              className="min-h-11 w-full rounded-xl bg-accent py-3 text-sm font-medium text-accent-ink transition-transform duration-150 active:scale-[0.98] active:opacity-80"
+            >
+              {ocr.status === "running"
+                ? "Salvar aula mesmo assim"
+                : "Salvar aula"}
+            </button>
+          </>
         )}
       </footer>
     </div>
@@ -455,26 +536,5 @@ function DiscardConfirm({
         </div>
       </div>
     </div>
-  );
-}
-
-/** O microfone da linha de áudio. Em SVG: a cobertura de emoji varia. */
-function MicSummaryIcon() {
-  return (
-    <svg
-      width="15"
-      height="15"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.9"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      className="shrink-0 text-accent"
-    >
-      <rect x="9" y="2" width="6" height="11" rx="3" />
-      <path d="M5 10a7 7 0 0 0 14 0M12 17v4" />
-    </svg>
   );
 }

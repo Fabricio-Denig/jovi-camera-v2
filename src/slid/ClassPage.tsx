@@ -263,10 +263,13 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
             // quadro ilegível e a fala transcrita, marcá-la como vazia
             // esconderia a única leitura que a aula tem.
             texto: comLeitura + falado,
+            // A fala conta: uma aula cujo quadro não deu resumo mas cuja
+            // transcrição deu não pode ter a aba marcada como vazia.
             resumo:
               (record.overview ? 1 : 0) +
               record.topics.length +
-              record.kinds.length,
+              record.kinds.length +
+              falado,
           }}
         />
       </header>
@@ -317,6 +320,8 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
           <ClassSummaryTab
             record={record}
             temAudio={Boolean(audio)}
+            transcript={transcript}
+            transcriptStatus={audio?.transcriptStatus}
             onExcluir={excluir}
             onOuvir={
               audio
@@ -346,7 +351,11 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
       {/* A folha de impressão vive fora da tela e só existe quando alguém
           manda imprimir. Ela precisa estar no documento — não dá para montá-la
           durante o `print()`. */}
-      <LessonPrintSheet record={record} temAudio={Boolean(audio)} />
+      <LessonPrintSheet
+        record={record}
+        temAudio={Boolean(audio)}
+        transcript={transcript}
+      />
 
       {reviewing !== null && (
         <ClassReview

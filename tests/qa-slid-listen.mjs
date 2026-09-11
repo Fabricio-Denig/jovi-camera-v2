@@ -22,6 +22,19 @@ async function abrir({
   microfone = true,
   semMediaRecorder = false,
   duasCameras = false,
+  /**
+   * O reconhecimento de fala que este navegador terá:
+   *
+   * - `"bancada"` (padrão): o que o Chromium desta máquina realmente faz —
+   *   medido, e é `start` → `error:audio-capture` → `end`. A API existe e não
+   *   funciona, que é o cenário mais importante de todos porque é o que o SliD
+   *   não pode deixar quebrar nada.
+   * - `"ausente"`: a API não existe. Safari em modo restrito, WebView.
+   * - `"funciona"`: um dublê que devolve resultados. Existe porque CI não tem
+   *   microfone nem serviço de reconhecimento, e sem ele o caminho feliz do
+   *   recurso nunca seria exercitado por teste nenhum.
+   */
+  fala = "bancada",
   cena = "fp-aula-slide-projetado.y4m",
 } = {}) {
   const b = await chromium.launch({
@@ -98,6 +111,82 @@ async function abrir({
         }
         return original(restricoes);
       };
+    });
+  }
+
+  if (fala === "ausente") {
+    await p.addInitScript(() => {
+      delete window.SpeechRecognition;
+      delete window.webkitSpeechRecognition;
+    });
+  }
+
+  if (fala === "funciona") {
+    /*
+     * O dublê do reconhecimento.
+     *
+     * Ele não simula o acerto do reconhecimento — simula o **protocolo**: um
+     * parcial, um final, e o navegador encerrando o turno sozinho, que é o
+     * ciclo que a Web Speech realmente executa numa aula longa. O que o teste
+     * verifica é o que o app faz com esse ciclo.
+     *
+     * `__iniciadas` conta os `start()`. É por esse contador que se distingue
+     * um religamento controlado (o navegador encerrou, o app volta) de um
+     * religamento indevido (a pessoa desligou, e volta mesmo assim).
+     */
+    await p.addInitScript(() => {
+      window.__iniciadas = 0;
+      const resultado = (texto, final) => ({
+        resultIndex: 0,
+        results: Object.assign([Object.assign([{ transcript: texto, confidence: 0.9 }], { isFinal: final })], {
+          length: 1,
+        }),
+      });
+      class FalaDeMentira {
+        constructor() {
+          this.lang = "";
+          this.continuous = false;
+          this.interimResults = false;
+          this.maxAlternatives = 1;
+          this.onstart = null;
+          this.onresult = null;
+          this.onerror = null;
+          this.onend = null;
+          this._t = [];
+        }
+        start() {
+          window.__iniciadas += 1;
+          this._t.push(setTimeout(() => this.onstart && this.onstart(), 60));
+          this._t.push(
+            setTimeout(
+              () => this.onresult && this.onresult(resultado("prestem atenção nessa parte", false)),
+              500,
+            ),
+          );
+          this._t.push(
+            setTimeout(
+              () =>
+                this.onresult &&
+                this.onresult(
+                  resultado("prestem atenção nessa parte porque isso cai na prova", true),
+                ),
+              1400,
+            ),
+          );
+          // O navegador encerrando o turno por conta própria: o evento que
+          // exige religamento controlado.
+          this._t.push(setTimeout(() => this.onend && this.onend(), 2600));
+        }
+        stop() {
+          this.abort();
+        }
+        abort() {
+          for (const t of this._t) clearTimeout(t);
+          this._t = [];
+        }
+      }
+      window.SpeechRecognition = FalaDeMentira;
+      window.webkitSpeechRecognition = FalaDeMentira;
     });
   }
 
@@ -554,6 +643,192 @@ console.log("\n== a aula sem áudio não mostra player nem botões ==");
   check(
     (await p.locator("[role=tabpanel] li button").count()) > 0,
     "mas a aula está lá, com os momentos",
+  );
+  check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
+  await b.close();
+}
+
+console.log("\n== sem reconhecimento de fala: o SliD não sente ==");
+{
+  const { b, p, erros } = await abrir({ fala: "ausente" });
+  await entrarNoSlid(p);
+  await p.waitForTimeout(1500);
+
+  const corpo = await p.locator("body").innerText();
+  check(/Ouvindo/i.test(corpo), "o Listen continua ouvindo");
+  check(
+    !/Transcrevendo/i.test(corpo),
+    "e não promete transcrever o que não vai transcrever",
+  );
+  // O que importa de verdade: See e Identify inteiros.
+  check(
+    (await p.getByRole("button", { name: /^Encerrar$/ }).count()) >= 0 &&
+      /Acompanhando a aula|Procurando o conteúdo/i.test(corpo),
+    "a sessão segue de pé",
+  );
+  check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
+  await b.close();
+}
+
+console.log("\n== API declarada que não funciona: o caso desta bancada ==");
+{
+  /*
+   * Medido, não suposto. Neste Chromium:
+   *   typeof SpeechRecognition  → "function"
+   *   eventos de uma sessão     → start, error:audio-capture, end
+   *
+   * É por isso que o app não diz "Transcrevendo" porque a API existe: se
+   * dissesse, esta bancada mostraria a palavra e nunca transcreveria nada.
+   * Capacidade é evidência, não declaração — e este bloco é a prova viva
+   * disso, porque roda contra a API real, sem dublê nenhum.
+   */
+  const { b, p, erros } = await abrir({ fala: "bancada" });
+  await entrarNoSlid(p);
+  await p.waitForTimeout(3000);
+
+  const corpo = await p.locator("body").innerText();
+  check(/Ouvindo/i.test(corpo), "grava normalmente");
+  check(
+    !/Transcrevendo/i.test(corpo),
+    "e NÃO diz 'Transcrevendo' só porque a API existe",
+  );
+  check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
+  await b.close();
+}
+
+console.log("\n== reconhecimento funcionando: o selo e a fala na tela ==");
+{
+  const { b, p, erros } = await abrir({ fala: "funciona" });
+  await entrarNoSlid(p);
+  await p.waitForTimeout(1200);
+
+  const corpo = await p.locator("body").innerText();
+  check(
+    /Ouvindo · Transcrevendo/i.test(corpo),
+    "o selo evolui quando um resultado chega de verdade",
+    corpo.split("\n").slice(0, 4).join(" · "),
+  );
+  check(
+    /prestem atenção nessa parte/i.test(corpo),
+    "e uma linha do que está sendo dito aparece",
+  );
+  check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
+  await b.close();
+}
+
+console.log("\n== o navegador encerra o turno, o app religa ==");
+{
+  const { b, p, erros } = await abrir({ fala: "funciona" });
+  await entrarNoSlid(p);
+  await p.waitForTimeout(1500);
+  const antes = await p.evaluate(() => window.__iniciadas);
+  // O dublê encerra o turno aos 2,6 s; a espera cobre dois ciclos.
+  await p.waitForTimeout(6000);
+  const depois = await p.evaluate(() => window.__iniciadas);
+  check(
+    depois > antes,
+    `religou sozinho quando o navegador encerrou (${antes} → ${depois})`,
+  );
+  check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
+  await b.close();
+}
+
+console.log("\n== a pessoa desliga: NADA religa ==");
+{
+  /*
+   * O defeito antigo, agora do lado da transcrição. O religamento controlado
+   * é exatamente o mecanismo que poderia trazer de volta algo que a pessoa
+   * desligou — e a intenção do usuário vence qualquer religamento.
+   */
+  const { b, p, erros } = await abrir({ fala: "funciona" });
+  await entrarNoSlid(p);
+  await p.waitForTimeout(1500);
+  check(
+    /Transcrevendo/i.test(await p.locator("body").innerText()),
+    "está transcrevendo antes",
+  );
+
+  await p.getByRole("button", { name: /desligar o áudio desta aula/i }).click();
+  await p.waitForTimeout(600);
+  const noDesligar = await p.evaluate(() => window.__iniciadas);
+
+  // Tempo de sobra para dois ou três ciclos do dublê, se algo religasse.
+  await p.waitForTimeout(8000);
+  const depois = await p.evaluate(() => window.__iniciadas);
+
+  check(
+    depois === noDesligar,
+    `o reconhecimento não voltou sozinho (${noDesligar} → ${depois})`,
+  );
+  check(
+    !/Transcrevendo/i.test(await p.locator("body").innerText()),
+    "e a tela não mostra transcrição depois de desligada",
+  );
+  check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
+  await b.close();
+}
+
+console.log("\n== a fala transcrita é guardada com a aula e sobrevive ==");
+{
+  const { b, p, erros } = await abrir({ fala: "funciona" });
+  await entrarNoSlid(p);
+  // Tempo para alguns finais entrarem.
+  await p.waitForTimeout(7000);
+  await encerrar(p);
+  await p.getByRole("button", { name: /salvar|guardar/i }).first().click();
+  await p.waitForTimeout(3000);
+
+  const guardado = await p.evaluate(async () => {
+    const db = await new Promise((r, x) => {
+      const q = indexedDB.open("jovi-camera-v2");
+      q.onsuccess = () => r(q.result);
+      q.onerror = () => x(q.error);
+    });
+    const tudo = await new Promise((r) => {
+      const q = db.transaction("lessonAudio").objectStore("lessonAudio").getAll();
+      q.onsuccess = () => r(q.result);
+    });
+    db.close();
+    const a = tudo[0];
+    return a
+      ? {
+          status: a.transcriptStatus,
+          trechos: (a.transcript ?? []).length,
+          primeiro: (a.transcript ?? [])[0]?.text ?? null,
+          crescente: (a.transcript ?? []).every(
+            (s, i, v) => i === 0 || s.startMs >= v[i - 1].startMs,
+          ),
+        }
+      : null;
+  });
+
+  check(guardado !== null, "o áudio da aula foi guardado");
+  check(guardado?.status === "ok", `com a transcrição marcada como ok (${guardado?.status})`);
+  check((guardado?.trechos ?? 0) > 0, `e com trechos dentro (${guardado?.trechos})`);
+  check(
+    /cai na prova/i.test(guardado?.primeiro ?? ""),
+    "que são o texto reconhecido, e não outra coisa",
+  );
+  check(guardado?.crescente === true, "com horários que só crescem");
+
+  // E a aula reaberta mostra tudo isso.
+  await p.getByRole("button", { name: "Galeria", exact: true }).click();
+  await p.waitForTimeout(1200);
+  await p
+    .getByRole("tablist", { name: "Filtrar a galeria" })
+    .getByRole("tab", { name: /^SliD/ })
+    .click();
+  await p.waitForTimeout(900);
+  await p.locator("article button").first().click();
+  await p.waitForTimeout(1800);
+  await p.getByRole("tab", { name: "Texto", exact: true }).click();
+  await p.waitForTimeout(800);
+
+  const naAula = await p.locator("[role=tabpanel]").innerText();
+  check(
+    /cai na prova/i.test(naAula),
+    "a aula reaberta mostra o que foi dito",
+    naAula.slice(0, 120).replace(/\n/g, " · "),
   );
   check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
   await b.close();

@@ -109,10 +109,22 @@ const MIN_VISIBLE = 64;
 
 /** Cada canto é duas bordas de um quadrado, o que dá o colchete do Figma. */
 const CORNERS = [
-  { key: "tl", className: "-left-px -top-px rounded-tl-xl border-l-2 border-t-2" },
-  { key: "tr", className: "-right-px -top-px rounded-tr-xl border-r-2 border-t-2" },
-  { key: "bl", className: "-bottom-px -left-px rounded-bl-xl border-b-2 border-l-2" },
-  { key: "br", className: "-bottom-px -right-px rounded-br-xl border-b-2 border-r-2" },
+  {
+    key: "tl",
+    className: "-left-px -top-px rounded-tl-xl border-l-2 border-t-2",
+  },
+  {
+    key: "tr",
+    className: "-right-px -top-px rounded-tr-xl border-r-2 border-t-2",
+  },
+  {
+    key: "bl",
+    className: "-bottom-px -left-px rounded-bl-xl border-b-2 border-l-2",
+  },
+  {
+    key: "br",
+    className: "-bottom-px -right-px rounded-br-xl border-b-2 border-r-2",
+  },
 ];
 
 interface Rect {
@@ -182,7 +194,10 @@ function useCoverRect(
         centre + (value - centre) * z;
       const left = Math.max(0, zoomAbout(offsetX + x * shownW, cw / 2));
       const top = Math.max(0, zoomAbout(offsetY + wide.y * shownH, ch / 2));
-      const right = Math.min(cw, zoomAbout(offsetX + (x + wide.width) * shownW, cw / 2));
+      const right = Math.min(
+        cw,
+        zoomAbout(offsetX + (x + wide.width) * shownW, cw / 2),
+      );
       const bottom = Math.min(
         ch,
         zoomAbout(offsetY + (wide.y + wide.height) * shownH, ch / 2),
@@ -204,7 +219,10 @@ function useCoverRect(
         if (b - a >= MIN_VISIBLE) return [a, b];
         const centro = (a + b) / 2;
         const meio = MIN_VISIBLE / 2;
-        const inicio = Math.max(0, Math.min(limite - MIN_VISIBLE, centro - meio));
+        const inicio = Math.max(
+          0,
+          Math.min(limite - MIN_VISIBLE, centro - meio),
+        );
         return [inicio, Math.min(limite, inicio + MIN_VISIBLE)];
       };
       const [x0, x1] = cresce(left, right, cw);

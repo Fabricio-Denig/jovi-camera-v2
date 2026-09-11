@@ -183,3 +183,96 @@ E um último, que é o que mais dói se falhar:
 
 O granulado é o item que importa. Se não houver diferença visível num ambiente
 escuro de verdade, anote — a medição da bancada diz que deveria haver.
+
+---
+
+## I — Transcrição da fala (ciclo de 11/set)
+
+Esta é a seção com **menos** cobertura de bancada de todo o documento, e o
+motivo está medido. No Chromium desta máquina:
+
+```
+typeof SpeechRecognition  → "function"
+eventos de uma sessão     → start, error:audio-capture, end
+```
+
+A API é declarada e não funciona: não há microfone real e o serviço recusa
+antes do primeiro resultado. Então **o reconhecimento em si nunca foi
+exercitado por teste automático** — o que os testes cobrem é o protocolo (com
+dublê) e tudo o que o app faz com uma transcrição (com transcrição semeada).
+Se isto funciona de verdade, quem descobre é o aparelho.
+
+Vale saber antes de começar: no Chrome, o reconhecimento de fala do navegador
+**envia áudio para um serviço do Google**. O app não escolhe isso e não tem
+como impedir — o que ele faz é não mentir sobre. O arquivo de áudio, esse,
+é gravado pelo app e fica no aparelho.
+
+### O cenário para testar
+
+Vale mais que qualquer roteiro genérico: **fale uma aula curta de verdade**,
+uns dois minutos, em voz normal, com o celular apoiado como um estudante
+apoiaria. Um roteiro que funciona bem porque exercita todos os caminhos:
+
+> "Hoje a gente vai falar sobre estado no React. O useState é o jeito de um
+> componente guardar um valor que muda. **Prestem atenção nessa parte**, porque
+> o useState devolve sempre um par. Um erro muito comum é modificar o estado
+> direto. **Isso cai na prova**: o estado no React é imutável. **Resumindo**, o
+> useState guarda estado e o useEffect reage a mudanças."
+
+Marque um momento com a câmera enquanto fala a parte do useState.
+
+### Durante a aula
+
+- [ ] o selo evolui de **"Ouvindo"** para **"Ouvindo · Transcrevendo"** — e só
+      depois de você falar alguma coisa, nunca antes
+- [ ] uma **linha curta do que você acabou de dizer** aparece embaixo do selo
+- [ ] essa linha **não tapa o quadro** nem empurra nada de lugar
+- [ ] o selo **não** diz "Transcrevendo" se nada for reconhecido — se disser
+      sem transcrever nada, é defeito, e é o mais grave desta seção
+- [ ] fale por dois minutos seguidos: a transcrição **continua** (o navegador
+      encerra o turno sozinho e o app precisa religar)
+- [ ] toque no ✕ para desligar o áudio no meio: a linha de fala some **e não
+      volta sozinha** depois de dez ou vinte segundos
+
+### Na aula salva
+
+- [ ] a aba **Texto** mostra dois chips: "Texto do quadro" e "Transcrição da
+      aula"
+- [ ] a transcrição está lá, **com horários**, e o texto é o que você falou —
+      erros de reconhecimento são esperados; **texto que você não disse, não**
+- [ ] tocar num horário **leva o áudio para aquele ponto**
+- [ ] há uma seção **"O professor marcou"** com as frases do "prestem atenção",
+      do "isso cai na prova" e do "resumindo" — e **só** essas
+- [ ] embaixo do momento do useState aparece uma linha com microfone: o que
+      você estava dizendo quando a câmera guardou aquele quadro
+- [ ] a aba **Resumo** tem **"O que foi dito"**, e cada linha ali é uma frase
+      que você realmente falou
+- [ ] "Copiar a aula inteira" traz a parte falada junto
+- [ ] feche o app por completo, reabra, abra a aula: **a transcrição continua
+      lá**
+
+### O caso que motivou este ciclo
+
+Repita com o **quadro ilegível de propósito** — aponte para algo que o OCR não
+vai ler (letra à mão, slide distante, pouca luz) e fale a mesma aula:
+
+- [ ] a aba Texto **não** diz "a câmera não conseguiu ler texto nesta aula"
+- [ ] ela abre direto na transcrição e explica por que a fala está sozinha
+- [ ] a aba Resumo **não** fica vazia: a seção "O que foi dito" a preenche
+- [ ] os momentos que ficariam com "Início da aula" podem ganhar um título
+      tirado da fala — e se ganharem, o título tem de ser **uma palavra que
+      você disse**, não um palpite
+
+### Navegador sem reconhecimento
+
+Repita no **Firefox** ou no **Safari** (a cobertura varia muito, e em vários
+deles a API simplesmente não existe):
+
+- [ ] o SliD **não quebra**: entra, mostra "Ouvindo", grava, marca momentos
+- [ ] o selo **não** promete transcrição
+- [ ] a aula salva diz "Esta aula tem gravação de áudio" e, se for o caso, que
+      a transcrição não funcionou naquele navegador
+- [ ] nada na tela some ou fica pela metade
+
+Anote **qual navegador, qual sistema e o que aconteceu**. A cobertura real
+desta API é o dado que falta, e só aparelho responde.

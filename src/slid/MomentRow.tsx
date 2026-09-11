@@ -72,7 +72,9 @@ export function MomentRow({
   );
 
   if (!onOpen) {
-    return <article className="relative flex gap-3 pb-6 pl-6">{content}</article>;
+    return (
+      <article className="relative flex gap-3 pb-6 pl-6">{content}</article>
+    );
   }
 
   return (

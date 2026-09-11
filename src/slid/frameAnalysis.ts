@@ -32,8 +32,10 @@
 const SAMPLE_W = 128;
 const SAMPLE_H = 96;
 
-let sampler: { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } | null =
-  null;
+let sampler: {
+  canvas: HTMLCanvasElement;
+  ctx: CanvasRenderingContext2D;
+} | null = null;
 
 function getSampler() {
   if (!sampler) {
@@ -465,7 +467,10 @@ const CROP_MAX_THIN = 0.93;
  */
 const WEAVE_MIN_LINES = 5;
 
-export function readScene(gray: Uint8Array, forcedDelta?: number): SceneSignals {
+export function readScene(
+  gray: Uint8Array,
+  forcedDelta?: number,
+): SceneSignals {
   const mask = markMask(gray, forcedDelta);
 
   const rowRuns = new Int32Array(SAMPLE_H);
@@ -754,7 +759,8 @@ export function readBestScene(
       scale: ANALYSIS_SCALES[index],
     };
     readings.push(reading);
-    if (reading.looksLikeClass) return { ...reading, readings, tooSmall: false };
+    if (reading.looksLikeClass)
+      return { ...reading, readings, tooSmall: false };
     const score = evidence(reading);
     if (score > bestScore) {
       best = { ...reading, readings, tooSmall: false };
@@ -776,7 +782,11 @@ export function readBestScene(
       r.isStudy &&
       (r.verdict === "poucas-linhas" || r.verdict === "uma-faixa-so"),
   );
-  return { ...best, readings, tooSmall: sinalRecortado && !best.looksLikeClass };
+  return {
+    ...best,
+    readings,
+    tooSmall: sinalRecortado && !best.looksLikeClass,
+  };
 }
 
 /**
@@ -839,9 +849,15 @@ export function markArea(
   }
 
   const x0 = Math.max(0, Math.round(region.x * SAMPLE_W));
-  const x1 = Math.min(SAMPLE_W, Math.round((region.x + region.width) * SAMPLE_W));
+  const x1 = Math.min(
+    SAMPLE_W,
+    Math.round((region.x + region.width) * SAMPLE_W),
+  );
   const y0 = Math.max(0, Math.round(region.y * SAMPLE_H));
-  const y1 = Math.min(SAMPLE_H, Math.round((region.y + region.height) * SAMPLE_H));
+  const y1 = Math.min(
+    SAMPLE_H,
+    Math.round((region.y + region.height) * SAMPLE_H),
+  );
 
   let marks = 0;
   for (let y = y0; y < y1; y++) {

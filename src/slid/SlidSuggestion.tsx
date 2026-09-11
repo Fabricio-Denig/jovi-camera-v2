@@ -69,8 +69,8 @@ export function SlidSuggestion({ onAccept, onDismiss }: SlidSuggestionProps) {
               perder a aula que estava começando. */}
           {expandido && (
             <p className="mt-1.5 animate-[slid-enter_200ms_ease-out] text-[11.5px] leading-snug text-ink-muted">
-              Você apoia o celular e assiste. O SliD guarda cada momento em que o
-              quadro muda e grava o áudio da aula, e no fim entrega tudo em
+              Você apoia o celular e assiste. O SliD guarda cada momento em que
+              o quadro muda e grava o áudio da aula, e no fim entrega tudo em
               ordem — com o que reconheceu, e com o áudio ligado a cada momento.
               O microfone é pedido na hora, e a aula funciona sem ele.
             </p>

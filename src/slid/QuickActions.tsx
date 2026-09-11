@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
-import { compartilharAula, podeCompartilhar, podeImprimir } from "./lessonSharing";
+import {
+  compartilharAula,
+  podeCompartilhar,
+  podeImprimir,
+} from "./lessonSharing";
+import type { TranscriptSegment } from "../shared/lib/mediaStore";
 import type { ClassRecord } from "./classes";
 
 /**
@@ -20,10 +25,13 @@ import type { ClassRecord } from "./classes";
 export function QuickActions({
   record,
   temAudio,
+  transcript = [],
   onExcluir,
 }: {
   record: ClassRecord;
   temAudio: boolean;
+  /** A fala reconhecida, para o texto compartilhado sair inteiro. */
+  transcript?: TranscriptSegment[];
   onExcluir: () => void;
 }) {
   const [compartilhando, setCompartilhando] = useState(false);
@@ -66,17 +74,23 @@ export function QuickActions({
             ocupado={compartilhando}
             onClick={async () => {
               setCompartilhando(true);
-              const r = await compartilharAula(record);
+              const r = await compartilharAula(record, transcript);
               setCompartilhando(false);
               // Cancelar é uma decisão normal, e não ganha aviso de erro.
-              if (r === "falhou") setAviso("Não deu para compartilhar por aqui.");
+              if (r === "falhou")
+                setAviso("Não deu para compartilhar por aqui.");
             }}
           />
         )}
 
         {/* Ícones em SVG e não em emoji: a cobertura varia por sistema, e um
             cartão com o glifo faltando vira um retângulo com rótulo. */}
-        <Cartao icone={<TrashIcon />} rotulo="Excluir" suave onClick={onExcluir} />
+        <Cartao
+          icone={<TrashIcon />}
+          rotulo="Excluir"
+          suave
+          onClick={onExcluir}
+        />
       </div>
 
       {/* Onde nenhuma das duas existe, a tela diz o que dá para fazer em vez
@@ -130,7 +144,10 @@ function Cartao({
           : "border-line bg-surface-2 text-ink"
       }`}
     >
-      <span aria-hidden="true" className="flex h-[22px] items-center text-[19px] leading-none">
+      <span
+        aria-hidden="true"
+        className="flex h-[22px] items-center text-[19px] leading-none"
+      >
         {ocupado ? "…" : icone}
       </span>
       <span className="text-[11.5px] font-medium">{rotulo}</span>

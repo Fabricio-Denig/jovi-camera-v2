@@ -6,6 +6,8 @@ import { linesWithoutTitle, momentsAsText } from "./classText";
 import { formatClock } from "../shared/lib/time";
 import type { ClassMoment, ClassRecord } from "./classes";
 import { TranscriptView } from "../listen/TranscriptView";
+import { MicIcon } from "../listen/MicIcon";
+import { legendaDaFala } from "../listen/speechInsights";
 import type { TranscriptSegment } from "../shared/lib/mediaStore";
 
 type Fonte = "quadro" | "fala";
@@ -127,6 +129,7 @@ export function ClassTextTab({
             <BlocoDeMomento
               key={momento.media.id}
               momento={momento}
+              legenda={legendaDaFala(transcript, momento.atMs)}
               onOuvir={onOuvir}
             />
           ))}
@@ -178,9 +181,12 @@ function Chip({
 
 function BlocoDeMomento({
   momento,
+  legenda,
   onOuvir,
 }: {
   momento: ClassMoment;
+  /** O que estava sendo dito por volta deste momento, se algo sustentar. */
+  legenda?: string | null;
   onOuvir?: (atMs: number) => void;
 }) {
   const url = useObjectUrl(momento.media.blob);
@@ -230,6 +236,27 @@ function BlocoDeMomento({
           {url && <img src={url} alt="" className="size-full object-cover" />}
         </div>
       </div>
+
+      {/*
+        O que estava sendo dito quando a câmera guardou este quadro.
+
+        É a costura entre as duas metades do SliD — o que se viu e o que se
+        ouviu, na mesma caixa. A janela é assimétrica porque a explicação
+        começa antes de o slide ficar pronto e continua depois dele.
+
+        Ausente com facilidade, e isso é o recurso funcionando: quando nada na
+        janela sustenta uma legenda, não há legenda. Uma frase de muleta
+        ("então tá, vamos lá") embaixo de uma fórmula não acrescenta nada e
+        gasta a confiança nas que acrescentam.
+      */}
+      {legenda && (
+        <p className="mt-2.5 flex gap-1.5 border-t border-line pt-2.5 text-[12.5px] italic leading-snug text-ink-muted">
+          <span className="mt-px text-accent">
+            <MicIcon size={13} />
+          </span>
+          <span className="min-w-0 flex-1">{legenda}</span>
+        </p>
+      )}
     </article>
   );
 }

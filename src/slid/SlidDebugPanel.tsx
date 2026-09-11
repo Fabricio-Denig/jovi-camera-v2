@@ -29,7 +29,13 @@ export function SlidDebugPanel({
   const [copiado, setCopiado] = useState(false);
 
   const cena = diagnostics?.scene ?? null;
-  const relatorio = montarRelatorio(diagnostics, zoomLevel, zoomNative, suggesting, running);
+  const relatorio = montarRelatorio(
+    diagnostics,
+    zoomLevel,
+    zoomNative,
+    suggesting,
+    running,
+  );
 
   const copiar = async () => {
     try {
@@ -101,18 +107,25 @@ export function SlidDebugPanel({
             {diagnostics!.streak}/{diagnostics!.needed}
           </Linha>
           <Linha rotulo="veredito">
-            <span className={cena.looksLikeClass ? "text-emerald-300" : "text-amber-300"}>
+            <span
+              className={
+                cena.looksLikeClass ? "text-emerald-300" : "text-amber-300"
+              }
+            >
               {VERDICT_LABELS[cena.verdict]}
             </span>
           </Linha>
           <Linha rotulo="janela">
             {cena.scale}x lida
-            {diagnostics!.lockedScale > 0 && ` · ${diagnostics!.lockedScale}x travada`}
+            {diagnostics!.lockedScale > 0 &&
+              ` · ${diagnostics!.lockedScale}x travada`}
           </Linha>
           <Linha rotulo="zoom">
             {zoomLevel}x {zoomNative ? "hardware" : "digital"}
           </Linha>
-          <Linha rotulo="tinta">limiar {cena.inkThreshold.toFixed(0)}/255</Linha>
+          <Linha rotulo="tinta">
+            limiar {cena.inkThreshold.toFixed(0)}/255
+          </Linha>
           <Linha rotulo="moldura">
             {cena.bounds
               ? `${(cena.bounds.x * 100).toFixed(0)},${(cena.bounds.y * 100).toFixed(0)} ` +
@@ -138,7 +151,12 @@ export function SlidDebugPanel({
             </thead>
             <tbody>
               {cena.readings.map((r) => (
-                <tr key={r.scale} className={r.scale === cena.scale ? "text-white" : "text-white/55"}>
+                <tr
+                  key={r.scale}
+                  className={
+                    r.scale === cena.scale ? "text-white" : "text-white/55"
+                  }
+                >
                   <td>{r.scale}x</td>
                   <td className="text-right">{r.writtenRows}</td>
                   <td className="text-right">{r.lines}</td>
@@ -155,7 +173,13 @@ export function SlidDebugPanel({
   );
 }
 
-function Linha({ rotulo, children }: { rotulo: string; children: React.ReactNode }) {
+function Linha({
+  rotulo,
+  children,
+}: {
+  rotulo: string;
+  children: React.ReactNode;
+}) {
   return (
     <p>
       <span className="text-white/50">{rotulo} </span>

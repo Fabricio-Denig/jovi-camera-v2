@@ -267,7 +267,10 @@ export function useTranscript({
           return;
         }
       }
-      religarRef.current = window.setTimeout(() => ligarRef.current?.(), RELIGAR_MS);
+      religarRef.current = window.setTimeout(
+        () => ligarRef.current?.(),
+        RELIGAR_MS,
+      );
     };
 
     try {
@@ -293,7 +296,15 @@ export function useTranscript({
     ligarRef.current = ligar;
   }, [ligar]);
 
-  /** Começa a transcrever. Só por gesto explícito de quem é dono da sessão. */
+  /**
+   * Começa a transcrever. Só por gesto explícito de quem é dono da sessão.
+   *
+   * **Não apaga o que já foi transcrito**, e isso é deliberado. Desligar o
+   * áudio no meio da aula e religar dez minutos depois é um caminho normal —
+   * e limpar aqui faria a primeira metade da aula desaparecer no gesto de
+   * voltar a gravar, que é o oposto do que a pessoa pediu. Quem zera é
+   * `reset`, chamado quando uma aula nova começa.
+   */
   const start = useCallback(() => {
     if (!reconhecimentoDeclarado()) {
       setStatus("indisponivel");
@@ -302,11 +313,18 @@ export function useTranscript({
     queridoRef.current = true;
     tentativasRef.current = 0;
     jaDeuResultadoRef.current = false;
-    setSegments([]);
     setParcial("");
     setStatus("aguardando");
     ligar();
   }, [ligar]);
+
+  /** Aula nova, transcrição nova. O único lugar que joga fora o que foi dito. */
+  const reset = useCallback(() => {
+    queridoRef.current = false;
+    soltar();
+    setSegments([]);
+    setStatus("parado");
+  }, [soltar]);
 
   /** Para e devolve o que foi transcrito. */
   const stop = useCallback((): TranscriptSegment[] => {
@@ -332,5 +350,6 @@ export function useTranscript({
     start,
     stop,
     disable,
+    reset,
   };
 }

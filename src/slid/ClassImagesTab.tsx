@@ -61,38 +61,38 @@ function CartaoDeMomento({
 
   return (
     <div className="relative">
-    <button
-      type="button"
-      onClick={onAbrir}
-      aria-label={`Abrir momento de ${formatClock(momento.atMs)}: ${momento.label}`}
-      className="w-full overflow-hidden rounded-xl border border-line bg-surface-2 text-left transition-transform duration-150 active:scale-[0.97]"
-    >
-      <span className="relative block aspect-[4/3] w-full bg-surface">
-        {url && <img src={url} alt="" className="size-full object-cover" />}
-        <span className="absolute bottom-1.5 left-1.5 rounded bg-black/65 px-1.5 py-0.5 font-mono text-[10.5px] tabular-nums text-white backdrop-blur">
-          {formatClock(momento.atMs)}
-        </span>
-      </span>
-      <span className="block px-2 pb-2 pt-1.5">
-        <span className="line-clamp-2 text-[12.5px] font-medium leading-snug text-ink">
-          {momento.label}
-        </span>
-        {momento.category && (
-          <span className="mt-1 inline-block rounded bg-accent/12 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent">
-            {momento.category}
+      <button
+        type="button"
+        onClick={onAbrir}
+        aria-label={`Abrir momento de ${formatClock(momento.atMs)}: ${momento.label}`}
+        className="w-full overflow-hidden rounded-xl border border-line bg-surface-2 text-left transition-transform duration-150 active:scale-[0.97]"
+      >
+        <span className="relative block aspect-[4/3] w-full bg-surface">
+          {url && <img src={url} alt="" className="size-full object-cover" />}
+          <span className="absolute bottom-1.5 left-1.5 rounded bg-black/65 px-1.5 py-0.5 font-mono text-[10.5px] tabular-nums text-white backdrop-blur">
+            {formatClock(momento.atMs)}
           </span>
-        )}
-      </span>
-    </button>
+        </span>
+        <span className="block px-2 pb-2 pt-1.5">
+          <span className="line-clamp-2 text-[12.5px] font-medium leading-snug text-ink">
+            {momento.label}
+          </span>
+          {momento.category && (
+            <span className="mt-1 inline-block rounded bg-accent/12 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent">
+              {momento.category}
+            </span>
+          )}
+        </span>
+      </button>
 
-    {/* Fora do botão do card, e não dentro: um <button> dentro de outro é
+      {/* Fora do botão do card, e não dentro: um <button> dentro de outro é
         HTML inválido, e o navegador desfaz o aninhamento de um jeito que
         deixa o de dentro inalcançável. */}
-    {onOuvir && (
-      <span className="absolute right-1.5 top-1.5">
-        <ListenFromHere atMs={momento.atMs} onOuvir={onOuvir} compacto />
-      </span>
-    )}
+      {onOuvir && (
+        <span className="absolute right-1.5 top-1.5">
+          <ListenFromHere atMs={momento.atMs} onOuvir={onOuvir} compacto />
+        </span>
+      )}
     </div>
   );
 }

@@ -48,7 +48,9 @@ export function DisciplineManager({
     const stored = renameDiscipline(from, draft);
     if (!stored) {
       setProblem(
-        draft.trim() ? "Já existe uma matéria com esse nome." : "Dê um nome à matéria.",
+        draft.trim()
+          ? "Já existe uma matéria com esse nome."
+          : "Dê um nome à matéria.",
       );
       return;
     }

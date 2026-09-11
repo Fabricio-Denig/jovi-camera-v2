@@ -43,7 +43,9 @@ que fingir que não existe.
 **Vai acontecer:** o topo mostra três coisas ao mesmo tempo:
 
 - **Acompanhando a aula** com o relógio da sessão
-- **Ouvindo** com a barrinha de nível mexendo
+- **Ouvindo** com a barrinha de nível mexendo — e, se este navegador
+  transcrever, **Ouvindo · Transcrevendo** com uma linha do que você acabou de
+  dizer
 - **SEE · LISTEN · IDENTIFY**
 
 > "Aqui estão as três letras do nome, acontecendo juntas. A barrinha mexe
@@ -90,6 +92,22 @@ ou balance um pouco o celular. Nenhum momento novo aparece.
    > "Este é o encontro das três letras: a imagem do momento, o que estava
    > escrito, e o que estava sendo dito naquele instante."
 
+**Se a transcrição tiver funcionado neste navegador** — confira antes, no Ato
+2, se o selo disse "Ouvindo · Transcrevendo":
+
+6. Na aba **Texto**, troque o chip para **Transcrição da aula**.
+   > "A aula tem duas fontes de texto: o que a câmera leu do quadro, e o que
+   > foi falado. Numa aula de letra à mão, esta é a única que sobra."
+7. Toque num **horário** da transcrição.
+   > "O horário é um botão. Ele leva a gravação para aquele ponto."
+8. Mostre **"O professor marcou"**.
+   > "Estas frases não foram escolhidas por relevância. Elas existem porque
+   > alguém disse 'isso cai na prova' — a expressão é a evidência, e ela está
+   > guardada junto."
+9. Na aba **Resumo**, mostre **"O que foi dito"**.
+   > "Cada linha aqui foi dita, palavra por palavra. O ranking escolhe entre as
+   > frases que existem; ele não escreve nenhuma."
+
 **Faça:** toque em **Copiar a aula inteira**, e cole em qualquer lugar.
 
 ---
@@ -122,8 +140,22 @@ Escolha **um ou dois**, conforme o tempo. Não passe dos dois.
 > linguagem, e a tela não diz que chama."
 
 **"O áudio vai para algum servidor?"**
-> "Não. É `MediaRecorder` do navegador, gravando num arquivo que fica no
-> aparelho. Não tem backend neste projeto — nem para isso, nem para nada."
+> "O **arquivo** não. É `MediaRecorder` do navegador, gravando para o IndexedDB
+> do aparelho. Não tem backend neste projeto — nem para isso, nem para nada.
+>
+> A **transcrição** é outra coisa, e vale ser exato: quem transcreve é o
+> reconhecimento de voz do próprio navegador, e no Chrome isso significa áudio
+> indo para um serviço do Google. Eu não escolho isso e não tenho como impedir.
+> O que dá para fazer é não chamar de local uma coisa que não controlo — e a
+> tela do app diz exatamente isso."
+
+**"E se o navegador não transcrever?"**
+> "O SliD não sente. Ele grava o áudio igual, marca os momentos igual, salva a
+> aula igual." — **e é o caso normal**: neste Chromium a API existe, responde
+> `typeof === "function"`, e morre em `audio-capture` antes do primeiro
+> resultado. Foi essa medição que definiu o desenho: o app só diz
+> "Transcrevendo" **depois que um resultado chega**. Capacidade é evidência,
+> não declaração.
 
 **"E se a pessoa não der o microfone?"**
 > "A aula acontece igual." — **e mostre**: negue o microfone e entre no SliD.
@@ -147,6 +179,7 @@ Escolha **um ou dois**, conforme o tempo. Não passe dos dois.
 | a detecção não pega o slide | use **2x**, ou aponte para uma folha escrita de perto |
 | o wi-fi do lugar cair | o app já está carregado; ele não precisa de rede depois de aberto |
 | o microfone não abrir | siga sem — e aproveite: é a jornada "sem áudio", que é parte da demonstração |
+| o selo não disser "Transcrevendo" | **não force**. Diga que este navegador não transcreve, que é verdade e é metade da história — e pule os passos 6 a 9 do Ato 3 |
 | a bateria estiver baixa | pule o Ato 4 inteiro |
 | algo travar | recarregue a página; as aulas salvas continuam lá (IndexedDB) |
 

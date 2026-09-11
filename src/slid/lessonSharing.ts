@@ -1,5 +1,6 @@
 import { classAsText } from "./classText";
 import type { ClassRecord } from "./classes";
+import type { TranscriptSegment } from "../shared/lib/mediaStore";
 
 /**
  * O que dá para fazer com uma aula, e o que este navegador realmente faz.
@@ -44,8 +45,11 @@ export type ResultadoDeCompartilhar = "compartilhou" | "cancelou" | "falhou";
  */
 export async function compartilharAula(
   record: ClassRecord,
+  // O que foi dito vai junto: mandar para um colega a aula sem a parte falada
+  // seria mandar meia aula — e, com o quadro ilegível, quase nada.
+  transcript: TranscriptSegment[] = [],
 ): Promise<ResultadoDeCompartilhar> {
-  const texto = classAsText(record);
+  const texto = classAsText(record, transcript);
   try {
     await navigator.share({ title: record.subject, text: texto });
     return "compartilhou";

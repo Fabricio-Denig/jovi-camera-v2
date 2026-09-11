@@ -74,12 +74,16 @@ export function addDiscipline(name: string): string {
   if (!trimmed) return "";
   const known = getDisciplines();
   const existing = known.find(
-    (item) => item.toLocaleLowerCase("pt-BR") === trimmed.toLocaleLowerCase("pt-BR"),
+    (item) =>
+      item.toLocaleLowerCase("pt-BR") === trimmed.toLocaleLowerCase("pt-BR"),
   );
   if (existing) return existing;
   // Adding back a default the student had removed just unhides it.
   if (DEFAULT_DISCIPLINES.includes(trimmed)) {
-    write(HIDDEN_KEY, readHidden().filter((name) => name !== trimmed));
+    write(
+      HIDDEN_KEY,
+      readHidden().filter((name) => name !== trimmed),
+    );
     return trimmed;
   }
   write(KEY, [...readCustom(), trimmed]);
@@ -110,11 +114,19 @@ export function renameDiscipline(from: string, to: string): string {
     if (!DEFAULT_DISCIPLINES.includes(trimmed)) {
       write(KEY, [...readCustom(), trimmed]);
     } else {
-      write(HIDDEN_KEY, readHidden().filter((name) => name !== trimmed).concat(from));
+      write(
+        HIDDEN_KEY,
+        readHidden()
+          .filter((name) => name !== trimmed)
+          .concat(from),
+      );
     }
     return trimmed;
   }
-  write(KEY, readCustom().map((name) => (name === from ? trimmed : name)));
+  write(
+    KEY,
+    readCustom().map((name) => (name === from ? trimmed : name)),
+  );
   return trimmed;
 }
 
@@ -125,8 +137,12 @@ export function renameDiscipline(from: string, to: string): string {
  */
 export function removeDiscipline(name: string): void {
   if (DEFAULT_DISCIPLINES.includes(name)) {
-    if (!readHidden().includes(name)) write(HIDDEN_KEY, [...readHidden(), name]);
+    if (!readHidden().includes(name))
+      write(HIDDEN_KEY, [...readHidden(), name]);
     return;
   }
-  write(KEY, readCustom().filter((item) => item !== name));
+  write(
+    KEY,
+    readCustom().filter((item) => item !== name),
+  );
 }
