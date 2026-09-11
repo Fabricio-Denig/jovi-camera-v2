@@ -159,8 +159,17 @@ for (const largura of LARGURAS) {
       check(!r.rola, `aula/${aba}: sem rolagem lateral (${r.scrollWidth}/${r.clientWidth})`);
     }
 
-    // A transcrição é a vista mais larga que existe: parágrafos longos com
-    // um botão de horário na frente. Se algo estoura, estoura aqui.
+    /*
+     * A transcrição é a vista mais larga que existe: parágrafos longos com um
+     * botão de horário na frente. Se algo estoura, estoura aqui.
+     *
+     * Voltar para a aba Texto antes é obrigatório — o chip das fontes vive
+     * dentro dela, e o laço acima termina no Resumo. A primeira versão
+     * procurava o chip estando no Resumo e esperava trinta segundos por algo
+     * que não está montado.
+     */
+    await p.getByRole("tab", { name: "Texto", exact: true }).click();
+    await p.waitForTimeout(700);
     await p.getByRole("tab", { name: "Transcrição da aula" }).click();
     await p.waitForTimeout(700);
     const r = await rolaDeLado(p);
