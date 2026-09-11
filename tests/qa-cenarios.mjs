@@ -88,7 +88,24 @@ const AULA_MUDA = {
   id: "aula-muda",
   subject: "Aula sem quadro e sem fala",
   overview: "",
-  momentos: AULA_REACT.momentos.map((m) => ({ ...m, lines: [], cat: null })),
+  kinds: [],
+  /*
+   * Rótulos genéricos, e não os da aula legível.
+   *
+   * A primeira versão desta fixture copiava os momentos de `AULA_REACT` só
+   * zerando as linhas — e ficava com "useState" e "Estado imutável" como
+   * títulos de uma aula em que nada foi lido. O teste falhou e estava certo em
+   * falhar: aquele estado o app não produz. Quando o OCR não devolve nada,
+   * `describeMoment` cai no rótulo de posição e `kind` fica nulo.
+   *
+   * Uma fixture que descreve um estado impossível não prova nada sobre o
+   * produto — prova sobre a fixture.
+   */
+  momentos: [
+    { t: 12000, label: "Início da aula", cat: null, cor: "#1e2a3a", lines: [] },
+    { t: 62000, label: "Conteúdo para revisão", cat: null, cor: "#2a1e3a", lines: [] },
+    { t: 108000, label: "Fechamento da aula", cat: null, cor: "#3a2a1e", lines: [] },
+  ],
 };
 
 console.log("== CENÁRIO A — quadro bom + fala boa ==");
@@ -194,9 +211,14 @@ console.log("\n== CENÁRIO D — os dois ruins: o produto não inventa ==");
     "sem fala, porque não houve fala",
   );
   check(
-    !/useState|useEffect|derivada|função/i.test(resumo),
+    !/useState|useEffect|derivada|imutável/i.test(resumo),
     "e sem assunto nenhum inventado",
-    resumo.slice(0, 120).replace(/\n/g, " · "),
+    resumo.slice(0, 140).replace(/\n/g, " · "),
+  );
+  check(
+    !/fórmula|lista|tabela|definição/i.test(resumo),
+    "nem estrutura reconhecida que não foi reconhecida",
+    resumo.slice(0, 140).replace(/\n/g, " · "),
   );
   // Os momentos continuam lá: a aula existiu, e as imagens são dela.
   await p.getByRole("tab", { name: "Imagens", exact: true }).click();

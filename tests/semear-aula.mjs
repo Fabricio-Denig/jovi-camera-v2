@@ -110,10 +110,19 @@ export async function semearAula(page, aula = AULA) {
           skippedDuplicates: 7,
           savedAt,
           topics: a.momentos.filter((x) => x.lines.length > 0).map((x) => x.label),
-          kinds: [
-            ["formula", 2],
-            ["lista", 1],
-          ],
+          /*
+           * As estruturas que o OCR reconheceu. Uma aula cujo quadro não leu
+           * nada não tem nenhuma — e sem poder zerar isto pela fixture, o
+           * estado "não deu para ler" ficava impossível de reproduzir: a tela
+           * mostrava "2 fórmulas" numa aula sem uma linha lida.
+           */
+          kinds:
+            a.kinds !== undefined
+              ? a.kinds
+              : [
+                  ["formula", 2],
+                  ["lista", 1],
+                ],
           /*
            * A visão geral que a sessão teria escrito. `overview: ""` na
            * fixture reproduz a aula em que a leitura não deu nada — o estado
