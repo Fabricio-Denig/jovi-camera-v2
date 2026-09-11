@@ -568,6 +568,7 @@ export function CameraShell({
                   detail: described.get(capture.id)?.detail ?? null,
                   category: described.get(capture.id)?.category ?? null,
                   spanMs: described.get(capture.id)?.spanMs,
+                  lines: described.get(capture.id)?.lines ?? [],
                   durationMs: slid.elapsedMs,
                   skippedDuplicates: slid.stats.skippedDuplicates,
                   savedAt,

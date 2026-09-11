@@ -5,6 +5,12 @@ interface ClassTitleProps {
   placeholder?: string;
   onChange: (value: string) => void;
   onCommit?: () => void;
+  /**
+   * `cartao` para o cabeçalho da aula reaberta, onde o título divide 134 px
+   * com miniatura, chips e data — no tamanho grande o campo empurrava a linha
+   * de data para fora do cartão assim que o lápis era tocado.
+   */
+  size?: "grande" | "cartao";
 }
 
 /**
@@ -21,6 +27,7 @@ export function ClassTitle({
   placeholder,
   onChange,
   onCommit,
+  size = "grande",
 }: ClassTitleProps) {
   const ref = useRef<HTMLTextAreaElement>(null);
 
@@ -46,7 +53,11 @@ export function ClassTitle({
           event.currentTarget.blur();
         }
       }}
-      className="-ml-1 mt-0.5 w-full resize-none overflow-hidden rounded-lg bg-transparent px-1 text-[22px] font-semibold leading-tight text-ink placeholder:text-ink-muted/60 focus:bg-surface-2 focus:outline-none"
+      className={`-ml-1 w-full resize-none overflow-hidden rounded-lg bg-transparent px-1 font-semibold leading-tight text-ink placeholder:text-ink-muted/60 focus:outline-none ${
+        size === "cartao"
+          ? "bg-surface/70 text-[17px] focus:bg-surface"
+          : "mt-0.5 text-[22px] focus:bg-surface-2"
+      }`}
     />
   );
 }

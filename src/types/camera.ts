@@ -49,11 +49,23 @@ export interface CapturedMedia {
     /**
      * What the camera recognised, already in the student's language. Stored
      * because it is the result — reopening a class months later must not
-     * depend on reading the board again, and the reading itself is never
-     * persisted: a transcript is exactly what this product is not.
+     * depend on reading the board again.
      */
     label?: string;
     detail?: string | null;
+    /**
+     * As linhas que a câmera conseguiu ler neste momento, já peneiradas.
+     *
+     * Não é transcrição, e a diferença importa: o que entra aqui passou pelo
+     * mesmo teste de leitura da legenda — língua ou fórmula, dentro da
+     * confiança, sem repetir a linha anterior. O que o OCR devolveu e não
+     * passou no teste **não é guardado**, então não existe um lugar neste app
+     * onde o texto bruto de uma aula fique salvo.
+     *
+     * Guardado porque a aba Texto tem de abrir meses depois sem ler a imagem
+     * de novo — e reler custaria quatro megabytes de WASM e um minuto.
+     */
+    lines?: string[];
     /** The kind of content, in one word. */
     category?: string | null;
     /** How long the topic kept growing before it settled. */

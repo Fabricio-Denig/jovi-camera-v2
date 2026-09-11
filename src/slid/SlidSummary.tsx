@@ -8,6 +8,7 @@ import {
   KIND_NAMES,
   KIND_TAGS,
   describeMoment,
+  readableLines,
   suggestSubject,
   overviewWithStatus,
   summariseClass,
@@ -37,6 +38,8 @@ export interface SavedClass {
     detail: string | null;
     category: string | null;
     spanMs: number;
+    /** O que a câmera leu neste momento, peneirado. Alimenta a aba Texto. */
+    lines: string[];
   }[];
   topics: string[];
   kinds: [string, number][];
@@ -105,6 +108,13 @@ export function SlidSummary({
     () =>
       captures.map((capture, index) => ({
         capture,
+        // O que sobrou da leitura depois da peneira, para a aba Texto da aula
+        // reaberta. Descrito e peneirado aqui, uma vez, e guardado: reabrir
+        // uma aula não pode depender de reler quatro megabytes de WASM.
+        lines: readableLines(
+          readByCapture.get(capture.id)?.text,
+          readByCapture.get(capture.id)?.confidence,
+        ),
         ...describeMoment(capture.reason, {
           text: readByCapture.get(capture.id)?.text,
           previousText:
@@ -314,12 +324,13 @@ export function SlidSummary({
               subject: subjectValue.trim() || UNTITLED,
               discipline,
               status,
-              moments: described.map(({ capture, label, detail, kind }) => ({
+              moments: described.map(({ capture, label, detail, kind, lines }) => ({
                 id: capture.id,
                 label,
                 detail,
                 category: kind ? KIND_TAGS[kind] : null,
                 spanMs: capture.completedAtMs - capture.atMs,
+                lines,
               })),
               topics,
               kinds: kinds.map(([kind, count]) => [kind, count]),

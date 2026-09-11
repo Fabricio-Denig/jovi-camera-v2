@@ -651,3 +651,40 @@ const STOPWORDS = new Set([
   "menos", "muito", "pode", "deve", "seja", "está", "esta", "sobre", "outro",
   "outra", "todos", "todas", "http", "https", "porque", "assim",
 ]);
+
+/**
+ * As linhas de um momento que passam no teste de leitura, para a aba Texto.
+ *
+ * Não é o texto bruto do OCR e não pode virar isso. O que passa por aqui é o
+ * que já passaria pela legenda de um momento — a mesma peneira `readsAsDetail`,
+ * a mesma limpeza conservadora, a mesma exigência de confiança — só que sem o
+ * limite de uma linha só.
+ *
+ * A diferença entre isto e um dump é o que se joga fora: linhas que não leem
+ * como língua nem como fórmula, repetições da linha anterior, e tudo abaixo da
+ * confiança. Uma aba de texto cheia de "ao do 20 grau LÁ" diz ao estudante que
+ * a câmera não entendeu a aula dele, que é o oposto do que esta tela existe
+ * para dizer.
+ *
+ * Nada é corrigido nem completado: ou a linha foi lida como está, ou ela não
+ * aparece.
+ */
+export function readableLines(
+  text: string | undefined,
+  confidence: number | undefined,
+  limit = 12,
+): string[] {
+  if (!text || (confidence ?? 100) < DETAIL_CONFIDENCE) return [];
+  const vistas = new Set<string>();
+  const saida: string[] = [];
+  for (const bruta of toLines(text)) {
+    const linha = clean(bruta);
+    if (!linha || !readsAsDetail(linha)) continue;
+    const chave = normalise(linha);
+    if (chave.length < 3 || vistas.has(chave)) continue;
+    vistas.add(chave);
+    saida.push(linha);
+    if (saida.length >= limit) break;
+  }
+  return saida;
+}

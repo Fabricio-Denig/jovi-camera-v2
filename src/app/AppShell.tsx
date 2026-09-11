@@ -32,7 +32,16 @@ export function AppShell() {
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-canvas">
       <div className="relative min-h-0 flex-1">
-        <div className="absolute inset-0">
+        {/*
+         * As camadas de trás saem do alcance enquanto a aula está aberta.
+         *
+         * A câmera e a galeria continuam montadas de propósito — remontar o
+         * stream custa perto de um segundo e foi o que produziu o defeito da
+         * prévia preta. Mas montado e alcançável são coisas diferentes: sem
+         * `inert`, um leitor de tela lê a aula e continua lendo a galeria
+         * inteira embaixo dela, e o Tab do teclado cai em botões invisíveis.
+         */}
+        <div className="absolute inset-0" inert={openClassId !== null}>
           <CameraShell
             modeId={state.modeId}
             onSelectMode={(modeId) => dispatch({ type: "select-mode", modeId })}
@@ -47,7 +56,7 @@ export function AppShell() {
 
         {/* Drawn over the live camera rather than replacing it. */}
         {state.tab === "gallery" && (
-          <div className="absolute inset-0 z-30">
+          <div className="absolute inset-0 z-30" inert={openClassId !== null}>
             <GalleryPage
               refreshKey={galleryRefresh}
               onOpenClass={setOpenClassId}

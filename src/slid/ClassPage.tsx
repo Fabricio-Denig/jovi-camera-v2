@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
-import { ClassTitle } from "./ClassTitle";
-import { MomentRow } from "./MomentRow";
 import { ClassReview } from "./ClassReview";
+import { ClassHeaderCard } from "./ClassHeaderCard";
+import { ClassTabs, type ClassTab } from "./ClassTabs";
+import { ClassImagesTab } from "./ClassImagesTab";
+import { ClassTextTab } from "./ClassTextTab";
+import { ClassSummaryTab } from "./ClassSummaryTab";
+import { linesWithoutTitle } from "./classText";
 import { DisciplinePicker } from "./DisciplinePicker";
 import { StatusPicker } from "./StatusPicker";
-import { STATUS_STYLES, type ClassStatus } from "./status";
-import { overviewWithStatus } from "./readContent";
+import { type ClassStatus } from "./status";
 import {
   getClassById,
   renameClass,
@@ -15,9 +18,6 @@ import {
   trashClass,
   type ClassRecord,
 } from "./classes";
-import { KIND_NAMES, type ContentKind } from "./readContent";
-import { formatClock } from "../shared/lib/time";
-import { formatDate } from "../shared/lib/time";
 
 interface ClassPageProps {
   classId: string;
@@ -33,18 +33,32 @@ interface ClassPageProps {
 /**
  * Sua aula — the class as something you keep, not a session that ended.
  *
- * This is the screen that has to answer "quais foram os momentos importantes?"
- * weeks after the lecture. Everything on it was decided while the class was
- * happening and stored then; nothing is recomputed, nothing is re-read, and no
- * extracted text, confidence or processing state ever reaches the student.
+ * Esta é a tela do `Resumo v2` (`339:611`), e a estrutura dela vem de lá: um
+ * cartão de cabeçalho que responde seis perguntas de uma vez, e três abas.
+ *
+ * As abas resolvem um problema real que a rolagem única tinha: numa aula de
+ * doze momentos, o resumo ficava doze telas acima da última captura, e a
+ * pergunta "o que eu preciso revisar" só era respondida por quem rolasse até
+ * o fim. Cada aba responde uma pergunta diferente — onde está aquele slide,
+ * o que foi lido, e como a aula foi no todo.
+ *
+ * Tudo aqui foi decidido enquanto a aula acontecia e guardado então; nada é
+ * recalculado e nenhuma imagem é lida de novo.
  */
 export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
   const [record, setRecord] = useState<ClassRecord | null | undefined>(undefined);
   /** Index of the moment being reviewed, or null when the timeline is showing. */
   const [reviewing, setReviewing] = useState<number | null>(null);
   const [name, setName] = useState("");
+  const [editingName, setEditingName] = useState(false);
   const [filing, setFiling] = useState(false);
   const [marking, setMarking] = useState(false);
+  /*
+   * Abre em Imagens: é a aba que sempre tem conteúdo, porque uma aula sem
+   * momento nenhum não vira aula. Texto e Resumo dependem de a leitura ter
+   * dado certo, e abrir numa aba vazia faz a tela parecer quebrada.
+   */
+  const [tab, setTab] = useState<ClassTab>("imagens");
 
   useEffect(() => {
     let active = true;
@@ -90,18 +104,28 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
     );
   }
 
+  const comLeitura = record.moments.filter(
+    (m) => linesWithoutTitle(m).length > 0,
+  ).length;
+
   return (
     <div className="flex h-full flex-col bg-canvas">
-      <header className="border-b border-line px-5 pb-4 pt-[max(18px,env(safe-area-inset-top))]">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <ClassTitle
-              value={name}
-              placeholder="Nomear esta aula"
-              onChange={setName}
-              onCommit={commitName}
-            />
-          </div>
+      <header className="border-b border-line px-4 pb-0 pt-[max(14px,env(safe-area-inset-top))]">
+        {/* "Voltar" à esquerda, como o `339:671` — e não um ✕ à direita. Este é
+            o gesto de uma tela que está dentro de outra, e a aula está. */}
+        <div className="flex items-center justify-between">
+          <button
+            type="button"
+            onClick={onClose}
+            className="-ml-2 flex min-h-11 items-center gap-1.5 rounded-full px-2 pr-3 text-[14px] text-ink-muted transition-transform active:scale-95 active:opacity-70"
+          >
+            <span aria-hidden="true" className="text-[17px] leading-none">
+              ‹
+            </span>
+            Voltar
+          </button>
+          {/* A estrela não está no wireframe. Fica por decisão de produto: é
+              como uma aula volta a ser encontrada na galeria. */}
           <button
             type="button"
             onClick={() => {
@@ -113,177 +137,104 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
               record.favorite ? "Remover dos favoritos" : "Marcar como favorita"
             }
             aria-pressed={record.favorite}
-            className={`flex size-11 shrink-0 items-center justify-center rounded-full text-[17px] transition-all duration-200 active:scale-90 active:opacity-70 ${
-              record.favorite
-                ? "bg-accent-soft text-accent"
-                : "bg-surface-2 text-ink-muted"
+            className={`-mr-1 flex size-11 shrink-0 items-center justify-center rounded-full text-[17px] transition-all duration-200 active:scale-90 active:opacity-70 ${
+              record.favorite ? "bg-accent-soft text-accent" : "text-ink-muted"
             }`}
           >
-            <span key={String(record.favorite)} className="animate-[slid-rise_260ms_ease-out]">
+            <span
+              key={String(record.favorite)}
+              className="animate-[slid-rise_260ms_ease-out]"
+            >
               {record.favorite ? "★" : "☆"}
             </span>
           </button>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Fechar aula"
-            className="flex size-11 shrink-0 items-center justify-center rounded-full bg-surface-2 text-ink-muted active:opacity-70"
-          >
-            ✕
-          </button>
         </div>
 
-        {/* One quiet line instead of a block: the curation is context for the
-            class, not the headline above it. The matéria joins it because it is
-            how the student will look for this class again. */}
-        <p className="mt-1 flex flex-wrap items-center gap-x-1.5 px-1 text-[13px] text-ink-muted">
-          <button
-            type="button"
-            onClick={() => setFiling((open) => !open)}
-            aria-expanded={filing}
-            className={`min-h-7 rounded-full px-2.5 text-[12px] font-medium transition-all duration-200 active:scale-95 active:opacity-70 ${
-              record.discipline
-                ? "bg-accent-soft text-accent"
-                : "bg-surface-2 text-ink-muted"
-            }`}
-          >
-            {record.discipline ?? "Escolher matéria"}
-          </button>
-          <button
-            type="button"
-            onClick={() => setMarking((open) => !open)}
-            aria-expanded={marking}
-            className={`min-h-7 rounded-full px-2.5 text-[12px] font-medium transition-all duration-200 active:scale-95 active:opacity-70 ${
-              record.status
-                ? STATUS_STYLES[record.status].chip
-                : "bg-surface-2 text-ink-muted"
-            }`}
-          >
-            {record.status ? STATUS_STYLES[record.status].label : "Marcar status"}
-          </button>
-          <span aria-hidden="true">·</span>
-          <span>{formatDate(record.savedAt)}</span>
-          <span aria-hidden="true">·</span>
-          <span>{formatClock(record.durationMs)} de aula</span>
-        </p>
+        <div className="pb-3.5 pt-1">
+          <ClassHeaderCard
+            capa={record.moments[0]?.media.blob ?? null}
+            nome={name}
+            onNome={setName}
+            onCommitNome={commitName}
+            discipline={record.discipline}
+            status={record.status}
+            savedAt={record.savedAt}
+            durationMs={record.durationMs}
+            momentos={record.moments.length}
+            editando={editingName}
+            onEditar={() => {
+              if (editingName) commitName();
+              setEditingName((aberto) => !aberto);
+            }}
+            onAbrirMateria={() => {
+              setFiling((open) => !open);
+              setMarking(false);
+            }}
+            onAbrirStatus={() => {
+              setMarking((open) => !open);
+              setFiling(false);
+            }}
+            materiaAberta={filing}
+            statusAberto={marking}
+          />
 
-        {marking && (
-          <div className="mt-3 animate-[slid-enter_220ms_ease-out]">
-            <StatusPicker
-              value={record.status}
-              label="Como ficou essa aula para você?"
-              onChange={(status: ClassStatus | null) => {
-                setRecord({ ...record, status });
-                void setClassStatus(record.id, status).then(() => onChanged?.());
-              }}
-            />
-          </div>
-        )}
+          {marking && (
+            <div className="mt-3 animate-[slid-enter_220ms_ease-out]">
+              <StatusPicker
+                value={record.status}
+                label="Como ficou essa aula para você?"
+                onChange={(status: ClassStatus | null) => {
+                  setRecord({ ...record, status });
+                  void setClassStatus(record.id, status).then(() => onChanged?.());
+                }}
+              />
+            </div>
+          )}
 
-        {filing && (
-          <div className="mt-3 animate-[slid-enter_220ms_ease-out]">
-            <DisciplinePicker
-              value={record.discipline}
-              onChange={(discipline) => {
-                setRecord({ ...record, discipline });
-                void setClassDiscipline(record.id, discipline).then(() =>
-                  onChanged?.(),
-                );
-              }}
-            />
-          </div>
-        )}
+          {filing && (
+            <div className="mt-3 animate-[slid-enter_220ms_ease-out]">
+              <DisciplinePicker
+                value={record.discipline}
+                onChange={(discipline) => {
+                  setRecord({ ...record, discipline });
+                  void setClassDiscipline(record.id, discipline).then(() =>
+                    onChanged?.(),
+                  );
+                }}
+              />
+            </div>
+          )}
+        </div>
+
+        <ClassTabs
+          active={tab}
+          onSelect={setTab}
+          counts={{
+            imagens: record.moments.length,
+            texto: comLeitura,
+            resumo:
+              (record.overview ? 1 : 0) +
+              record.topics.length +
+              record.kinds.length,
+          }}
+        />
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
-        {record.moments.length === 0 ? (
-          <p className="pt-8 text-center text-sm text-ink-muted">
-            Esta aula não guardou nenhum momento.
-          </p>
-        ) : (
-          <div className="flex flex-col gap-6">
-            {/* A aula reaberta abre com a mesma frase que o resumo abriu. */}
-            {record.overview && (
-              <p className="text-[15px] leading-relaxed text-ink">
-                {overviewWithStatus(
-                  record.overview,
-                  record.status,
-                  record.status ? STATUS_STYLES[record.status].label : null,
-                )}
-              </p>
-            )}
-
-            {record.kinds.length > 0 && (
-              <section>
-                <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
-                  Conteúdo reconhecido
-                </h2>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {record.kinds.map(([kind, count]) => (
-                    <span
-                      key={kind}
-                      className="rounded-full bg-accent/12 px-3 py-1.5 text-[12.5px] font-medium text-accent"
-                    >
-                      {count} {nameKind(kind, count)}
-                    </span>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {record.topics.length > 0 && (
-              <section className="rounded-2xl bg-surface-2 px-4 py-4">
-                <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
-                  Nesta aula
-                </h2>
-                <ul className="mt-2.5 flex flex-col gap-1.5">
-                  {record.topics.map((topic) => (
-                    <li
-                      key={topic}
-                      className="flex gap-2 text-[14.5px] leading-snug text-ink"
-                    >
-                      <span aria-hidden="true" className="text-accent">
-                        •
-                      </span>
-                      <span className="min-w-0 flex-1">{topic}</span>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            )}
-
-            <section>
-              <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
-                {record.moments.length === 1
-                  ? "1 momento capturado"
-                  : `${record.moments.length} momentos capturados`}
-              </h2>
-              <ol className="relative">
-            <span
-              aria-hidden="true"
-              className="absolute bottom-4 left-[5px] top-3 w-px bg-line"
-            />
-            {record.moments.map((moment, index) => (
-              <li key={moment.media.id}>
-                <MomentRow
-                  atMs={moment.atMs}
-                  label={moment.label}
-                  detail={moment.detail}
-                  category={moment.category}
-                  spanMs={moment.spanMs}
-                  blob={moment.media.blob}
-                  onOpen={() => setReviewing(index)}
-                />
-              </li>
-                ))}
-              </ol>
-            </section>
-          </div>
+      <div
+        role="tabpanel"
+        id={`painel-${tab}`}
+        aria-labelledby={`aba-${tab}`}
+        className="min-h-0 flex-1 overflow-y-auto px-4 py-4"
+      >
+        {tab === "imagens" && (
+          <ClassImagesTab momentos={record.moments} onAbrir={setReviewing} />
         )}
+        {tab === "texto" && <ClassTextTab record={record} />}
+        {tab === "resumo" && <ClassSummaryTab record={record} />}
       </div>
 
       {record.moments.length > 0 && (
-        <footer className="flex gap-2.5 border-t border-line px-5 pb-[max(16px,env(safe-area-inset-bottom))] pt-3">
+        <footer className="flex gap-2.5 border-t border-line px-4 pb-[max(14px,env(safe-area-inset-bottom))] pt-3">
           <button
             type="button"
             onClick={() => setReviewing(0)}
@@ -319,10 +270,3 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
     </div>
   );
 }
-
-/** Stored kinds come back as plain strings; anything unknown simply says nothing. */
-function nameKind(kind: string, count: number): string {
-  const names = KIND_NAMES[kind as ContentKind];
-  return names ? names[count === 1 ? 0 : 1] : "";
-}
-

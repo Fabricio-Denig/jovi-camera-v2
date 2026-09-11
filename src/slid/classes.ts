@@ -24,6 +24,8 @@ export interface ClassMoment {
   detail: string | null;
   category: string | null;
   spanMs: number;
+  /** O que a câmera leu neste momento, peneirado. Vazio quando não leu nada. */
+  lines: string[];
 }
 
 export interface ClassRecord {
@@ -57,6 +59,7 @@ function toRecord(id: string, items: CapturedMedia[]): ClassRecord {
       detail: media.session?.detail ?? null,
       category: media.session?.category ?? null,
       spanMs: media.session?.spanMs ?? 0,
+      lines: media.session?.lines ?? [],
     }))
     .sort((a, b) => a.atMs - b.atMs);
 
