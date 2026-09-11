@@ -145,6 +145,26 @@ async function tela(nome, p) {
   await p.waitForTimeout(4000);
   await tela("SliD ativo", p);
 
+  /*
+   * O estado da sessão e o do áudio são o que alguém que apoiou o celular
+   * precisa saber sem olhar — e eram exatamente os dois que mudavam em
+   * silêncio para um leitor de tela.
+   */
+  const anunciados = await p.evaluate(() =>
+    [...document.querySelectorAll("[aria-live]")].map((x) =>
+      x.innerText.replace(/\n/g, " ").slice(0, 44),
+    ),
+  );
+  check(
+    anunciados.some((t) => /Acompanhando|Procurando|Pausado/i.test(t)),
+    "o estado da sessão é anunciado quando muda",
+    anunciados.join(" | "),
+  );
+  check(
+    anunciados.some((t) => /Ouvindo|Áudio/i.test(t)),
+    "e o do áudio também",
+  );
+
   check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
   await b.close();
 }
