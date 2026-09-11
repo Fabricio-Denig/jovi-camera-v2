@@ -42,15 +42,64 @@ function openDb(): Promise<IDBDatabase> {
   });
 }
 
+/**
+ * O erro que o navegador dá quando não cabe mais nada.
+ *
+ * Ele merece um nome próprio porque a resposta a ele é diferente de todos os
+ * outros: "não deu para salvar" é um beco sem saída; "o espaço acabou, apague
+ * alguma coisa" é uma instrução. Uma aula de uma hora com áudio, ou um
+ * time-lapse longo, chegam lá de verdade.
+ */
+export class SemEspacoError extends Error {
+  constructor() {
+    super("O armazenamento deste navegador ficou sem espaço.");
+    this.name = "SemEspacoError";
+  }
+}
+
+function ehCotaEstourada(erro: unknown): boolean {
+  if (!erro) return false;
+  const nome = (erro as { name?: string }).name ?? "";
+  return (
+    nome === "QuotaExceededError" ||
+    // O Firefox usa outro nome para a mesma coisa.
+    nome === "NS_ERROR_DOM_QUOTA_REACHED" ||
+    nome === "SemEspacoError"
+  );
+}
+
+/** Quanto ainda cabe, quando o navegador sabe dizer. */
+export async function espacoRestante(): Promise<{
+  usadoMB: number;
+  totalMB: number;
+} | null> {
+  try {
+    const e = await navigator.storage?.estimate?.();
+    if (!e || e.quota === undefined || e.usage === undefined) return null;
+    return {
+      usadoMB: Math.round(e.usage / 1048576),
+      totalMB: Math.round(e.quota / 1048576),
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function saveCapture(media: CapturedMedia): Promise<void> {
   const db = await openDb();
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    tx.objectStore(STORE_NAME).put(media);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-  db.close();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      tx.objectStore(STORE_NAME).put(media);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (erro) {
+    if (ehCotaEstourada(erro)) throw new SemEspacoError();
+    throw erro;
+  } finally {
+    db.close();
+  }
 }
 
 async function readAll(): Promise<CapturedMedia[]> {
@@ -155,13 +204,19 @@ export interface LessonAudio {
 
 export async function saveLessonAudio(audio: LessonAudio): Promise<void> {
   const db = await openDb();
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(AUDIO_STORE, "readwrite");
-    tx.objectStore(AUDIO_STORE).put(audio);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-  db.close();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(AUDIO_STORE, "readwrite");
+      tx.objectStore(AUDIO_STORE).put(audio);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (erro) {
+    if (ehCotaEstourada(erro)) throw new SemEspacoError();
+    throw erro;
+  } finally {
+    db.close();
+  }
 }
 
 export async function getLessonAudio(
