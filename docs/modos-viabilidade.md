@@ -14,6 +14,7 @@ Tesseract.js rodando local, IndexedDB, e a análise de quadro do SliD.
 | Modo | Hoje | Pode virar real? | API / peça | Esforço | Prioridade |
 |---|---|---|---|---|---|
 | **Foto** | real | — | canvas + `capturePhoto` | — | — |
+| **Instantâneo** | **real** *(11/set)* | — | o mesmo caminho da Foto, passando por cima do temporizador | — | — |
 | **Vídeo** | real | — | `MediaRecorder` | — | — |
 | **SliD** | real *(validado em projetor, 2x)* | — | análise de quadro própria | — | — |
 | **Documento / Scanner** | **real** *(fase 1 e 2)* | — | canvas para detectar bordas por gradiente, transformação de perspectiva com `setTransform`, Tesseract já embarcado, filtro de contraste já existe | médio | **1ª** |
