@@ -68,12 +68,34 @@ export function SlidSuggestion({ onAccept, onDismiss }: SlidSuggestionProps) {
               uma aula, tirar o estudante da câmera para explicar a câmera é
               perder a aula que estava começando. */}
           {expandido && (
-            <p className="mt-1.5 animate-[slid-enter_200ms_ease-out] text-[11.5px] leading-snug text-ink-muted">
-              Você apoia o celular e assiste. O SliD guarda cada momento em que o
-              quadro muda e grava o áudio da aula, e no fim entrega tudo em
-              ordem — com o que reconheceu, e com o áudio ligado a cada momento.
-              O microfone é pedido na hora, e a aula funciona sem ele.
-            </p>
+            <>
+              <p className="mt-1.5 animate-[slid-enter_200ms_ease-out] text-[11.5px] leading-snug text-ink-muted">
+                Você apoia o celular e assiste. O SliD guarda cada momento em que
+                o quadro muda e grava o áudio da aula, e no fim entrega tudo em
+                ordem — com o que reconheceu, e com o áudio ligado a cada
+                momento. O microfone é pedido na hora, e a aula funciona sem ele.
+              </p>
+              {/*
+                Duas frases sobre privacidade, e nem uma a mais.
+
+                Elas ficam dentro do "Saiba mais" e não na câmera: um parágrafo
+                sobre processamento de fala em cima do quadro durante a aula
+                assusta sem informar, e ninguém lê. Aqui responde a quem
+                perguntou.
+
+                A separação entre as duas é o ponto. O arquivo é gravado pelo
+                app e fica no aparelho — isso dá para afirmar. A transcrição é
+                feita pelo reconhecimento do navegador, e o que ele faz com o
+                som é decisão dele; no Chrome, envia para um serviço. Escrever
+                "100% local" cobrindo as duas seria uma garantia que não temos
+                como dar.
+              */}
+              <p className="mt-1.5 animate-[slid-enter_200ms_ease-out] text-[11px] leading-snug text-ink-muted/75">
+                O áudio da aula fica guardado neste aparelho. Quando o navegador
+                oferece transcrição, o reconhecimento da fala é feito por ele —
+                e pode usar o serviço de reconhecimento do próprio navegador.
+              </p>
+            </>
           )}
           <button
             type="button"

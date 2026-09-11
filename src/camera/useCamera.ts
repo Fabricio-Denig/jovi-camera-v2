@@ -44,7 +44,8 @@ async function openVideoStream(target: CameraFacing): Promise<MediaStream> {
     });
   } catch (error) {
     const name = error instanceof DOMException ? error.name : "";
-    if (name !== "OverconstrainedError" && name !== "NotFoundError") throw error;
+    if (name !== "OverconstrainedError" && name !== "NotFoundError")
+      throw error;
     return await navigator.mediaDevices.getUserMedia({
       video: { facingMode: { ideal: target } },
       audio: false,
@@ -138,7 +139,10 @@ export function useCamera(): UseCameraResult {
           setErrorMessage(
             "Permissão de câmera negada. Autorize o acesso nas configurações do site e tente novamente.",
           );
-        } else if (name === "NotFoundError" || name === "OverconstrainedError") {
+        } else if (
+          name === "NotFoundError" ||
+          name === "OverconstrainedError"
+        ) {
           setStatus("unsupported");
           setErrorMessage("Nenhuma câmera encontrada neste dispositivo.");
         } else if (name === "NotReadableError") {
@@ -162,7 +166,11 @@ export function useCamera(): UseCameraResult {
       // Trust the track over the request: the flip control should reflect the
       // camera that is actually open, not the one that was asked for.
       const granted = videoTrack?.getSettings().facingMode;
-      setFacing(granted === "user" || granted === "environment" ? granted : targetFacing);
+      setFacing(
+        granted === "user" || granted === "environment"
+          ? granted
+          : targetFacing,
+      );
       if (videoTrack) {
         addLog(`track: ${videoTrack.label || "sem rótulo"}`);
       }
@@ -186,6 +194,58 @@ export function useCamera(): UseCameraResult {
   const requestCamera = useCallback(() => {
     void acquireStream(facing);
   }, [acquireStream, facing]);
+
+  /*
+   * A câmera pode morrer sem ninguém pedir, e até agora nada percebia.
+   *
+   * Num celular isso é rotina, não exceção: uma ligação chega, o sistema toma
+   * a câmera; o estudante troca de app para ver a hora e o navegador encerra a
+   * track para poupar bateria; outro app abre a câmera e ganha a disputa. Em
+   * todos esses casos o `<video>` congela no último quadro ou fica preto, o
+   * estado por aqui continua dizendo `ready`, e não há nada na tela que
+   * explique ou que ofereça sair disso.
+   *
+   * Tela preta sem saída é o pior estado possível deste app — pior que um erro,
+   * porque um erro pelo menos diz o que houve. As duas peças abaixo fecham isso:
+   * a track avisa quando morre, e a volta para a aba confere se ela morreu
+   * enquanto ninguém olhava (o `onended` nem sempre chega quando a página está
+   * escondida).
+   */
+  useEffect(() => {
+    if (!stream) return;
+    const tracks = stream.getVideoTracks();
+    const morreu = () => {
+      // Só se esta ainda for a câmera em uso: uma track antiga terminando
+      // durante uma troca de câmera é o funcionamento normal, não uma falha.
+      if (streamRef.current !== stream) return;
+      addLog("track de vídeo encerrada pelo sistema");
+      setStatus("interrupted");
+      setErrorMessage(
+        "A câmera foi interrompida — outro aplicativo pode tê-la assumido, ou o sistema a encerrou.",
+      );
+    };
+    for (const t of tracks) t.addEventListener("ended", morreu);
+    return () => {
+      for (const t of tracks) t.removeEventListener("ended", morreu);
+    };
+  }, [stream, addLog]);
+
+  useEffect(() => {
+    const aoVoltar = () => {
+      if (document.hidden) return;
+      const atual = streamRef.current;
+      if (!atual) return;
+      const viva = atual.getVideoTracks().some((t) => t.readyState === "live");
+      if (viva) return;
+      // Voltou para uma câmera que morreu escondida. Retomar sozinho é o certo
+      // aqui: a pessoa não fez nada errado, e pedir um toque para consertar o
+      // que o sistema quebrou é transferir a ele um problema que não é dele.
+      addLog("volta à aba com a câmera morta — retomando");
+      void acquireStream(facing);
+    };
+    document.addEventListener("visibilitychange", aoVoltar);
+    return () => document.removeEventListener("visibilitychange", aoVoltar);
+  }, [acquireStream, addLog, facing]);
 
   const switchFacing = useCallback(async () => {
     if (acquiringRef.current) return;

@@ -19,6 +19,10 @@ export function PermissionGate({
 }: PermissionGateProps) {
   const isDenied = status === "denied";
   const isError = status === "unsupported" || status === "error";
+  /* Interrompida não é negada nem quebrada: a câmera funcionava e o sistema a
+     tomou. A pessoa não precisa autorizar nada — precisa de um botão que
+     retome, e de saber que não fez nada errado. */
+  const foiInterrompida = status === "interrupted";
 
   return (
     <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-5 bg-canvas px-8 text-center">
@@ -28,18 +32,22 @@ export function PermissionGate({
 
       <div className="space-y-2">
         <h1 className="text-lg font-semibold text-ink">
-          {isDenied
-            ? "Permissão de câmera negada"
-            : isError
-              ? "Não foi possível acessar a câmera"
-              : "Jovi Camera precisa da sua câmera"}
+          {foiInterrompida
+            ? "A câmera foi interrompida"
+            : isDenied
+              ? "Permissão de câmera negada"
+              : isError
+                ? "Não foi possível acessar a câmera"
+                : "Jovi Camera precisa da sua câmera"}
         </h1>
         <p className="max-w-xs text-sm text-ink-muted">
-          {isDenied
-            ? "Ative a permissão de câmera nas configurações do navegador e tente novamente."
-            : isError
-              ? errorMessage
-              : "Usada só para o preview ao vivo e para as fotos e vídeos que você capturar. Tudo fica salvo no seu dispositivo."}
+          {foiInterrompida
+            ? "Outro aplicativo pode tê-la assumido, ou o sistema a encerrou. Suas capturas continuam salvas."
+            : isDenied
+              ? "Ative a permissão de câmera nas configurações do navegador e tente novamente."
+              : isError
+                ? errorMessage
+                : "Usada só para o preview ao vivo e para as fotos e vídeos que você capturar. Tudo fica salvo no seu dispositivo."}
         </p>
       </div>
 
@@ -50,9 +58,11 @@ export function PermissionGate({
       >
         {status === "requesting"
           ? "Solicitando…"
-          : isDenied || isError
-            ? "Tentar novamente"
-            : "Permitir câmera"}
+          : foiInterrompida
+            ? "Retomar a câmera"
+            : isDenied || isError
+              ? "Tentar novamente"
+              : "Permitir câmera"}
       </button>
     </div>
   );

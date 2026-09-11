@@ -1,0 +1,121 @@
+# As sete telas, hoje
+
+*11/set. Auditoria do **estado atual do código**, não do que existia em agosto.*
+
+Este documento substitui a leitura de `figma-gaps.md` para saber onde o produto
+está. Aquele arquivo é o registro datado de cada auditoria, com o motivo de
+cada decisão preservado; **este** responde a pergunta "como está agora".
+
+Regra que usei para pontuar, para os números significarem a mesma coisa em
+todas as linhas:
+
+- **Fidelidade** — quanto a tela se parece com a v2 do Figma, medida contra os
+  nós que li. Onde uma regra de produto validada venceu o wireframe, conto
+  como fidelidade cheia e digo qual foi.
+- **Funcionalidade** — todo elemento visível faz algo real? Um botão
+  cenográfico derruba esta coluna sozinho, por mais bonita que a tela esteja.
+- **Mobile** — sem rolagem lateral, alvo de toque adequado nos controles
+  principais, nada atrás da navegação, nada fora da tela. A coluna diz **em
+  quantas larguras isso foi medido**, e não uma impressão: até esta rodada só
+  o Resumo era verificado em três, e as outras telas a 390 px — a largura do
+  Figma, que esconde as duas pontas (375 é o SE, onde estoura; 430 é o Pro
+  Max, onde sobra vão). `qa-mobile` passou a cobrir as três em toda tela.
+- **QA** — existe suíte que falharia se a tela quebrasse? "Existe teste" não
+  basta; o teste tem de ser capaz de ficar vermelho.
+
+## Quadro
+
+| Tela | Fidelidade | Funcionalidade | Mobile | QA | P0 | P1 |
+|---|---|---|---|---|---|---|
+| **Câmera** | alta | completa | 3 larguras | `qa-filtros` 92 · `qa-virar` · `qa-modos` 51 · `qa-mobile` | — | ✨ do Figma sem função (fora de propósito) |
+| **Detecção** | alta | completa | 390 px | `qa-dica` · `qa-moldura` · `qa-slid-realworld` · `qa-enquadramento` | — | — |
+| **SliD ativo** | alta | completa | 390 px | `qa-slid-listen` 69 · `qa-slid-dinamico` · `qa-microfone` 6 · `qa-fala` 33 | — | hierarquia a revisar (Fase 4) |
+| **Modos** | alta | completa | 3 larguras | `qa-modos` 51 · `qa-intervalo` · `qa-noturno` · `qa-mobile` | — | busca do Figma ausente |
+| **Filtros** | alta | completa | 390 px | `qa-filtros` 92 · `perf-filtros` | — | — |
+| **Galeria** | alta | completa | 3 larguras | `qa-galeria` 18 · `qa-persistencia` 14 · `qa-mobile` | — | sino e "..." sem função (fora de propósito) |
+| **Resumo** | alta | completa | 3 larguras | `qa-resumo` 75 · `qa-fala` 33 · `qa-mobile` | — | — |
+
+**Detecção, SliD ativo e Filtros continuam medidos a 390 px só**, e digo isso
+em vez de escrever "ok": as três são telas em que a câmera ocupa tudo e o
+conteúdo é sobreposto, então o risco de estouro é menor — mas menor não é
+medido. Fica como a próxima lacuna de cobertura, não como uma afirmação.
+
+**P0 zerados.** Os três que existiam foram encontrados nesta rodada e estão
+corrigidos — microfone preso durante a caixa de permissão, tela preta depois de
+o sistema tomar a câmera, e gravação órfã invisível no banco. Nenhum deles era
+visível no navegador de mesa, e nenhum deles tinha teste antes.
+
+## O que está aberto, e por quê
+
+Nenhum item aberto é uma lacuna de implementação. Todos são decisões, e cada
+uma tem o mesmo motivo por trás:
+
+> Todo elemento visível deve fazer alguma coisa real.
+
+| item do Figma | por que não existe |
+|---|---|
+| ✨ no topo da câmera | sem função conhecida. Um botão de brilhos que não faz nada é o oposto da regra. |
+| Aba `Retrato` na barra principal | o modo existe e é `simulated` — desfoque sem segmentação real. Fica no catálogo, onde o cartão diz o que ele é. |
+| Sino de notificações na galeria | não há notificação neste app. |
+| Menu "..." no card de aula | é um nó de texto no Figma, sem estado nem tela de destino. Implementar seria inventar produto a partir de três pontinhos. |
+| "Sincronizado com a galeria do sistema" | um app web não escreve no rolo do sistema. É a única linha do wireframe que, copiada, seria mentira na tela. |
+| Busca no catálogo de modos | dezesseis modos cabem na tela. Uma busca que ninguém usa é peso sem função. |
+
+E duas diferenças de nome, ambas porque o rótulo do Figma descreveria errado o
+que a regra de produto põe ali:
+
+- A aba é **"Resumo"**, não "Resumo IA". Nenhum modelo de linguagem é chamado.
+- A segunda seção da galeria é **"Fotos e vídeos"**, não "Recentes": ela contém
+  o que foi tirado com o dedo, nunca momentos de aula.
+
+## Onde a cobertura é fina, dito com precisão
+
+O quadro acima mede o que dá para medir nesta bancada. Três coisas ele **não**
+responde, e vale saber quais antes de confiar nele:
+
+1. **Reconhecimento de fala.** Não roda em CI — não há microfone e o serviço
+   recusa antes do primeiro resultado. O que as suítes cobrem é o protocolo
+   (com dublê) e o que o produto faz com uma transcrição (semeada). Se ele
+   acerta uma aula de verdade é verificação de aparelho.
+2. **Formato de áudio por aparelho.** O Chromium daqui grava webm/opus e é só
+   isso que ele sabe dizer. Qual formato cada celular escolhe, só o celular.
+3. **Modos com hardware.** Lanterna, zoom óptico e foco dependem do que o
+   aparelho expõe; a bancada tem uma câmera falsa.
+
+As três estão no `checklist-aparelho.md`, que é o documento que fecha a
+lacuna — e que diz, na primeira linha de cada seção, o que ele não conseguiu
+provar sozinho.
+
+## Uma suíte que não é determinística, e o que isso custa
+
+Medido em 11/set, rodando `qa-moldura` duas vezes — uma contra a `main`, outra
+contra a branch de hardening, com o mesmo código de detecção nas duas:
+
+| cena | `main` | branch |
+|---|---|---|
+| slide 70% | ok | ok |
+| slide 50% | FAIL, tremor 43px | FAIL, tremor 39px |
+| slide 32% | ok | ok |
+| slide 20% | **FAIL**, tremor 29px | **ok** |
+| slide 50% sala clara | FAIL, tremor 93px | FAIL, tremor 59px |
+| slide 32% com 2x | ok | ok |
+
+O detector não mudou entre as duas execuções — nem uma linha de
+`frameAnalysis.ts`, `useSlidSession.ts` ou `ContentFrame.tsx`. Ainda assim o
+"slide 20%" falha numa e passa na outra, e o tremor medido varia de 93 px para
+59 px na mesma cena.
+
+**Conclusão honesta: os números desta suíte não servem para comparar builds.**
+O que serve é o *conjunto* de cenas que falha — e nesse eixo a branch não
+piorou (duas falhas contra três).
+
+Por que isso importa mais que parece: a suíte roda a câmera real do navegador
+sobre um vídeo, e o tremor é a diferença de moldura entre quadros consecutivos.
+Quantos quadros o Chromium entrega e em que instante o teste amostra são coisas
+que variam com a carga da máquina. Um número que muda sem o código mudar não
+pode decidir se um PR entra.
+
+Fica registrado como o que é — **cobertura de tendência, não de valor** — e
+como a próxima dívida de teste a pagar: ou a suíte amostra várias vezes e
+compara a mediana, ou ela afirma menos do que afirma hoje. Enquanto isso, a
+regressão manual do SliD continua sendo o projetor real em 2x.

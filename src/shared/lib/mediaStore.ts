@@ -290,6 +290,59 @@ export async function getSessionsWithAudio(): Promise<Set<string>> {
 }
 
 /** Sai junto com a aula, quando a aula sai de vez. */
+/**
+ * Apaga gravações cuja aula não existe mais em lugar nenhum.
+ *
+ * Este lixo é invisível por construção: o áudio mora num armazém próprio, com
+ * a chave da sessão, e nenhuma tela o lista sozinho. Se a aula some sem passar
+ * por `deleteClassForever`, a gravação fica — dezenas de megabytes de uma aula
+ * que o estudante não tem mais, ocupando a cota do navegador e aparecendo
+ * depois como "não coube o áudio" numa aula nova.
+ *
+ * O caminho que produz isso é real: apagar de vez o último momento de uma aula
+ * pela grade de mídia. A aula deixa de existir — ela é definida pelas capturas
+ * que a referenciam — e o áudio nunca é avisado.
+ *
+ * **Conta a lixeira como existência**, e isso é o detalhe que faz a varredura
+ * ser segura: uma aula no lixo ainda pode voltar inteira, e apagar o áudio
+ * dela aqui transformaria uma ação reversível numa perda permanente.
+ *
+ * Devolve quantas gravações foram removidas, para o diagnóstico poder dizer.
+ */
+export async function limparAudiosOrfaos(): Promise<number> {
+  const capturas = await readAll();
+  // Toda sessão referenciada, na lixeira ou fora dela.
+  const vivas = new Set(
+    capturas
+      .map((c) => c.session?.id)
+      .filter((id): id is string => Boolean(id)),
+  );
+
+  const db = await openDb();
+  try {
+    const chaves = await new Promise<string[]>((resolve, reject) => {
+      const tx = db.transaction(AUDIO_STORE, "readonly");
+      const q = tx.objectStore(AUDIO_STORE).getAllKeys();
+      q.onsuccess = () => resolve(q.result as string[]);
+      q.onerror = () => reject(q.error);
+    });
+
+    const orfas = chaves.filter((k) => !vivas.has(k));
+    if (orfas.length === 0) return 0;
+
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(AUDIO_STORE, "readwrite");
+      const store = tx.objectStore(AUDIO_STORE);
+      for (const k of orfas) store.delete(k);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    return orfas.length;
+  } finally {
+    db.close();
+  }
+}
+
 export async function deleteLessonAudio(sessionId: string): Promise<void> {
   const db = await openDb();
   await new Promise<void>((resolve, reject) => {
