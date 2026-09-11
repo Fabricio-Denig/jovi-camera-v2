@@ -86,9 +86,9 @@ protótipo em que não se pode confiar.
   instável no Safari — e o produto não vai dizer "processamento local" sobre
   algo que sai do aparelho. Fica de fora até dar para fazer honestamente.
 - **Instalar como aplicativo** (PWA) e uso offline.
-- **Nove modos do catálogo** — Retrato, Comida, Microfilme, Câmera lenta,
-  Panorâmica, Profissional, Alta resolução, Superlua e Visualização dupla — são
-  maquetes navegáveis,
+- **Oito modos do catálogo** — Retrato, Microfilme, Câmera lenta, Panorâmica,
+  Profissional, Alta resolução, Superlua e Visualização dupla — são maquetes
+  navegáveis,
   marcadas como **Prévia** na própria tela, com um cartão explicando o que
   fariam. Dois deles (**câmera lenta** e **superlua**) estão registrados como
   impossíveis no navegador, e não como pendências.

@@ -156,6 +156,92 @@ console.log("\n== um modo simulado não é botão morto ==");
   await b.close();
 }
 
+console.log("\n== o Comida aplica uma aparência de verdade ==");
+{
+  const { b, p, erros } = await abrir("cor-mesa-de-estudo.y4m", 3000);
+  await p.getByRole("dialog").getByRole("button", { name: /^Comida/ }).first().click();
+  await p.waitForTimeout(2200);
+
+  const corpo = await p.locator("body").innerText();
+  check(!/Prévia/i.test(corpo), "sem selo de prévia");
+  check(/Realce do prato/i.test(corpo), "com o controle de realce");
+
+  const css = await p.evaluate(() => getComputedStyle(document.querySelector("video")).filter);
+  check(css !== "none", "o visor recebe a aparência", css);
+  check(/saturate/.test(css), "que realça a cor", css);
+
+  /* A aparência é do modo, não da tira: uma oitava opção na tira daria ao
+     `Filtros v2` algo que o wireframe não tem. */
+  check(
+    (await p.locator("button[aria-label^='Filtro ']").count()) === 0,
+    "e a tira de filtros não aparece — a aparência é o modo",
+  );
+
+  // O realce mexe de verdade.
+  const slider = p.getByRole("slider", { name: /realce do prato/i });
+  await slider.fill("100");
+  await p.waitForTimeout(400);
+  const cheio = await p.evaluate(() => getComputedStyle(document.querySelector("video")).filter);
+  await slider.fill("0");
+  await p.waitForTimeout(400);
+  const zero = await p.evaluate(() => getComputedStyle(document.querySelector("video")).filter);
+  console.log(`        100% → ${cheio}\n        0%   → ${zero}`);
+  check(cheio !== zero && zero === "none", "e o realce vai de nada ao cheio");
+
+  // E a foto sai como o visor mostrava — a mesma regra dos filtros.
+  await slider.fill("100");
+  await p.waitForTimeout(400);
+  await p.getByRole("button", { name: /Tirar foto/i }).click();
+  await p.waitForTimeout(1500);
+  const comparacao = await p.evaluate(async () => {
+    const sat = (ctx, w, h) => {
+      const d = ctx.getImageData(0, 0, w, h).data;
+      let s = 0, n = 0;
+      for (let i = 0; i < d.length; i += 4 * 31) {
+        const mx = Math.max(d[i], d[i + 1], d[i + 2]);
+        const mn = Math.min(d[i], d[i + 1], d[i + 2]);
+        s += mx === 0 ? 0 : (mx - mn) / mx;
+        n++;
+      }
+      return s / n;
+    };
+    const w = 160, h = 120;
+    const v = document.querySelector("video");
+    const cru = document.createElement("canvas");
+    cru.width = w; cru.height = h;
+    const cc = cru.getContext("2d", { willReadFrequently: true });
+    cc.drawImage(v, 0, 0, w, h);
+
+    const db = await new Promise((r) => {
+      const q = indexedDB.open("jovi-camera-v2");
+      q.onsuccess = () => r(q.result);
+    });
+    const all = await new Promise((r) => {
+      const q = db.transaction("captures", "readonly").objectStore("captures").getAll();
+      q.onsuccess = () => r(q.result);
+    });
+    db.close();
+    const ultima = all.sort((a, z) => z.createdAt - a.createdAt)[0];
+    const bmp = await createImageBitmap(ultima.blob);
+    const f = document.createElement("canvas");
+    f.width = w; f.height = h;
+    const fc = f.getContext("2d", { willReadFrequently: true });
+    fc.drawImage(bmp, 0, 0, w, h);
+    return { cru: sat(cc, w, h), foto: sat(fc, w, h) };
+  });
+  console.log(
+    `        saturação: cru ${comparacao.cru.toFixed(3)} · foto ${comparacao.foto.toFixed(3)}`,
+  );
+  check(
+    comparacao.foto > comparacao.cru * 1.08,
+    "e a foto salva sai realçada, como o visor mostrava",
+    `${comparacao.cru.toFixed(3)} → ${comparacao.foto.toFixed(3)}`,
+  );
+
+  check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
+  await b.close();
+}
+
 console.log("\n== o Instantâneo faz o que o nome diz ==");
 {
   const { b, p, erros } = await abrir("fp-parede-rebocada-textura-forte.y4m", 4000);
@@ -219,8 +305,8 @@ console.log("\n== os números dos modos, contra o que os docs dizem ==");
     `        ${contagem.total} modos · ${contagem.reais} reais · ${contagem.previa} prévia`,
   );
   check(contagem.total === 16, "dezesseis modos no catálogo", `${contagem.total}`);
-  check(contagem.reais === 7, "sete reais", `${contagem.reais}`);
-  check(contagem.previa === 9, "nove prévias, e cada uma diz que é", `${contagem.previa}`);
+  check(contagem.reais === 8, "oito reais", `${contagem.reais}`);
+  check(contagem.previa === 8, "oito prévias, e cada uma diz que é", `${contagem.previa}`);
   check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
   await b.close();
 }

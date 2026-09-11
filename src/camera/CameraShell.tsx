@@ -12,7 +12,7 @@ import { FrameGuides } from "./FrameGuides";
 import { FilterStrip } from "./FilterStrip";
 import { FiltersSheet } from "./FiltersSheet";
 import { EffectLayer } from "./EffectLayer";
-import { applyFilter, DEFAULT_INTENSITY } from "./filters";
+import { FOOD_LOOK, applyFilter, DEFAULT_INTENSITY } from "./filters";
 import { useFrameSample } from "./useFrameSample";
 import { SettingsSheet, DEFAULT_SETTINGS, type CameraSettings } from "./SettingsSheet";
 import { useTorch } from "./useTorch";
@@ -139,6 +139,13 @@ export function CameraShell({
    * diz uma coisa e faz outra é pior que um modo a menos.
    */
   const isSnapshot = mode.id === "snapshot";
+  /*
+   * O modo Comida é um filtro, e não havia por que ele ser maquete: a máquina
+   * de aparência já aplica a mesma string ao visor e à foto. O que o torna um
+   * modo, e não mais uma opção da tira, é ele **definir** a aparência — como o
+   * SliD define "nenhuma".
+   */
+  const isFood = mode.id === "food";
   /** O modo Noite, que empilha quadros em vez de disparar uma vez. */
   const isNight = mode.id === "night";
   const [nivelNoturno, setNivelNoturno] = useState<NivelNoturno>("medio");
@@ -157,7 +164,9 @@ export function CameraShell({
    * alimenta o visor e o `ctx.filter` da captura; a de baixo, a camada do
    * efeito nos dois lugares.
    */
-  const filtroCss = isSlid ? "none" : applyFilter(filterId, intensity);
+  const filtroCss = isSlid
+    ? "none"
+    : applyFilter(isFood ? FOOD_LOOK.id : filterId, intensity);
   const efeitoAtivo = isSlid ? null : effectId;
 
   /*
@@ -910,6 +919,31 @@ export function CameraShell({
               </>
             )}
 
+            {isFood && (
+              /* Numa caixa própria, e não solto sobre o degradê: o degradê do
+                 rodapé é fraco nesta altura, e um prato bem iluminado — que é
+                 exatamente a cena deste modo — apagava o rótulo. */
+              <div className="pointer-events-auto mx-6 w-full max-w-sm rounded-2xl bg-black/55 px-4 py-2.5 backdrop-blur">
+                <label className="block">
+                  <span className="mb-0.5 flex items-center justify-between text-[10.5px] font-semibold uppercase tracking-[0.08em] text-white/80">
+                    Realce do prato
+                    <span className="font-mono text-[12px] tabular-nums text-white">
+                      {Math.round(intensity)}%
+                    </span>
+                  </span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={intensity}
+                    onChange={(e) => setIntensity(Number(e.target.value))}
+                    aria-label="Realce do prato"
+                    className="h-10 w-full accent-[var(--color-accent)]"
+                  />
+                </label>
+              </div>
+            )}
+
             {isNight && (
               <NightBar
                 nivel={nivelNoturno}
@@ -932,7 +966,7 @@ export function CameraShell({
               />
             )}
 
-            {mode.kind === "photo" && !isScanner && !isNight && (
+            {mode.kind === "photo" && !isScanner && !isNight && !isFood && (
               <div className="flex w-full flex-col items-center gap-1.5">
                 <button
                   type="button"
