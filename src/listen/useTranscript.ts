@@ -124,6 +124,18 @@ export function useTranscript({
   const [segments, setSegments] = useState<TranscriptSegment[]>([]);
   /** O que está sendo dito agora, ainda podendo mudar. */
   const [parcial, setParcial] = useState<string>("");
+  /*
+   * O último erro que o reconhecimento devolveu, guardado inteiro.
+   *
+   * Não aparece na câmera — erro técnico em cima do quadro é ruído para quem
+   * está assistindo aula. Ele existe para o relatório de aparelho: quando
+   * alguém disser "não transcreveu no meu celular", a diferença entre
+   * `not-allowed`, `network` e `audio-capture` é a diferença entre três
+   * conselhos distintos.
+   */
+  const [ultimoErro, setUltimoErro] = useState<string | null>(null);
+  /** Alguma vez chegou resultado neste aparelho — a prova, não a promessa. */
+  const [houveResultado, setHouveResultado] = useState(false);
 
   const recRef = useRef<SpeechRecognitionLike | null>(null);
   /** O usuário quer transcrição. Desligar à mão zera isto e nada religa. */
@@ -190,6 +202,7 @@ export function useTranscript({
     rec.onresult = (e) => {
       jaDeuResultadoRef.current = true;
       tentativasRef.current = 0;
+      setHouveResultado(true);
       setStatus("transcrevendo");
 
       const fim = agoraRef.current();
@@ -231,6 +244,7 @@ export function useTranscript({
     };
 
     rec.onerror = (e) => {
+      setUltimoErro(e.error);
       if (ERROS_FATAIS.has(e.error)) {
         queridoRef.current = false;
         soltar();
@@ -313,6 +327,7 @@ export function useTranscript({
     queridoRef.current = true;
     tentativasRef.current = 0;
     jaDeuResultadoRef.current = false;
+    setUltimoErro(null);
     setParcial("");
     setStatus("aguardando");
     ligar();
@@ -347,6 +362,9 @@ export function useTranscript({
     parcial,
     /** Há prova de que o reconhecimento funciona neste aparelho. */
     transcrevendo: status === "transcrevendo",
+    /** Para o relatório de aparelho, não para a tela da câmera. */
+    ultimoErro,
+    houveResultado,
     start,
     stop,
     disable,

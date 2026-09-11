@@ -100,8 +100,25 @@ export function useListen() {
   /** Quanto já foi gravado antes da pausa atual. */
   const acumuladoRef = useRef<number>(0);
   const analiseRef = useRef<{ ctx: AudioContext; raf: number } | null>(null);
+  /*
+   * A geração da tentativa em curso.
+   *
+   * Existe por causa de uma janela que só aparece no aparelho: entre pedir o
+   * microfone e a pessoa responder à caixa de permissão passam segundos — às
+   * vezes minutos. Nesse intervalo ela pode sair do SliD, ou desligar o áudio,
+   * e sem esta marca o `await` continuava correndo: quando a permissão enfim
+   * chegava, `streamRef` era preenchido e o `MediaRecorder` começava a gravar
+   * **fora** da sessão, sem nenhum indicador na tela.
+   *
+   * Eram dois defeitos num só — microfone preso aceso, e gravação sem aviso,
+   * que é exatamente o que este recurso não pode fazer. Qualquer coisa que
+   * solte o microfone incrementa isto, e a tentativa antiga descobre, ao
+   * voltar, que já não é a atual.
+   */
+  const geracaoRef = useRef(0);
 
   const soltarTudo = useCallback(() => {
+    geracaoRef.current += 1;
     if (analiseRef.current) {
       cancelAnimationFrame(analiseRef.current.raf);
       void analiseRef.current.ctx.close().catch(() => {});
@@ -145,6 +162,8 @@ export function useListen() {
     }
 
     setStatus("pedindo");
+    // A geração desta tentativa, lida antes de qualquer espera.
+    const minhaGeracao = ++geracaoRef.current;
     let stream: MediaStream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({
@@ -161,7 +180,23 @@ export function useListen() {
       // `NotAllowedError` é a pessoa dizendo não; o resto é o aparelho não
       // tendo microfone, ou ele estar ocupado por outro app.
       const nome = erro instanceof Error ? erro.name : "";
+      // Uma recusa que chega depois de a pessoa já ter saído não deve
+      // reescrever o estado: ela veria "Áudio desativado" numa tela que não
+      // tem áudio nenhum.
+      if (geracaoRef.current !== minhaGeracao) return false;
       setStatus(nome === "NotAllowedError" || nome === "SecurityError" ? "negado" : "indisponivel");
+      return false;
+    }
+
+    /*
+     * A permissão chegou — mas para quem?
+     *
+     * Se alguém desligou o áudio ou saiu do SliD enquanto a caixa estava
+     * aberta, este stream não tem mais dono. Soltar aqui é a diferença entre
+     * o microfone apagar e ficar aceso pelo resto da sessão.
+     */
+    if (geracaoRef.current !== minhaGeracao) {
+      stream.getTracks().forEach((t) => t.stop());
       return false;
     }
 
@@ -260,7 +295,14 @@ export function useListen() {
     }
   }, []);
 
-  /** Desistir do áudio no meio da aula, sem encerrar a aula. */
+  /**
+   * Desistir do áudio, com ou sem gravação em curso.
+   *
+   * Chamável a qualquer momento, inclusive durante o "pedindo": é justamente
+   * aí que ele mais importa, porque é a janela em que o microfone podia ficar
+   * preso. `soltarTudo` incrementa a geração e a tentativa pendente morre
+   * sozinha quando voltar.
+   */
   const disable = useCallback(() => {
     const recorder = recorderRef.current;
     if (recorder && recorder.state !== "inactive") {
@@ -276,11 +318,36 @@ export function useListen() {
     setElapsedMs(0);
   }, [soltarTudo]);
 
+  /**
+   * O estado real das tracks de microfone, perguntado ao hardware.
+   *
+   * Função e não estado: o `readyState` de uma track muda sem avisar o React
+   * — o sistema pode encerrá-la quando outro app toma o microfone —, e um
+   * valor guardado em `useState` estaria desatualizado exatamente na hora em
+   * que alguém o consulta para investigar. Quem chama pergunta na hora.
+   */
+  const estadoDoMicrofone = useCallback((): {
+    tracks: number;
+    vivas: number;
+    detalhe: string;
+  } => {
+    const tracks = streamRef.current?.getAudioTracks() ?? [];
+    return {
+      tracks: tracks.length,
+      vivas: tracks.filter((t) => t.readyState === "live").length,
+      detalhe:
+        tracks.length === 0
+          ? "sem track"
+          : tracks.map((t) => `${t.label || "microfone"}:${t.readyState}`).join(", "),
+    };
+  }, []);
+
   return {
     status,
     elapsedMs,
     level,
     mimeType,
+    estadoDoMicrofone,
     /** Se há gravação correndo agora — o que o indicador da tela reflete. */
     gravando: status === "ouvindo" || status === "pausado",
     start,

@@ -39,6 +39,7 @@ import { SlidSuggestion } from "../slid/SlidSuggestion";
 import { SlidDebugPanel } from "../slid/SlidDebugPanel";
 import { SlidSummary } from "../slid/SlidSummary";
 import { useSlidSession } from "../slid/useSlidSession";
+import { DeviceReport } from "./DeviceReport";
 import { useListen } from "../listen/useListen";
 import { useTranscript } from "../listen/useTranscript";
 import type { TranscriptSegment } from "../listen/useTranscript";
@@ -64,6 +65,13 @@ const params = new URLSearchParams(window.location.search);
 const debugEnabled = params.has("debug");
 /** `?debug=slid` liga o painel do SliD — o que se leva para a sala de aula. */
 const slidDebug = params.get("debug") === "slid";
+/**
+ * `?debug=device` abre o relatório do aparelho.
+ *
+ * É o que transforma "não funcionou no meu celular" num texto colável. Nenhum
+ * caminho da interface leva até aqui: sai do produto sem deixar rastro.
+ */
+const deviceDebug = params.get("debug") === "device";
 
 interface CameraShellProps {
   modeId: string;
@@ -338,6 +346,9 @@ export function CameraShell({
   }, [modeId]);
 
   const [confirmingFinish, setConfirmingFinish] = useState(false);
+  /* O relatório de aparelho abre junto com a página quando `?debug=device`
+     está na URL: quem põe o parâmetro quer o relatório, não um botão. */
+  const [relatorioAberto, setRelatorioAberto] = useState(deviceDebug);
   // Two ways out, two answers. Ending the class on purpose always earns its
   // review, even an empty one — landing back on the viewfinder with no word
   // reads as a bug. Wandering off to another mode only interrupts the student
@@ -459,7 +470,21 @@ export function CameraShell({
 
   /* Sair do SliD sem encerrar pela tela de resumo também solta o microfone. */
   useEffect(() => {
-    if (!isSlid && listen.gravando) listen.disable();
+    /*
+     * Sem a condição `listen.gravando`, e isso é o conserto de um defeito.
+     *
+     * `gravando` é falso enquanto o estado é "pedindo" — ou seja, durante toda
+     * a caixa de permissão do microfone. Quem entrava no SliD e trocava de
+     * modo antes de responder passava por aqui sem soltar nada; quando a
+     * permissão enfim chegava, o `MediaRecorder` começava a gravar fora da
+     * sessão, sem indicador na tela e sem jeito de desligar.
+     *
+     * `disable` é idempotente e barato quando não há nada para soltar, e é ele
+     * que incrementa a geração dentro do gancho — que é o que mata a tentativa
+     * pendente. Chamar sempre é mais simples e mais seguro que acertar a
+     * condição.
+     */
+    if (!isSlid) listen.disable();
     /*
      * O reconhecimento sai junto — e a fala da aula anterior sai com ele.
      *
@@ -769,7 +794,49 @@ export function CameraShell({
         />
       )}
 
-      {debugEnabled && !slidDebug && (
+      {deviceDebug && relatorioAberto && (
+        <DeviceReport
+          onFechar={() => setRelatorioAberto(false)}
+          vivo={{
+            camera: {
+              status,
+              facing,
+              trackState: diagnostics.trackState,
+              trackLabel: diagnostics.trackLabel,
+              videoSize: diagnostics.videoSize,
+              appliedFacing: diagnostics.appliedFacing,
+              canSwitchFacing,
+            },
+            zoom: { level: zoom.level, native: zoom.native },
+            torch: { available: torch.available, on: torch.on },
+            listen: {
+              status: listen.status,
+              mimeType: listen.mimeType,
+              microfone: listen.estadoDoMicrofone(),
+            },
+            transcript: {
+              status: transcript.status,
+              houveResultado: transcript.houveResultado,
+              ultimoErro: transcript.ultimoErro,
+              trechos: transcript.segments.length,
+            },
+          }}
+        />
+      )}
+
+      {/* O botão que reabre o relatório depois de fechado. Só existe com o
+          parâmetro ligado, e some junto com ele. */}
+      {deviceDebug && !relatorioAberto && (
+        <button
+          type="button"
+          onClick={() => setRelatorioAberto(true)}
+          className="absolute right-3 top-[max(60px,calc(env(safe-area-inset-top)+48px))] z-40 min-h-9 rounded-full bg-black/70 px-3 font-mono text-[11px] text-white"
+        >
+          diagnóstico
+        </button>
+      )}
+
+      {debugEnabled && !slidDebug && !deviceDebug && (
         <DebugPanel
           status={status}
           facing={facing}

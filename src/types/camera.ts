@@ -6,6 +6,15 @@ export type CameraStatus =
   | "ready"
   | "denied"
   | "unsupported"
+  /**
+   * A câmera estava viva e o sistema a encerrou.
+   *
+   * Diferente de `error`: nada deu errado no pedido, e não há nada para a
+   * pessoa autorizar. Uma ligação chegou, outro app tomou a câmera, ou o
+   * navegador encerrou a track com a aba escondida. O conselho é outro — é
+   * "retomar", não "verificar a permissão" — e por isso o estado é outro.
+   */
+  | "interrupted"
   | "error";
 
 export type CaptureKind = "photo" | "video";

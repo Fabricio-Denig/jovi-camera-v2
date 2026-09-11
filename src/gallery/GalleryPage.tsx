@@ -16,6 +16,7 @@ import {
 } from "../slid/classes";
 import {
   deleteCapturesForever,
+  limparAudiosOrfaos,
   getAllCaptures,
   getSessionsWithAudio,
   getTrashedCaptures,
@@ -659,6 +660,16 @@ function TrashView({
             if (confirming.kind === "class")
               await deleteClassForever(confirming.id);
             else await deleteCapturesForever((m) => m.id === confirming.id);
+            /*
+             * Depois de apagar de vez, varrer as gravações sem aula.
+             *
+             * Apagar o último momento de uma aula pela grade de mídia faz a
+             * aula deixar de existir — ela é definida pelas capturas que a
+             * referenciam — e o áudio dela ficaria para sempre, invisível,
+             * ocupando a cota do navegador. A varredura conta a lixeira como
+             * existência, então nada que ainda possa voltar é tocado.
+             */
+            await limparAudiosOrfaos().catch(() => {});
             setConfirming(null);
             onChanged();
           }}
