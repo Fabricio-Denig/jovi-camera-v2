@@ -59,7 +59,7 @@ entre o tempo real e a duração do vídeo, não um número escrito na tela.
 Medido: 19 quadros em 9 segundos a 500 ms, virando 1 s de vídeo — 6× mais
 rápido, em `video/webm;codecs=vp9`, 640×480, que o navegador abre.
 
-Sobram **sete prévias**, e cada uma diz "Prévia" no card com um cartão
+Sobram **nove prévias**, e cada uma diz "Prévia" no card com um cartão
 explicando o que faria. Das sete, as que ainda poderiam virar reais estão
 acima com o esforço estimado; **câmera lenta** e **superlua** não podem, e
 estão registradas como tal para não custarem um ciclo de descoberta.

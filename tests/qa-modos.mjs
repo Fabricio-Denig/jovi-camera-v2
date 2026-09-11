@@ -156,5 +156,26 @@ console.log("\n== um modo simulado não é botão morto ==");
   await b.close();
 }
 
+console.log("\n== os números dos modos, contra o que os docs dizem ==");
+{
+  const { b, p, erros } = await abrir("fp-parede-rebocada-textura-forte.y4m", 4000);
+  /* Este bloco existe porque eu errei a conta: os docs diziam "6 de 16 são
+     prévia" quando eram 9, e ninguém nota um número errado num documento. O
+     app é a fonte, e o teste faz a contagem. */
+  const contagem = await p.evaluate(() => {
+    const cards = [...document.querySelectorAll("[role=dialog] li button")];
+    const previa = cards.filter((c) => /Prévia/i.test(c.innerText)).length;
+    return { total: cards.length, previa, reais: cards.length - previa };
+  });
+  console.log(
+    `        ${contagem.total} modos · ${contagem.reais} reais · ${contagem.previa} prévia`,
+  );
+  check(contagem.total === 16, "dezesseis modos no catálogo", `${contagem.total}`);
+  check(contagem.reais === 7, "sete reais", `${contagem.reais}`);
+  check(contagem.previa === 9, "nove prévias, e cada uma diz que é", `${contagem.previa}`);
+  check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
+  await b.close();
+}
+
 console.log(fail ? `\n${fail} FALHA(S)` : "\nTUDO PASSOU");
 process.exit(fail ? 1 : 0);
