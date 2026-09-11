@@ -85,3 +85,37 @@ responde, e vale saber quais antes de confiar nele:
 As três estão no `checklist-aparelho.md`, que é o documento que fecha a
 lacuna — e que diz, na primeira linha de cada seção, o que ele não conseguiu
 provar sozinho.
+
+## Uma suíte que não é determinística, e o que isso custa
+
+Medido em 11/set, rodando `qa-moldura` duas vezes — uma contra a `main`, outra
+contra a branch de hardening, com o mesmo código de detecção nas duas:
+
+| cena | `main` | branch |
+|---|---|---|
+| slide 70% | ok | ok |
+| slide 50% | FAIL, tremor 43px | FAIL, tremor 39px |
+| slide 32% | ok | ok |
+| slide 20% | **FAIL**, tremor 29px | **ok** |
+| slide 50% sala clara | FAIL, tremor 93px | FAIL, tremor 59px |
+| slide 32% com 2x | ok | ok |
+
+O detector não mudou entre as duas execuções — nem uma linha de
+`frameAnalysis.ts`, `useSlidSession.ts` ou `ContentFrame.tsx`. Ainda assim o
+"slide 20%" falha numa e passa na outra, e o tremor medido varia de 93 px para
+59 px na mesma cena.
+
+**Conclusão honesta: os números desta suíte não servem para comparar builds.**
+O que serve é o *conjunto* de cenas que falha — e nesse eixo a branch não
+piorou (duas falhas contra três).
+
+Por que isso importa mais que parece: a suíte roda a câmera real do navegador
+sobre um vídeo, e o tremor é a diferença de moldura entre quadros consecutivos.
+Quantos quadros o Chromium entrega e em que instante o teste amostra são coisas
+que variam com a carga da máquina. Um número que muda sem o código mudar não
+pode decidir se um PR entra.
+
+Fica registrado como o que é — **cobertura de tendência, não de valor** — e
+como a próxima dívida de teste a pagar: ou a suíte amostra várias vezes e
+compara a mediana, ou ela afirma menos do que afirma hoje. Enquanto isso, a
+regressão manual do SliD continua sendo o projetor real em 2x.
