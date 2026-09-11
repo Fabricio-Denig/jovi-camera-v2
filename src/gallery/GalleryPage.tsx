@@ -73,6 +73,16 @@ export function GalleryPage({
   const [managing, setManaging] = useState(false);
   /** Bumped by anything on this screen that writes, so the lists reload. */
   const [localRefresh, setLocalRefresh] = useState(0);
+  /*
+   * O banco recusou.
+   *
+   * Acontece de verdade: janela privada em alguns navegadores, site com dados
+   * bloqueados, cota estourada. Sem este estado a promessa rejeitava sem
+   * ninguém escutando, `media` ficava em `null` para sempre, e a galeria
+   * mostrava "Carregando…" até a pessoa desistir — que é exatamente a tela
+   * morta que não pode existir.
+   */
+  const [semArmazenamento, setSemArmazenamento] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -81,13 +91,23 @@ export function GalleryPage({
       getClasses(),
       getTrashedCaptures(),
       getTrashedClasses(),
-    ]).then(([items, records, trashed, trashedRecords]) => {
-      if (!active) return;
-      setMedia(items);
-      setClasses(records);
-      setTrashedMedia(trashed.filter((item) => !item.session));
-      setTrashedClasses(trashedRecords);
-    });
+    ])
+      .then(([items, records, trashed, trashedRecords]) => {
+        if (!active) return;
+        setSemArmazenamento(false);
+        setMedia(items);
+        setClasses(records);
+        setTrashedMedia(trashed.filter((item) => !item.session));
+        setTrashedClasses(trashedRecords);
+      })
+      .catch(() => {
+        if (!active) return;
+        setSemArmazenamento(true);
+        setMedia([]);
+        setClasses([]);
+        setTrashedMedia([]);
+        setTrashedClasses([]);
+      });
     return () => {
       active = false;
     };
@@ -213,7 +233,11 @@ export function GalleryPage({
       <header className="px-6 pb-3 pt-[max(20px,env(safe-area-inset-top))]">
         <h1 className="text-2xl font-semibold text-ink">Galeria</h1>
         <p className="mt-0.5 mb-3 text-[13px] text-ink-muted">
-          {media === null ? "Carregando…" : describe(view, grid.length, classes.length, trashCount)}
+          {semArmazenamento
+            ? "Não consegui abrir o armazenamento deste navegador"
+            : media === null
+              ? "Carregando…"
+              : describe(view, grid.length, classes.length, trashCount)}
         </p>
         <FilterChips
           chips={chips}
@@ -222,6 +246,21 @@ export function GalleryPage({
           label="Filtrar a galeria"
         />
       </header>
+
+      {/* O que aconteceu, e o que dá para fazer — nunca uma tela que só não
+          funciona. A câmera continua inteira: o que falhou foi guardar. */}
+      {semArmazenamento && (
+        <div className="mx-6 mb-4 rounded-2xl border border-warn/30 bg-warn/10 px-4 py-3.5">
+          <p className="text-[13.5px] font-medium text-warn">
+            Este navegador não deixou abrir o armazenamento do app.
+          </p>
+          <p className="mt-1 text-[12.5px] leading-snug text-ink-muted">
+            Costuma ser janela anônima, ou dados de site bloqueados nas
+            configurações. A câmera e o SliD continuam funcionando — o que não
+            dá é guardar entre uma sessão e outra.
+          </p>
+        </div>
+      )}
 
       {media !== null && view === "slid" && (
         <SlidView

@@ -15,17 +15,24 @@ tomando como oficial, pelo nome e pela posição no canvas.
 | Camera inicial | `298:136` | ✅ |
 | Reeconhecimento slid | `312:322` | ✅ |
 | Usando slid | `321:296` | ✅ |
-| Resumo | `339:611` | ❌ limite do plano |
+| Resumo | `339:611` | ✅ **lida em 11/set** |
 | Galeria | `339:540` | ✅ **lida em 5/set** |
 | Modos | `337:443` | ✅ **lida em 6/set** |
 | Filtros | `333:169` | ✅ **lida em 10/set** |
 
-O limite do Starter libera **uma chamada por janela**: em 5/set consegui a
-Galeria e a chamada seguinte já voltou bloqueada; em 6/set consegui Modos.
-Filtros saiu em 10/set. **Só o Resumo (`339:611`) continua na fila.**
+O limite do Starter libera **uma ou duas chamadas por janela**: em 5/set
+consegui a Galeria e a chamada seguinte já voltou bloqueada; em 6/set consegui
+Modos; Filtros saiu em 10/set. Em 11/set saiu o **Resumo** — e com ele
+**todas as sete telas v2 estão lidas**.
 
-O MCP do Figma corta as chamadas no plano Starter. As quatro que faltam ficam
-para a próxima janela. **Nada abaixo é palpite sobre tela que eu não abri.**
+Do Resumo eu tenho a estrutura medida (`get_metadata`: todos os nós, com
+posição e tamanho) mas **não a captura**: a segunda chamada da janela devolveu
+o bloqueio, e o proxy desta máquina recusa `figma.com`, então a imagem da
+primeira chamada também não pôde ser baixada. O que está abaixo são medidas
+reais, não impressão visual — e onde a medida não diz a cor ou o peso da
+fonte, está escrito que não diz.
+
+**Nada abaixo é palpite sobre tela que eu não abri.**
 
 ---
 
@@ -324,3 +331,86 @@ condições.
 
 O custo do filtro na foto é real mas acontece **uma vez por disparo**, no
 `ctx.filter` de um canvas de 640×480 — não por quadro.
+
+---
+
+## Resumo — `Resumo v2` (`339:611`)
+
+Lida em 11 de setembro, a última das sete telas v2. Frame de **412 × 917**.
+Estrutura medida com `get_metadata`; **sem captura** (o limite da janela e o
+proxy impediram), então nada aqui fala de cor, peso de fonte ou sombra.
+
+Esta tela corresponde ao **`ClassPage`** do app — a aula reaberta, não o
+`SlidSummary` que fecha a sessão. Os dois compartilham conteúdo, mas o Figma
+desenha a tela com "Voltar" e navegação inferior, que é a aula guardada.
+
+### Estrutura medida
+
+| Elemento | Figma v2 | App atual | Diferença | Ação |
+|---|---|---|---|---|
+| **Cabeçalho** | | | | |
+| voltar | ícone 13×18 em x=36 y=43 + texto "Voltar" em x=57 y=45 | botão "✕ Fechar aula" de 44×44 à direita | posição e forma opostas | **adotar o Figma** |
+| **cartão da aula** | `340×134` em x=36 y=94, com tudo dentro | não existe — cabeçalho é texto solto | estrutural | **adotar o Figma** |
+| … miniatura | quadrada `103×103` em x=56 y=109 | **não existe** | falta | **adotar** — dá rosto à aula |
+| … título | "Cálculo" em x=171 y=119, 57×19 | editável no lugar do título | ✅ mesma função | manter edição |
+| … chip | `71×21` em x=171 y=151, rótulo "Funções" | chip de matéria | ✅ equivalente | — |
+| … editar | ícone `pencil` 16×16 em x=334 y=109 (canto sup. dir. do cartão) | edição por toque no título | Figma explicita o gesto | **adotar o lápis** |
+| … data | "13/04" em x=171 y=185 | `formatDate(savedAt)` | ✅ | — |
+| … duração | "07 min" em x=215 y=185 | `formatClock(durationMs)` + "de aula" | ✅ | — |
+| … contagem | "04 capturas" em x=265 y=185 | "N momentos capturados" (título de seção) | Figma põe no cabeçalho | **subir para o cabeçalho** |
+| … separadores | duas elipses de 3×3 entre os três | "·" | ✅ equivalente | — |
+| … **status** | **não existe** | chip de status ao lado da matéria | decisão de produto | **preservar** |
+| … **favorito** | **não existe** | estrela de 44×44 no cabeçalho | decisão de produto | **preservar** |
+| **Abas** | três, em y=270: `Imagens` x=51 · `Texto` x=186 · `Resumo IA` x=297 | **não existem** — tudo numa rolagem só | estrutural | **adotar** |
+| … trilho | linha de 412 px em y=294 | — | — | — |
+| … indicador | linha de 115 px em x=149 y=294 — centrada em 206,5, ou seja **sob "Texto"** | — | o wireframe mostra a aba **Texto** aberta | — |
+| **Conteúdo (aba Texto)** | cartão `340×264` em x=37 y=312 | — | — | — |
+| … título do trecho | "Função do 2° Grau" em x=56 y=339 | `moment.label`, que já vem do OCR | ✅ mesma ideia | — |
+| … fórmulas | três linhas com Δ, radical e barra de fração desenhados | `moment.detail`, uma linha de texto | Figma trata fórmula como bloco | avaliar |
+| … **imagem da captura** | `150×133` em x=220 y=333, **dentro do cartão de texto** | miniatura fica na linha do momento | Figma junta texto e imagem | **adotar** |
+| … divisor | linha de 301 px em x=57 y=477 | — | — | fácil |
+| … marcadores | três bullets de 6×6 com Δ ao lado, y=486/517/546 | — | — | ver nota |
+| … texto dos marcadores | "> 0 → duas raízes reais" etc. | — | **interpretação de fórmula** | ver nota |
+| **Copiar texto** | botão `340×39` em x=37 y=599, ícone `copy` 24×24 + rótulo | **não existe** | falta | **adotar** |
+| **Ações rápidas** | título em x=37 y=655 + três cartões `102×93` em y=689 | rodapé com "Revisar a aula" + lixeira | estrutural | **adotar a grade** |
+| … Salvar PDF | x=36, ícone `save` 28×28 em y=711, rótulo em y=752 | não existe | falta | ver nota |
+| … Compartilhar | x=156, ícone `share-2` | não existe | falta | avaliar |
+| … Adicionar | x=275, componente `Adicionar` | não existe | falta | avaliar |
+| … **excluir** | **não existe** | lixeira no rodapé | decisão de produto | **preservar** |
+| … **revisar a aula** | **não existe** | botão primário no rodapé | decisão de produto | **preservar** |
+| Navegação inferior | Modos x=70 · Câmera x=188 · Galeria x=309, ícones 32×32 em y=855, rótulos em y=887 | igual | ✅ | — |
+
+### Notas
+
+**"Resumo IA" é o nome que não vamos usar como está.** O app não chama nenhum
+LLM externo, e não vai fingir que chama. O que produz o resumo hoje é OCR
+local (Tesseract WASM servido da própria origem), classificação de estrutura
+por forma (`classifyContent`), escolha de título a partir de uma linha que o
+professor escreveu (`pickHeading`), e organização dos momentos. É honesto
+chamar isso de **"Resumo"** — a linguagem visual do Figma fica, o nome não.
+Decisão registrada; a aba se chama **Resumo**.
+
+**Os marcadores interpretados são o achado desta tela, e o mais arriscado.**
+"Δ > 0 → duas raízes reais" não está escrito no slide do wireframe: é
+conhecimento sobre o assunto. Isso é exatamente o que este produto não faz — a
+regra é não inventar conteúdo que não está na captura. O que **dá** para fazer
+com o que já temos é o mesmo formato aplicado ao que o OCR leu: quando a
+captura traz uma lista, os itens dela viram marcadores; quando traz uma
+definição, ela vira um bloco. A forma do Figma serve; a fonte do conteúdo
+continua sendo a captura.
+
+**"Salvar PDF" só entra se for real.** Gerar PDF no navegador sem dependência
+pesada dá para fazer com `window.print()` e uma folha de impressão — o que sai
+é um PDF de verdade, salvo pelo próprio sistema. Se isso não funcionar bem no
+celular, **o botão não aparece**, em vez de aparecer e não fazer nada.
+
+**As três abas resolvem um problema real que o app tem.** Hoje o `ClassPage` é
+uma rolagem só: visão geral, conteúdo reconhecido, tópicos, e a linha do tempo
+dos momentos. Numa aula de doze momentos, o resumo fica doze telas acima da
+última captura. Separar em Imagens / Texto / Resumo é o que faz a tela
+responder "o que eu preciso revisar" sem rolagem.
+
+**O cabeçalho do Figma responde seis perguntas em 134 px.** Qual aula, de qual
+matéria, quando, quanto durou, quantas capturas, e — pela miniatura — como ela
+era. O app responde às mesmas menos a miniatura, em texto corrido. O cartão é
+melhor, e a miniatura é o que falta.

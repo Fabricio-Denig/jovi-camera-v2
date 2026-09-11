@@ -14,6 +14,7 @@ node tests/render-longe.mjs            # slides no fundo da sala
 node tests/render-dinamico.mjs         # cenas que mudam com o tempo
 node tests/render-documento.mjs        # folha sobre a mesa, para o Scanner
 node tests/render-cores.mjs            # a única cena COLORIDA, para os filtros
+node tests/render-texto.mjs            # uma folha com TEXTO de verdade, para o OCR
 node tests/qa-slid-realworld.mjs
 node tests/qa-slid-dinamico.mjs
 node tests/qa-moldura.mjs
@@ -21,6 +22,10 @@ node tests/qa-dica.mjs
 node tests/qa-enquadramento.mjs
 node tests/qa-scanner.mjs
 node tests/qa-filtros.mjs
+node tests/qa-resumo.mjs
+node tests/qa-slid-listen.mjs
+node tests/qa-demo-banca.mjs           # a jornada inteira, na ordem da apresentação
+node tests/qa-robustez.mjs             # os caminhos ruins: permissão, banco, clipboard, tela
 node tests/perf-filtros.mjs             # relatório, não teste com veredito
 ```
 
@@ -47,9 +52,19 @@ semente (`ruido()` em `caminhos.mjs`). `SLID_CENAS`, `SLID_APP` e
 | `qa-modos` | o painel de modos é uma folha sobre a câmera, com grade de 3 colunas, card de sugestão maior, e **nenhum selo de detecção quando não há aula na frente**? |
 | `qa-filtros` | a foto salva sai com a **mesma** aparência que o visor mostrava, em cada intensidade? A intensidade mexe de verdade? Filtro e efeito continuam separados? E, a pergunta que mais importa: **o quadro que o SliD analisa continua cru com um filtro ligado?** |
 | `perf-filtros` | quanto custam filtro e efeito no visor, no arraste da intensidade, na captura e na leitura do quadro pelo SliD. É relatório, não veredito. |
+| `qa-resumo` | a tela da aula: o cabeçalho-cartão responde as seis perguntas? As três abas existem, nenhuma se chama IA, e a aba Texto não repete o título? "Copiar texto" copia mesmo? E as ações rápidas somem onde o navegador não as oferece? |
+| `qa-slid-listen` | o **Listen**: grava áudio de verdade, mostra que está gravando, guarda o arquivo com a aula, e sobrevive a recarregar a página. E a pergunta que mais importa: **microfone negado, ausente ou quebrado deixa See e Identify inteiros?** |
+| `qa-demo-banca` | **a jornada inteira, na ordem em que uma pessoa a percorre.** Três caminhos: SliD com áudio do reconhecimento ao PDF; SliD sem microfone; e o Scanner do catálogo ao arquivo. Os outros testes provam que cada peça funciona; este prova que elas se encaixam — e é o único jeito de saber, antes da apresentação, que a demonstração roda. |
+| `qa-robustez` | os caminhos ruins, um a um: câmera negada, IndexedDB recusado, área de transferência bloqueada, uma câmera só, deitado, e 320 px. A pergunta de todos: **a tela diz o que aconteceu, ou só não funciona?** |
 | `qa-virar` | o botão de virar câmera está na fileira do obturador, à direita, como no Figma? Forja um segundo dispositivo de vídeo, porque a câmera falsa do Chromium expõe só um e o app — corretamente — esconde o botão. |
 
 ## Os geradores
+
+`render-texto.mjs` é o único que desenha **texto de verdade**, e ele usa o
+Chromium para rasterizar porque o Node não tem canvas. As outras cenas desenham
+marcas — retângulos do tamanho de uma linha — o que basta para o detector, que
+olha densidade e borda. O OCR precisa de glifo: sem esta cena, o teste do
+Scanner só provaria que a leitura *termina*, nunca que ela *lê*.
 
 `render-cores.mjs` é o único gerador que produz **cor**. Todas as outras cenas
 têm `U` e `V` constantes em 128 — cinza — porque o detector só olha luminância

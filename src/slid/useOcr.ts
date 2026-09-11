@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import { criarLeitor } from "../ocr/engine";
 import type { SlidCapture } from "./useSlidSession";
 
 export interface OcrPage {
@@ -24,10 +25,9 @@ interface UseOcrResult {
  * Runs on demand, never during the session: OCR and a live viewfinder compete for the
  * same CPU, and the capture pipeline always wins that argument.
  *
- * The engine, the WASM core and the language model are all served from this
- * origin. Tesseract's default CDN was measured as unreachable behind a
- * restricted network, and the summary is the climax of the demo — it cannot
- * depend on the venue's wifi.
+ * O motor vem de `ocr/engine`, compartilhado com o Scanner: dois lugares
+ * configurando o mesmo Tesseract seria garantir que um dia carregariam
+ * versões diferentes do mesmo WASM.
  */
 export function useOcr(): UseOcrResult {
   const [status, setStatus] = useState<OcrStatus>("idle");
@@ -43,18 +43,12 @@ export function useOcr(): UseOcrResult {
     setProgress(0);
     setErrorMessage(null);
 
-    let worker: Awaited<ReturnType<typeof import("tesseract.js").createWorker>> | null =
-      null;
+    let worker: Awaited<ReturnType<typeof criarLeitor>> | null = null;
 
     try {
-      // Loaded lazily so the ~4 MB runtime never touches the camera's startup.
-      const { createWorker } = await import("tesseract.js");
-      worker = await createWorker("por", 1, {
-        workerPath: "/tesseract/worker.min.js",
-        corePath: "/tesseract/",
-        langPath: "/tesseract/",
-        gzip: true,
-      });
+      // Um trabalhador para o lote inteiro: criar um por imagem pagaria o
+      // carregamento do WASM em cada momento da aula.
+      worker = await criarLeitor();
 
       const results: OcrPage[] = [];
       for (let i = 0; i < captures.length; i++) {

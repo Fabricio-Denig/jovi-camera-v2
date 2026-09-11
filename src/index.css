@@ -119,6 +119,19 @@ body {
   }
 }
 
+/* Só para leitor de tela: confirmações que o olho já viu pela cor. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
 /* Um painel subindo pelo rodapé, e o escurecido aparecendo junto. Sem isso,
  * ele nasce pronto na tela e a pessoa não vê de onde veio. */
 @keyframes slid-sheet-up {
@@ -199,5 +212,118 @@ body {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/*
+ * A folha de impressão da aula.
+ *
+ * Fora da impressão ela não existe: `display:none` e pronto. Na impressão, o
+ * app inteiro some e sobra só ela — sem isso, "Salvar PDF" produziria um PDF
+ * da interface do aplicativo, com barra de navegação e botões, que é
+ * exatamente o arquivo que ninguém quer.
+ */
+.folha-de-impressao {
+  display: none;
+}
+
+@media print {
+  /* O app sai de cena; a folha entra. */
+  body > #root {
+    display: none !important;
+  }
+
+  /* O fundo escuro do app pintava uma faixa preta no fim da folha. */
+  html,
+  body {
+    background: #fff !important;
+  }
+
+  .folha-de-impressao {
+    display: block !important;
+    position: static;
+    color: #111;
+    background: #fff;
+    font-size: 11pt;
+    line-height: 1.45;
+  }
+
+  .folha-de-impressao h1 {
+    font-size: 19pt;
+    margin: 0 0 2mm;
+  }
+
+  .folha-de-impressao h2 {
+    font-size: 12pt;
+    margin: 7mm 0 2mm;
+    border-bottom: 0.4pt solid #bbb;
+    padding-bottom: 1mm;
+  }
+
+  .folha-de-impressao h3 {
+    font-size: 11.5pt;
+    margin: 0 0 1.5mm;
+    font-weight: 600;
+  }
+
+  .folha-de-impressao .folha-meta {
+    color: #555;
+    font-size: 9.5pt;
+    margin: 0 0 5mm;
+  }
+
+  .folha-de-impressao .folha-resumo {
+    margin: 0 0 4mm;
+  }
+
+  .folha-de-impressao .folha-tempo {
+    font-family: ui-monospace, monospace;
+    color: #555;
+  }
+
+  .folha-de-impressao .folha-tipo {
+    color: #666;
+    font-weight: 400;
+  }
+
+  /* Um momento não se parte no meio entre duas páginas. */
+  .folha-de-impressao .folha-momento {
+    display: flex;
+    gap: 4mm;
+    margin: 0 0 5mm;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .folha-de-impressao .folha-momento img {
+    width: 45mm;
+    height: auto;
+    flex-shrink: 0;
+    border: 0.4pt solid #ccc;
+    border-radius: 1.5mm;
+  }
+
+  /* O `preflight` do Tailwind zera os marcadores, e sem eles a lista de
+     tópicos sai como um bloco de linhas soltas. */
+  .folha-de-impressao ul {
+    margin: 0;
+    padding-left: 6mm;
+    list-style: disc outside;
+  }
+
+  .folha-de-impressao li {
+    margin-bottom: 0.6mm;
+  }
+
+  .folha-de-impressao .folha-rodape {
+    margin-top: 8mm;
+    padding-top: 2mm;
+    border-top: 0.4pt solid #ddd;
+    color: #777;
+    font-size: 8.5pt;
+  }
+
+  @page {
+    margin: 14mm 12mm;
   }
 }
