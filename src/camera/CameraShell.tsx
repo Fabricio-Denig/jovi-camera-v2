@@ -650,7 +650,7 @@ export function CameraShell({
           foto={scanned.foto}
           detectado={scanned.regiao}
           onRefazer={() => setScanned(null)}
-          onSalvar={async (arquivo, aparencia) => {
+          onSalvar={async (arquivo, aparencia, texto) => {
             await persist({
               id: crypto.randomUUID(),
               kind: "photo",
@@ -663,6 +663,9 @@ export function CameraShell({
               // registrada. Não é aula, e não vira aula.
               source: "scanner",
               look: aparencia,
+              // Vazio quando ninguém pediu para extrair. Extrair e perder
+              // seria meia funcionalidade.
+              ...(texto.length > 0 ? { text: texto } : {}),
             });
             setScanned(null);
           }}

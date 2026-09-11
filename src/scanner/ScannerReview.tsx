@@ -23,12 +23,14 @@ export function ScannerReview({
   foto: Blob;
   /** A região que o detector achou, ou `null` quando não achou nada. */
   detectado: ContentBounds | null;
-  onSalvar: (arquivo: Blob, aparencia: string) => Promise<void>;
+  onSalvar: (arquivo: Blob, aparencia: string, texto: string[]) => Promise<void>;
   onRefazer: () => void;
 }) {
   const [lookId, setLookId] = useState("documento");
   const [margem, setMargem] = useState(0);
   const [salvando, setSalvando] = useState(false);
+  /** O que o OCR leu, quando alguém pediu. Vai junto com o arquivo. */
+  const [texto, setTexto] = useState<string[]>([]);
   const url = useObjectUrl(foto);
   const look = findLook(lookId);
 
@@ -49,7 +51,7 @@ export function ScannerReview({
     setSalvando(true);
     try {
       const arquivo = await renderDocument(foto, crop, look.css);
-      await onSalvar(arquivo, look.label);
+      await onSalvar(arquivo, look.label, texto);
     } finally {
       setSalvando(false);
     }
@@ -144,7 +146,7 @@ export function ScannerReview({
         {/* Sob demanda e fora do caminho de salvar: quem só queria a foto da
             página não paga quatro megabytes de WASM por ela. */}
         <div className="mb-3">
-          <ExtractText foto={foto} crop={crop} lookCss={look.css} />
+          <ExtractText foto={foto} crop={crop} lookCss={look.css} onTexto={setTexto} />
         </div>
 
         <div className="flex gap-2.5">
