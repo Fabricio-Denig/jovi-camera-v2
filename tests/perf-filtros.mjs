@@ -96,7 +96,7 @@ await p.waitForTimeout(500);
 linha("P&B a 70 %", await fps(SEGUNDOS), await travas(1));
 
 await abrirPainel();
-await p.getByRole("dialog", { name: "Filtros" }).getByRole("slider").fill("100");
+await p.getByRole("dialog", { name: "Filtros" }).getByRole("slider", { name: /intensidade do filtro/i }).fill("100");
 await p.waitForTimeout(300);
 await p.getByRole("dialog", { name: "Filtros" }).getByRole("button", { name: /^Raio de sol/ }).click();
 await p.waitForTimeout(300);
@@ -121,7 +121,7 @@ await abrirPainel();
    * inteira e o navegador recompondo o visor com o novo filtro.
    */
   const arrasto = await p.evaluate(() => {
-    const el = document.querySelector("[role=dialog] input[type=range]");
+    const el = document.querySelector('[role=dialog] input[type=range][aria-label^="Intensidade"]');
     const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
     const passos = 60;
     const t0 = performance.now();
@@ -136,7 +136,7 @@ await abrirPainel();
     `  ${arrasto.passos} passos em ${arrasto.total.toFixed(1)} ms · ` +
       `${(arrasto.total / arrasto.passos).toFixed(2)} ms por passo`,
   );
-  const visto = await p.getByRole("dialog", { name: "Filtros" }).getByRole("slider").inputValue();
+  const visto = await p.getByRole("dialog", { name: "Filtros" }).getByRole("slider", { name: /intensidade do filtro/i }).inputValue();
   console.log(`  o controle terminou em ${visto} % — nenhum passo se perdeu no caminho`);
   const css = await p.evaluate(() => getComputedStyle(document.querySelector("video")).filter);
   console.log(`  e o visor atrás do painel acompanhou: ${css}`);

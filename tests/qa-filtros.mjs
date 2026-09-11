@@ -122,7 +122,7 @@ console.log("\n== a intensidade é real, não cenográfica ==");
   await abrirPainel(p);
   const painel = p.getByRole("dialog", { name: "Filtros" });
 
-  const slider = painel.getByRole("slider");
+  const slider = painel.getByRole("slider", { name: /intensidade do filtro/i });
   check((await slider.count()) === 1, "há um controle de intensidade");
   check((await slider.inputValue()) === "70", "que entra em 70 %", await slider.inputValue());
 
@@ -153,7 +153,7 @@ console.log("\n== a intensidade é real, não cenográfica ==");
   await painel.getByRole("button", { name: /^Nenhum/ }).click();
   await p.waitForTimeout(300);
   check(
-    (await painel.getByRole("slider").count()) === 0,
+    (await painel.getByRole("slider", { name: /intensidade do filtro/i }).count()) === 0,
     "e o controle some quando não há filtro para dosar",
   );
 
@@ -248,7 +248,7 @@ console.log("\n== a foto salva sai como o visor mostrava ==");
     await p.locator(`button[aria-label='${filtroLabel}']`).click();
     await p.waitForTimeout(250);
     await abrirPainel(p);
-    await p.getByRole("dialog", { name: "Filtros" }).getByRole("slider").fill(valor);
+    await p.getByRole("dialog", { name: "Filtros" }).getByRole("slider", { name: /intensidade do filtro/i }).fill(valor);
     await p.waitForTimeout(250);
     await p.getByRole("dialog", { name: "Filtros" }).getByRole("button", { name: "Fechar painel" }).click();
     await p.waitForTimeout(400);
@@ -329,6 +329,75 @@ console.log("\n== a foto salva sai como o visor mostrava ==");
   await b.close();
 }
 
+console.log("\n== antes e depois: as duas versões ao mesmo tempo ==");
+{
+  const { b, p, erros } = await abrir("cor-mesa-de-estudo.y4m");
+  await abrirPainel(p);
+  const painel = p.getByRole("dialog", { name: "Filtros" });
+
+  // Com "Nenhum" escolhido não há o que comparar, e a seção não existe.
+  check(
+    !/ANTES E DEPOIS/i.test(await painel.innerText()),
+    "sem comparação quando não há filtro escolhido",
+  );
+
+  await painel.getByRole("button", { name: /^P&B/ }).click();
+  await p.waitForTimeout(600);
+  check(
+    /ANTES E DEPOIS/i.test(await painel.innerText()),
+    "escolher um filtro acende a comparação",
+  );
+
+  const duas = await p.evaluate(() => {
+    const imgs = [
+      ...document.querySelectorAll("[role=dialog] div[class*='aspect-'] img"),
+    ];
+    return imgs.map((i) => ({
+      filtro: getComputedStyle(i).filter,
+      recorte: getComputedStyle(i).clipPath,
+      src: i.src.slice(0, 30),
+    }));
+  });
+  check(duas.length === 2, "duas cópias da mesma amostra", `${duas.length}`);
+  check(
+    duas[0]?.src === duas[1]?.src,
+    "é a mesma imagem duas vezes — nenhuma decodificação a mais",
+  );
+  check(
+    duas[0]?.filtro !== "none" && duas[1]?.filtro === "none",
+    "uma com filtro, outra crua",
+    `${duas[0]?.filtro} | ${duas[1]?.filtro}`,
+  );
+  check(
+    /inset/.test(duas[1]?.recorte ?? ""),
+    "e a crua é recortada até o divisor",
+    duas[1]?.recorte ?? "",
+  );
+
+  // Arrastar é o gesto do wireframe, mas ele não pode ser o único caminho.
+  const controle = painel.getByRole("slider", {
+    name: /posição da comparação/i,
+  });
+  check((await controle.count()) === 1, "o divisor também é um controle alcançável");
+  const antes = await controle.inputValue();
+  await controle.fill("15");
+  await p.waitForTimeout(300);
+  const recorte = await p.evaluate(
+    () =>
+      getComputedStyle(
+        [...document.querySelectorAll("[role=dialog] div[class*='aspect-'] img")][1],
+      ).clipPath,
+  );
+  check(
+    antes !== "15" && /85/.test(recorte),
+    "e mexer nele move o recorte",
+    `${antes}% → 15% · ${recorte}`,
+  );
+
+  check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
+  await b.close();
+}
+
 console.log("\n== efeito não é filtro ==");
 {
   const { b, p, erros } = await abrir("cor-mesa-de-estudo.y4m");
@@ -365,7 +434,7 @@ console.log("\n== efeito não é filtro ==");
 
   // E não ganha um controle de intensidade que não significaria nada.
   check(
-    (await painel.getByRole("slider").count()) === 0,
+    (await painel.getByRole("slider", { name: /intensidade do filtro/i }).count()) === 0,
     "e não ganha intensidade, que num efeito não quer dizer nada",
   );
 
@@ -398,7 +467,7 @@ console.log("\n== o SliD continua recebendo o quadro cru ==");
   await p.locator("button[aria-label='Filtro P&B']").click();
   await p.waitForTimeout(250);
   await abrirPainel(p);
-  await p.getByRole("dialog", { name: "Filtros" }).getByRole("slider").fill("100");
+  await p.getByRole("dialog", { name: "Filtros" }).getByRole("slider", { name: /intensidade do filtro/i }).fill("100");
   await p.waitForTimeout(200);
   await p.getByRole("dialog", { name: "Filtros" }).getByRole("button", { name: "Fechar painel" }).click();
   await p.waitForTimeout(300);
@@ -593,7 +662,7 @@ for (const largura of [375, 390, 430]) {
   const painel = p.getByRole("dialog", { name: "Filtros" });
 
   const g = await p.evaluate(() => {
-    const s = document.querySelector("[role=dialog] input[type=range]");
+    const s = document.querySelector('[role=dialog] input[type=range][aria-label^="Intensidade"]');
     const r = s.getBoundingClientRect();
     // Quem está por cima no meio do controle? Se não for o próprio controle,
     // arrastar a intensidade vai acionar outra coisa.

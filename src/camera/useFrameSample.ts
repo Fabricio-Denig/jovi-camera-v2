@@ -2,8 +2,15 @@ import { useEffect, useRef, useState } from "react";
 
 /** De quanto em quanto tempo a amostra é renovada. */
 const REFRESH_MS = 2500;
-const SAMPLE_W = 96;
-const SAMPLE_H = 128;
+/*
+ * 240×320 e não 96×128, que era o tamanho de quando a amostra só alimentava
+ * miniaturas de 56 px. A comparação "antes e depois" a mostra com 350 px de
+ * largura, e nessa escala o quadro pequeno virava um borrão — o que anula o
+ * ponto de comparar. Quatro vezes mais pixels num JPEG a cada dois segundos e
+ * meio continua sendo perto de nada.
+ */
+const SAMPLE_W = 240;
+const SAMPLE_H = 320;
 
 /**
  * Um quadro parado do visor, para as miniaturas de filtro mostrarem a cena
@@ -55,7 +62,7 @@ export function useFrameSample(
         SAMPLE_W,
         SAMPLE_H,
       );
-      setAmostra(cv.toDataURL("image/jpeg", 0.6));
+      setAmostra(cv.toDataURL("image/jpeg", 0.72));
     };
 
     tirar();

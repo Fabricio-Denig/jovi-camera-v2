@@ -5,6 +5,7 @@ import {
   applyFilter,
   findFilter,
 } from "./filters";
+import { CompareSlider } from "./CompareSlider";
 import { useFilterFavorites } from "./useFilterFavorites";
 import { BottomSheet } from "../shared/ui/BottomSheet";
 
@@ -184,6 +185,26 @@ export function FiltersSheet({
               className="h-11 w-full accent-[var(--color-accent)]"
             />
           </label>
+        </div>
+      )}
+
+      {/*
+       * `PREVIEW AO VIVO` do wireframe: as duas versões ao mesmo tempo.
+       *
+       * Ele só aparece quando há filtro escolhido **e** amostra: comparar
+       * "Nenhum" com "Nenhum" é uma tela que não responde nada, e sem amostra
+       * seriam dois retângulos cinza.
+       */}
+      {temIntensidade && amostra && (
+        <div className="mb-6">
+          <h3 className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
+            Antes e depois
+          </h3>
+          <CompareSlider
+            amostra={amostra}
+            filtroCss={applyFilter(filterId, intensity)}
+            mirrored={mirrored}
+          />
         </div>
       )}
 
