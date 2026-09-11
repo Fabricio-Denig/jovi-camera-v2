@@ -100,21 +100,28 @@ const entrarNoSlid = async (p) => {
 };
 
 /**
- * Sair do SliD pela barra de modos, como o estudante sai.
+ * Sair do SliD sem encerrar a aula — pelo catálogo de Modos.
  *
- * Em repouso o SliD esconde os controles — a tela é o quadro, não o app —, e a
- * barra de modos vai junto. O toque no visor é o que a traz de volta. Chamar
- * "Foto" direto esperava trinta segundos por um botão que existe e está
- * coberto: a primeira versão deste arquivo fazia isso e o teste morria sem
- * chegar a medir nada.
+ * Errei este helper duas vezes, e as duas valem registro. Primeiro cliquei em
+ * "Foto" direto: durante uma sessão esse botão **não existe**, porque a barra
+ * de modos inteira vive dentro de `{isReady && !isSlid && …}` — não está
+ * escondida atrás de um toque, não está montada. Depois, ao trocar a chamada
+ * por este helper com um replace cego, troquei também a linha de dentro dele,
+ * e a função passou a chamar a si mesma: o teste deixou de estourar timeout e
+ * passou a travar de vez, que é bem pior de diagnosticar.
+ *
+ * O caminho de verdade é o de baixo: Modos → escolher outro modo. É por ele
+ * que o estudante troca de modo no meio de uma aula, e é exatamente o caminho
+ * do defeito que esta suíte persegue.
  */
 async function sairDoSlid(p) {
-  const mostrar = p.getByRole("button", { name: "Mostrar controles" });
-  if ((await mostrar.count()) > 0) {
-    await mostrar.click();
-    await p.waitForTimeout(700);
-  }
-  await sairDoSlid(p);
+  await p.getByRole("button", { name: "Modos", exact: true }).click();
+  await p.waitForTimeout(900);
+  await p
+    .getByRole("dialog")
+    .getByRole("button", { name: /^Foto/ })
+    .first()
+    .click();
 }
 
 async function encerrar(p) {
