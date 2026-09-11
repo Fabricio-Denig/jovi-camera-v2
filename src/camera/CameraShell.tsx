@@ -148,6 +148,31 @@ export function CameraShell({
   const isFood = mode.id === "food";
   /** O modo Noite, que empilha quadros em vez de disparar uma vez. */
   const isNight = mode.id === "night";
+
+  /*
+   * Onde faz sentido oferecer uma aula.
+   *
+   * Antes bastava o modo ser real, e isso punha o laço de análise para rodar
+   * em Comida, Noite e Intervalo. Nenhum dos três pode terminar numa sugestão
+   * de aula sem ser absurdo — ninguém aponta para um prato esperando que o app
+   * ofereça acompanhar uma aula —, e nos dois últimos o laço ainda disputa
+   * processador com o empilhamento e com a captura por intervalo, que são o
+   * modo em si.
+   *
+   * Esta mesma condição governa a pílula na tela, e não só o laço. A sugestão
+   * é pegajosa de propósito: uma vez levantada, ela sobrevive à troca de modo,
+   * porque parar a detecção não apaga o que já se sabe. Sem a condição aqui,
+   * quem detectasse uma aula em Foto e fosse para Comida via o prato com
+   * "Aula detectada" em cima.
+   */
+  const detectaAula =
+    status === "ready" &&
+    !isSlid &&
+    !isScanner &&
+    !isFood &&
+    !isNight &&
+    !isTimelapse &&
+    mode.fidelity === "real";
   const [nivelNoturno, setNivelNoturno] = useState<NivelNoturno>("medio");
   const [noturnoProgresso, setNoturnoProgresso] = useState(0);
   const [empilhando, setEmpilhando] = useState(false);
@@ -220,8 +245,20 @@ export function CameraShell({
   const slid = useSlidSession({
     videoRef,
     // Only look for a board when the suggestion could actually be acted on.
-    detectionEnabled:
-      status === "ready" && !isSlid && !isScanner && mode.fidelity === "real",
+    /*
+     * Só onde a sugestão faria sentido.
+     *
+     * Antes bastava o modo ser real, e isso punha o laço de análise para rodar
+     * em Comida, Noite e Intervalo. Nenhum dos três pode terminar numa
+     * sugestão de aula sem ser absurdo — ninguém aponta para um prato
+     * esperando que o app ofereça acompanhar uma aula —, e nos dois últimos o
+     * laço ainda disputa processador com o empilhamento e com a captura por
+     * intervalo, que são o modo em si.
+     *
+     * Em Foto e Instantâneo ela continua: apontar para um quadro e receber a
+     * oferta é o momento pelo qual o produto inteiro argumenta.
+     */
+    detectionEnabled: detectaAula,
     zoom: zoom.digital,
     diagnosing: slidDebug,
   });
@@ -245,9 +282,11 @@ export function CameraShell({
       (filtersOpen || filtersSheetOpen),
   );
 
+  // O catálogo de modos recebe a mesma verdade que a tela mostra: com o
+  // Comida aberto não há aula sugerida ali dentro tampouco.
   useEffect(() => {
-    onBoardDetected(slid.boardDetected);
-  }, [slid.boardDetected, onBoardDetected]);
+    onBoardDetected(detectaAula && slid.boardDetected);
+  }, [detectaAula, slid.boardDetected, onBoardDetected]);
 
   /*
    * Trocar de modo fecha o painel de filtros.
@@ -662,7 +701,7 @@ export function CameraShell({
 
       {/* The camera showing its work before it has anything to offer: without
           it, the first seconds of the demo are an ordinary viewfinder. */}
-      {isReady && slid.weighing && !isSlid && !isScanner && (
+      {detectaAula && slid.weighing && (
         <ContentFrame
           bounds={slid.contentBounds}
           videoRef={videoRef}
@@ -674,7 +713,7 @@ export function CameraShell({
 
       {/* The detection is drawn on the thing it detected, so the claim can be
           checked instead of believed. */}
-      {isReady && slid.boardDetected && !isSlid && !isScanner && (
+      {detectaAula && slid.boardDetected && (
         <ContentFrame
           bounds={slid.contentBounds}
           videoRef={videoRef}
@@ -698,7 +737,7 @@ export function CameraShell({
           para, mas o estado já levantado continua de pé. Uma pílula dizendo
           "Aula detectada" dentro do modo Documento confunde as duas coisas
           que este ciclo existe para separar. */}
-      {isReady && slid.boardDetected && !isSlid && !isScanner && (
+      {detectaAula && slid.boardDetected && (
         <SlidSuggestion
           onAccept={() => onSelectMode("slid")}
           onDismiss={slid.dismissSuggestion}

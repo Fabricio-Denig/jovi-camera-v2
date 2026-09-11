@@ -156,6 +156,33 @@ console.log("\n== um modo simulado não é botão morto ==");
   await b.close();
 }
 
+console.log("\n== a detecção de aula só roda onde faria sentido ==");
+{
+  /* Apontar para um prato e receber "Aula detectada" seria absurdo. E em Noite
+     e Intervalo o laço ainda disputaria processador com o empilhamento e com a
+     captura por intervalo, que são o modo em si. */
+  for (const [modo, deveDetectar] of [
+    [/^Foto/, true],
+    [/^Instantâneo/, true],
+    [/^Comida/, false],
+    [/^Noite/, false],
+    [/^Intervalo/, false],
+  ]) {
+    const { b, p, erros } = await abrir("fp-aula-slide-projetado.y4m", 3000);
+    await p.getByRole("dialog").getByRole("button", { name: modo }).first().click();
+    // Tempo de sobra para a detecção acontecer, se ela estiver ligada.
+    await p.waitForTimeout(11000);
+    const detectou = /Aula detectada/i.test(await p.locator("body").innerText());
+    check(
+      detectou === deveDetectar,
+      `${String(modo).replace(/[/^]/g, "")}: ${deveDetectar ? "detecta a aula" : "não oferece aula"}`,
+      detectou ? "detectou" : "não detectou",
+    );
+    check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
+    await b.close();
+  }
+}
+
 console.log("\n== o Comida aplica uma aparência de verdade ==");
 {
   const { b, p, erros } = await abrir("cor-mesa-de-estudo.y4m", 3000);
