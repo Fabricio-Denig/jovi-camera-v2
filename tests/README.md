@@ -31,6 +31,7 @@ node tests/qa-intervalo.mjs            # o time-lapse, que deixou de ser prévia
 node tests/qa-noturno.mjs              # o modo Noite, e a medida que o autoriza
 node tests/qa-acessibilidade.mjs       # nome, alvo e cabeçalho, nas sete telas
 node tests/perf-filtros.mjs             # relatório, não teste com veredito
+node tests/perf-app.mjs                 # o custo do app inteiro, também relatório
 ```
 
 As cenas são geradas em `tests/cenas/` e **não vão para o repositório** — são
@@ -55,6 +56,7 @@ semente (`ruido()` em `caminhos.mjs`). `SLID_CENAS`, `SLID_APP` e
 | `qa-scanner` | o modo Documento de ponta a ponta: entra pelos Modos, acha a folha, captura, revisa, escolhe aparência, salva e aparece na galeria **sem virar aula**. É o critério de pronto da fase 1 escrito como teste. |
 | `qa-modos` | o painel de modos é uma folha sobre a câmera, com grade de 3 colunas, card de sugestão maior, e **nenhum selo de detecção quando não há aula na frente**? |
 | `qa-filtros` | a foto salva sai com a **mesma** aparência que o visor mostrava, em cada intensidade? A intensidade mexe de verdade? Filtro e efeito continuam separados? E, a pergunta que mais importa: **o quadro que o SliD analisa continua cru com um filtro ligado?** |
+| `perf-app` | o custo do app inteiro: abertura, tamanho baixado, quadros por segundo com a detecção e o Listen rodando, memória, e o tempo de abrir uma aula. Relatório, não veredito. |
 | `perf-filtros` | quanto custam filtro e efeito no visor, no arraste da intensidade, na captura e na leitura do quadro pelo SliD. É relatório, não veredito. |
 | `qa-resumo` | a tela da aula: o cabeçalho-cartão responde as seis perguntas? As três abas existem, nenhuma se chama IA, e a aba Texto não repete o título? "Copiar texto" copia mesmo? E as ações rápidas somem onde o navegador não as oferece? |
 | `qa-slid-listen` | o **Listen**: grava áudio de verdade, mostra que está gravando, guarda o arquivo com a aula, e sobrevive a recarregar a página. E a pergunta que mais importa: **microfone negado, ausente ou quebrado deixa See e Identify inteiros?** |
