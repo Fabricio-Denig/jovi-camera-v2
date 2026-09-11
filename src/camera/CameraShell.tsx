@@ -920,9 +920,12 @@ export function CameraShell({
             )}
 
             {isFood && (
-              <div className="pointer-events-auto w-full max-w-sm px-6">
+              /* Numa caixa própria, e não solto sobre o degradê: o degradê do
+                 rodapé é fraco nesta altura, e um prato bem iluminado — que é
+                 exatamente a cena deste modo — apagava o rótulo. */
+              <div className="pointer-events-auto mx-6 w-full max-w-sm rounded-2xl bg-black/55 px-4 py-2.5 backdrop-blur">
                 <label className="block">
-                  <span className="mb-1 flex items-center justify-between text-[10.5px] font-semibold uppercase tracking-[0.08em] text-white/75">
+                  <span className="mb-0.5 flex items-center justify-between text-[10.5px] font-semibold uppercase tracking-[0.08em] text-white/80">
                     Realce do prato
                     <span className="font-mono text-[12px] tabular-nums text-white">
                       {Math.round(intensity)}%
@@ -935,7 +938,7 @@ export function CameraShell({
                     value={intensity}
                     onChange={(e) => setIntensity(Number(e.target.value))}
                     aria-label="Realce do prato"
-                    className="h-11 w-full accent-[var(--color-accent)]"
+                    className="h-10 w-full accent-[var(--color-accent)]"
                   />
                 </label>
               </div>
