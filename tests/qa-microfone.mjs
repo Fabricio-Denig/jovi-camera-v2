@@ -122,6 +122,29 @@ async function sairDoSlid(p) {
     .getByRole("button", { name: /^Foto/ })
     .first()
     .click();
+  await p.waitForTimeout(1500);
+
+  /*
+   * Sair do SliD com momentos guardados abre o resumo, e isso é o app certo.
+   *
+   * A regra é deliberada: sair por engano no meio de uma aula não pode
+   * descartar o que já foi capturado em silêncio. Então o resumo toma a tela
+   * e pergunta. Para o teste, é um overlay em cima de tudo — e foi ele que
+   * interceptou o clique seguinte, não um defeito.
+   *
+   * Aqui a aula é descartada, porque o que está sendo medido é o microfone,
+   * não o que acontece com a aula.
+   */
+  const descartar = p.getByRole("button", { name: /descartar/i });
+  if ((await descartar.count()) > 0) {
+    await descartar.first().click();
+    await p.waitForTimeout(900);
+    const confirmar = p.getByRole("button", { name: /descartar|sim|confirmar/i });
+    if ((await confirmar.count()) > 0) {
+      await confirmar.last().click();
+      await p.waitForTimeout(1200);
+    }
+  }
 }
 
 async function encerrar(p) {
