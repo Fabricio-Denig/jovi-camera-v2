@@ -77,3 +77,40 @@ Sempre que houver comportamento errado: **copiar** no painel e guardar o texto,
 junto com o que você estava apontando e o que esperava.
 
 Um vídeo curto da tela durante o item **B** vale mais que qualquer descrição.
+
+---
+
+## F — Filtros (ciclo de 10/set)
+
+Tudo aqui passou no navegador da bancada. O que falta é o dedo num celular de
+verdade: o arraste do controle, o tamanho dos alvos e a tela estreita.
+
+Em **Foto**, com a tira de filtros aberta:
+
+- [ ] a porta **"Mais"** está visível sem arrastar a tira
+- [ ] tocar em "Mais" abre o painel completo
+- [ ] o painel sobe pelo rodapé (não nasce pronto na tela)
+- [ ] **arrastar o controle de intensidade com o dedo** funciona — sem travar,
+      sem rolar o painel junto, sem soltar no meio
+- [ ] em **0 %** o visor volta ao original
+- [ ] em **50 %** o filtro aparece pela metade
+- [ ] em **100 %** o filtro aparece cheio
+- [ ] **a foto salva corresponde ao que o visor mostrava** — tire uma em cada
+      valor e confira na galeria; é o item mais importante desta seção
+- [ ] **Leitura** deixa o texto mais legível numa folha ou num slide de verdade
+- [ ] favoritar e desfavoritar acende e apaga a seção "Filtros favoritos"
+- [ ] o favorito sobrevive a fechar e reabrir o app
+- [ ] **Raio de sol** aparece no visor **e** na foto salva
+- [ ] **Tremor** balança o visor — e **não** aparece na foto (é movimento, e
+      foto não treme; se aparecer alguma coisa na foto, é defeito)
+- [ ] com a câmera frontal, ligar o Tremor **não desespelha** a imagem
+- [ ] nenhum card de filtro fica cortado na largura da sua tela
+- [ ] a seção "Filtros favoritos" é alcançável rolando o painel
+
+E a regra que não pode quebrar:
+
+- [ ] **entrar no SliD com um filtro ligado deixa a imagem natural** — sem
+      filtro, sem efeito, sem tira de filtros na tela
+
+Anote a largura da sua tela (Ajustes → Sobre, ou o modelo do aparelho) se algum
+item de corte falhar.
