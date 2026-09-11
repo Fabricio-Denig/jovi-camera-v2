@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { DOCUMENT_LOOKS, findLook } from "./appearance";
 import { CROP_PADRAO, renderDocument } from "./renderDocument";
+import { ExtractText } from "./ExtractText";
 import { useObjectUrl } from "../shared/hooks/useObjectUrl";
 import type { ContentBounds } from "../slid/frameAnalysis";
 
@@ -138,6 +139,12 @@ export function ScannerReview({
               </button>
             );
           })}
+        </div>
+
+        {/* Sob demanda e fora do caminho de salvar: quem só queria a foto da
+            página não paga quatro megabytes de WASM por ela. */}
+        <div className="mb-3">
+          <ExtractText foto={foto} crop={crop} lookCss={look.css} />
         </div>
 
         <div className="flex gap-2.5">

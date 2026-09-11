@@ -103,6 +103,63 @@ console.log("\n== captura, revisa, salva, e aparece na galeria ==");
   await b.close();
 }
 
+console.log("\n== extrair texto: sob demanda, e sem bloquear salvar ==");
+{
+  // A cena com texto de verdade: sem glifo, o teste só provaria que a leitura
+  // termina, nunca que ela lê.
+  const { b, p, erros } = await abrir("doc-folha-com-texto.y4m");
+  await entrarNoScanner(p);
+  await p.getByRole("button", { name: /Tirar foto|Capturar|obturador/i }).first().click().catch(() => {});
+  await p.waitForTimeout(1500);
+  const revisao = p.getByRole("dialog", { name: "Revisar documento" });
+
+  const botao = revisao.getByRole("button", { name: /Extrair texto/i });
+  check((await botao.count()) === 1, "a revisão oferece extrair o texto");
+
+  // Nada de WASM antes de alguém pedir: o Scanner de quem só quer a foto da
+  // página não pode pagar quatro megabytes.
+  const antes = await p.evaluate(() =>
+    performance.getEntriesByType("resource").filter((r) => /tesseract/.test(r.name)).length,
+  );
+  check(antes === 0, "e não carrega o motor antes de alguém pedir", `${antes} recursos`);
+
+  await botao.click();
+  await p.waitForTimeout(700);
+  check(
+    /Lendo a folha|Texto da folha|não consegui ler/i.test(await revisao.innerText()),
+    "tocar nele começa a leitura",
+  );
+
+  // Salvar continua disponível enquanto a leitura corre: o texto é um extra
+  // sobre a captura, nunca uma etapa dela.
+  const salvar = revisao.getByRole("button", { name: /Salvar na galeria/i });
+  check(
+    (await salvar.count()) === 1 && !(await salvar.isDisabled()),
+    "e salvar continua liberado durante a leitura",
+  );
+
+  // A leitura termina de um jeito ou de outro — e os dois são aceitáveis.
+  // O que não é aceitável é ficar girando para sempre.
+  await p.waitForTimeout(45000);
+  const depois = await revisao.innerText();
+  const terminou = /Texto da folha|não consegui ler|não terminou/i.test(depois);
+  check(terminou, "a leitura termina, com texto ou com explicação", depois.split("\n").slice(0, 3).join(" · "));
+  check(!/Lendo a folha/i.test(depois), "e não fica girando para sempre");
+
+  check(/Texto da folha/i.test(depois), "e leu a folha", depois.split("\n").slice(1, 5).join(" · "));
+  check(
+    /Grau|Funcao|Discriminante|Exercicios|raizes/i.test(depois),
+    "com palavras que estavam mesmo na folha",
+  );
+  check(
+    (await revisao.getByRole("button", { name: /Copiar texto/i }).count()) === 1,
+    "e há como copiar o que leu",
+  );
+
+  check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
+  await b.close();
+}
+
 console.log("\n== refazer volta para a câmera ==");
 {
   const { b, p } = await abrir("doc-folha-na-mesa.y4m");
