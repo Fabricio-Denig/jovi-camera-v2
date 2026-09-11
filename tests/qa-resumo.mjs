@@ -275,6 +275,96 @@ console.log("\n== a aula sem leitura nenhuma não finge ter resumo ==");
   await b.close();
 }
 
+console.log("\n== ações rápidas: só o que este navegador faz ==");
+{
+  const { b, p, erros } = await comAula();
+  await p.getByRole("tablist", { name: "Conteúdo da aula" }).getByRole("tab", { name: "Resumo" }).click();
+  await p.waitForTimeout(500);
+
+  const painel = await p.locator("[role=tabpanel]").innerText();
+  check(/AÇÕES RÁPIDAS/i.test(painel), "a seção do wireframe existe");
+  check(/Salvar PDF/i.test(painel), "Salvar PDF — `window.print` existe aqui");
+  check(/Excluir/i.test(painel), "e Excluir, no lugar do 'Adicionar' sem significado");
+
+  /* O wireframe desenha "Adicionar" sem dizer adicionar ao quê. Um botão
+     assim é cenográfico, e a regra desta reta final o proíbe. */
+  check(
+    !/Adicionar/i.test(painel),
+    "nenhum 'Adicionar' inventado",
+  );
+
+  // Imprimir de verdade: a folha tem de existir fora do #root, senão o PDF
+  // sai em branco — foi exatamente o defeito medido aqui.
+  const folha = await p.evaluate(() => {
+    const f = document.querySelector(".folha-de-impressao");
+    return f ? { foraDoRoot: !document.getElementById("root").contains(f), texto: f.innerText } : null;
+  });
+  check(folha !== null, "a folha de impressão está montada");
+  check(folha?.foraDoRoot === true, "e fora do #root, que a impressão esconde inteiro");
+  check(/Cálculo/.test(folha?.texto ?? ""), "com o conteúdo da aula dentro dela");
+  check(/00:03/.test(folha?.texto ?? ""), "e os momentos com horário");
+
+  check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
+  await b.close();
+}
+
+console.log("\n== sem compartilhar nem imprimir: o botão não aparece ==");
+{
+  const b = await chromium.launch({
+    executablePath: CHROMIUM,
+    args: [
+      "--use-fake-ui-for-media-stream",
+      "--use-fake-device-for-media-stream",
+      `--use-file-for-fake-video-capture=${CENAS}/cor-mesa-de-estudo.y4m`,
+    ],
+  });
+  const p = await (
+    await b.newContext({
+      viewport: { width: 390, height: 844 },
+      isMobile: true,
+      hasTouch: true,
+      permissions: ["camera"],
+    })
+  ).newPage();
+  const erros = [];
+  p.on("pageerror", (e) => erros.push(String(e)));
+  // Um navegador sem nenhuma das duas: é o caso que decide se a tela promete
+  // o que não cumpre.
+  await p.addInitScript(() => {
+    delete navigator.share;
+    delete navigator.canShare;
+    Object.defineProperty(window, "print", { value: undefined, configurable: true });
+  });
+  await p.goto(APP + "/", { waitUntil: "networkidle" });
+  await p.waitForTimeout(2200);
+  await semearAula(p);
+  await p.reload({ waitUntil: "networkidle" });
+  await p.waitForTimeout(1800);
+  await abrirAula(p);
+  await p.getByRole("tablist", { name: "Conteúdo da aula" }).getByRole("tab", { name: "Resumo" }).click();
+  await p.waitForTimeout(500);
+
+  const painel = await p.locator("[role=tabpanel]").innerText();
+  // Por botão e não por texto: a própria frase explicativa contém as duas
+  // palavras, e procurá-las no painel inteiro reprovaria a tela certa.
+  check(
+    (await p.getByRole("button", { name: /^Salvar PDF$/ }).count()) === 0,
+    "sem botão 'Salvar PDF' onde não há como imprimir",
+  );
+  check(
+    (await p.getByRole("button", { name: /^Compartilhar$/ }).count()) === 0,
+    "sem botão 'Compartilhar' onde não há como compartilhar",
+  );
+  check(
+    /não oferece compartilhar nem imprimir/i.test(painel),
+    "e a tela diz o que dá para fazer no lugar",
+  );
+  check(/Copiar a aula inteira/i.test(painel), "o copiar continua lá");
+  check(/Excluir/i.test(painel), "e o excluir também");
+  check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
+  await b.close();
+}
+
 console.log("\n== no celular ==");
 for (const largura of [375, 390, 430]) {
   const { b, p, erros } = await comAula({ largura });

@@ -1,4 +1,5 @@
 import { CopyButton } from "./CopyButton";
+import { QuickActions } from "./QuickActions";
 import { ListenFromHere } from "./ListenFromHere";
 import { classAsText } from "./classText";
 import { KIND_NAMES, overviewWithStatus, type ContentKind } from "./readContent";
@@ -25,11 +26,13 @@ export function ClassSummaryTab({
   record,
   temAudio = false,
   onOuvir,
+  onExcluir,
 }: {
   record: ClassRecord;
   /** A aula tem gravação — dito no resumo, porque é fato sobre a aula. */
   temAudio?: boolean;
   onOuvir?: (atMs: number) => void;
+  onExcluir: () => void;
 }) {
   const nada =
     !record.overview && record.topics.length === 0 && record.kinds.length === 0;
@@ -134,6 +137,8 @@ export function ClassSummaryTab({
       )}
 
       <CopyButton texto={classAsText(record)} rotulo="Copiar a aula inteira" />
+
+      <QuickActions record={record} temAudio={temAudio} onExcluir={onExcluir} />
     </div>
   );
 }

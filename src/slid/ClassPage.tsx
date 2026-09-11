@@ -6,6 +6,7 @@ import { ClassImagesTab } from "./ClassImagesTab";
 import { ClassTextTab } from "./ClassTextTab";
 import { ClassSummaryTab } from "./ClassSummaryTab";
 import { linesWithoutTitle } from "./classText";
+import { LessonPrintSheet } from "./LessonPrintSheet";
 import { DisciplinePicker } from "./DisciplinePicker";
 import { StatusPicker } from "./StatusPicker";
 import { type ClassStatus } from "./status";
@@ -121,6 +122,19 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
   const comLeitura = record.moments.filter(
     (m) => linesWithoutTitle(m).length > 0,
   ).length;
+
+  /* Sem confirmação, de propósito: esta é a ação reversível. A aula vai
+     inteira para a lixeira e volta inteira, e dizer isso vale mais que um
+     diálogo que a faria parecer definitiva.
+
+     Seta e não `function`: uma declaração de função é içada para fora do
+     estreitamento de tipo acima, e o `record` volta a poder ser nulo dentro
+     dela. */
+  const excluir = async () => {
+    await trashClass(record.id);
+    onChanged?.();
+    onClose();
+  };
 
   return (
     <div className="flex h-full flex-col bg-canvas">
@@ -278,6 +292,7 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
           <ClassSummaryTab
             record={record}
             temAudio={Boolean(audio)}
+            onExcluir={excluir}
             onOuvir={
               audio
                 ? (atMs) => setSeekTo(Math.max(0, atMs - audio.startedAtMs))
@@ -288,31 +303,25 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
       </div>
 
       {record.moments.length > 0 && (
-        <footer className="flex gap-2.5 border-t border-line px-4 pb-[max(14px,env(safe-area-inset-bottom))] pt-3">
+        <footer className="border-t border-line px-4 pb-[max(14px,env(safe-area-inset-bottom))] pt-3">
+          {/* Só a ação principal. A lixeira que ficava ao lado virou o cartão
+              "Excluir" das ações rápidas, e dois caminhos para a mesma coisa
+              na mesma tela é ruído — ainda mais quando um deles é um ícone
+              sem rótulo. */}
           <button
             type="button"
             onClick={() => setReviewing(0)}
-            className="min-h-11 flex-1 rounded-xl bg-accent py-3 text-sm font-medium text-accent-ink transition-transform duration-150 active:scale-[0.98] active:opacity-80"
+            className="min-h-11 w-full rounded-xl bg-accent py-3 text-sm font-medium text-accent-ink transition-transform duration-150 active:scale-[0.98] active:opacity-80"
           >
             Revisar a aula
           </button>
-          {/* No confirmation, on purpose: this is the reversible one. The class
-              goes to the trash whole and comes back whole, and saying so here
-              is worth more than a dialog that would make it feel final. */}
-          <button
-            type="button"
-            onClick={async () => {
-              await trashClass(record.id);
-              onChanged?.();
-              onClose();
-            }}
-            aria-label="Mover a aula para a lixeira"
-            className="flex min-h-11 items-center justify-center rounded-xl bg-surface-2 px-4 text-sm font-medium text-ink transition-transform duration-150 active:scale-95 active:opacity-70"
-          >
-            <span aria-hidden="true">🗑</span>
-          </button>
         </footer>
       )}
+
+      {/* A folha de impressão vive fora da tela e só existe quando alguém
+          manda imprimir. Ela precisa estar no documento — não dá para montá-la
+          durante o `print()`. */}
+      <LessonPrintSheet record={record} temAudio={Boolean(audio)} />
 
       {reviewing !== null && (
         <ClassReview
