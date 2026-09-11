@@ -119,6 +119,79 @@ body {
   }
 }
 
+/* Um painel subindo pelo rodapé, e o escurecido aparecendo junto. Sem isso,
+ * ele nasce pronto na tela e a pessoa não vê de onde veio. */
+@keyframes slid-sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes slid-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* O estalo de favoritar: um pulo curto, que é o que a mão espera do gesto. */
+@keyframes slid-pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.32);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/*
+ * O efeito "Tremor": a mão de quem filma, e não um solavanco.
+ *
+ * Anima `translate`/`rotate`/`scale`, que são propriedades independentes do
+ * `transform` — o espelho da câmera frontal e o zoom digital moram no
+ * `transform`, e uma animação vence o estilo em linha. Se as duas coisas
+ * dividissem a mesma propriedade, ligar o tremor desespelharia a selfie.
+ *
+ * O `scale` levemente acima de 1 existe para o deslocamento não descobrir a
+ * borda do vídeo e mostrar uma faixa preta.
+ */
+@keyframes slid-tremor {
+  0%,
+  100% {
+    translate: 0 0;
+    rotate: 0deg;
+    scale: 1.035;
+  }
+  18% {
+    translate: 0.5% -0.35%;
+    rotate: 0.22deg;
+    scale: 1.035;
+  }
+  37% {
+    translate: -0.4% 0.5%;
+    rotate: -0.18deg;
+    scale: 1.035;
+  }
+  58% {
+    translate: 0.35% 0.4%;
+    rotate: 0.14deg;
+    scale: 1.035;
+  }
+  79% {
+    translate: -0.45% -0.3%;
+    rotate: -0.2deg;
+    scale: 1.035;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

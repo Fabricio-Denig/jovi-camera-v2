@@ -1,3 +1,5 @@
+import { paintEffect } from "./effectPaint";
+
 /**
  * Draws the current video frame onto an offscreen canvas and exports it as a JPEG blob.
  *
@@ -14,6 +16,8 @@ export function capturePhotoFromVideo(
     window?: { x: number; y: number; width: number; height: number };
     /** O filtro do visor, em CSS, para a foto sair como a tela mostrava. */
     filter?: string;
+    /** O efeito escolhido, desenhado por cima depois do quadro. */
+    effect?: string | null;
   } = {},
 ): Promise<{ blob: Blob; width: number; height: number }> {
   const frameWidth = video.videoWidth;
@@ -61,6 +65,17 @@ export function capturePhotoFromVideo(
   if (options.filter && options.filter !== "none") ctx.filter = options.filter;
   ctx.drawImage(video, sx, sy, sw, sh, 0, 0, width, height);
   ctx.filter = "none";
+  // Depois do quadro e fora do filtro: a camada do efeito é desenhada por
+  // cima da imagem já filtrada, exatamente como o visor a empilha.
+  if (options.effect) {
+    // O espelho já está no contexto; desfazê-lo aqui mantém a luz do efeito
+    // no mesmo canto em que a tela a mostrava.
+    if (options.mirrored) {
+      ctx.translate(width, 0);
+      ctx.scale(-1, 1);
+    }
+    paintEffect(ctx, width, height, options.effect);
+  }
 
   return new Promise((resolve, reject) => {
     canvas.toBlob(

@@ -13,12 +13,15 @@ node tests/render-fp.mjs               # cenas paradas (adversárias e slides)
 node tests/render-longe.mjs            # slides no fundo da sala
 node tests/render-dinamico.mjs         # cenas que mudam com o tempo
 node tests/render-documento.mjs        # folha sobre a mesa, para o Scanner
+node tests/render-cores.mjs            # a única cena COLORIDA, para os filtros
 node tests/qa-slid-realworld.mjs
 node tests/qa-slid-dinamico.mjs
 node tests/qa-moldura.mjs
 node tests/qa-dica.mjs
 node tests/qa-enquadramento.mjs
 node tests/qa-scanner.mjs
+node tests/qa-filtros.mjs
+node tests/perf-filtros.mjs             # relatório, não teste com veredito
 ```
 
 As cenas são geradas em `tests/cenas/` e **não vão para o repositório** — são
@@ -42,9 +45,19 @@ semente (`ruido()` em `caminhos.mjs`). `SLID_CENAS`, `SLID_APP` e
 | `qa-enquadramento` | o momento guardado tem o enquadramento que estava na tela, e não o quadro inteiro do sensor? |
 | `qa-scanner` | o modo Documento de ponta a ponta: entra pelos Modos, acha a folha, captura, revisa, escolhe aparência, salva e aparece na galeria **sem virar aula**. É o critério de pronto da fase 1 escrito como teste. |
 | `qa-modos` | o painel de modos é uma folha sobre a câmera, com grade de 3 colunas, card de sugestão maior, e **nenhum selo de detecção quando não há aula na frente**? |
+| `qa-filtros` | a foto salva sai com a **mesma** aparência que o visor mostrava, em cada intensidade? A intensidade mexe de verdade? Filtro e efeito continuam separados? E, a pergunta que mais importa: **o quadro que o SliD analisa continua cru com um filtro ligado?** |
+| `perf-filtros` | quanto custam filtro e efeito no visor, no arraste da intensidade, na captura e na leitura do quadro pelo SliD. É relatório, não veredito. |
 | `qa-virar` | o botão de virar câmera está na fileira do obturador, à direita, como no Figma? Forja um segundo dispositivo de vídeo, porque a câmera falsa do Chromium expõe só um e o app — corretamente — esconde o botão. |
 
 ## Os geradores
+
+`render-cores.mjs` é o único gerador que produz **cor**. Todas as outras cenas
+têm `U` e `V` constantes em 128 — cinza — porque o detector só olha luminância
+e um plano de cor a mais seria peso morto. Mas filtro é cor: num quadro sem
+cor, Vivid, P&B e Quente saem idênticos, e o teste não distinguiria uma
+implementação certa de uma que não faz nada. Custou uma rodada inteira
+descobrir isso — a primeira versão do `qa-filtros` media saturação zero em
+todos os casos e reprovava a implementação correta.
 
 `cenas-fp.mjs` desenha superfícies para as quais um celular é apontado o tempo
 todo e que **não** são aula. `cenas-distancia.mjs` desenha um slide projetado

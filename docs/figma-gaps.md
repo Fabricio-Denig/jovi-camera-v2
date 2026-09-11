@@ -268,3 +268,59 @@ página inteira; o app tem uma tira no rodapé com miniaturas ao vivo, que é
 mais rápida de usar durante uma captura e já foi validada em teste. A grade é
 mais fiel; a tira interrompe menos. Fica registrada para decidir com o Fabricio
 antes de trocar algo que funciona.
+
+### Depois do ciclo de 10/set
+
+A decisão sobre grade × tira foi **as duas**, e não uma no lugar da outra: elas
+respondem a momentos diferentes. A tira troca de filtro durante a captura, sem
+tirar a cena da frente; o painel é onde se ajusta. A porta entre elas é a
+última posição da própria tira ("Mais"), que é onde a mão já está.
+
+| Lacuna de 10/set | Estado | Onde |
+|---|---|---|
+| **Intensidade** — não existia | ✅ contínua, 0–100 %, entra em 70 % | `filters.ts` · `applyFilter(id, intensidade)` |
+| … e a foto sai igual ao visor | ✅ provado com a foto medida, não com a string | `qa-filtros.mjs` |
+| Filtro **"Leitura"** | ✅ existe, com a sublegenda do wireframe | `filters.ts` |
+| **Sublegendas** dos cards | ✅ nos cards do painel | `FiltersSheet.tsx` |
+| Subtítulo "Aplique ao vivo…" | ✅ | `FiltersSheet.tsx` |
+| **Grade de 4 colunas**, cards com miniatura no topo | ✅ com a cena real, uma amostra para os dois | `FiltersSheet.tsx` · `useFrameSample.ts` |
+| **Filtros favoritos** | ✅ com estrela por card e seção própria, em `localStorage` | `useFilterFavorites.ts` |
+| "Raio de sol" e "Tremor" no meio dos favoritos | ✅ **corrigido**: são efeitos, e têm seção própria | `filters.ts` · `EffectLayer.tsx` |
+| Selo circular de 20 px no card escolhido | ✅ com a estrela de favoritar movida para o canto de baixo, para os dois não dividirem o mesmo canto | `FiltersSheet.tsx` |
+| Botão **"Aplicar"** no topo | ➖ **não vai existir** | ver nota |
+| **`PREVIEW AO VIVO`** com divisor arrastável | ⏳ não feito | ver nota |
+
+**"Aplicar" não vai existir, e isso é uma regra de produto vencendo o
+wireframe.** O filtro já é aplicado ao vivo no visor no instante do toque —
+é o que a própria tela promete no subtítulo. Um botão "Aplicar" depois disso
+só pode significar duas coisas: ou não faz nada, ou o que estava na tela ainda
+não valia. As duas são piores que não ter o botão.
+
+**A comparação partida ficou para depois.** É a única peça do `Filtros v2` que
+falta, e é a mais cara: exige um segundo canvas do mesmo quadro e um divisor
+arrastável. Vale como refinamento, não como bloqueio — com a intensidade
+contínua funcionando, dá para comparar arrastando de 0 a 100.
+
+### O que custa (medido, `perf-filtros.mjs`)
+
+Chromium de mesa com câmera falsa. **Não é medida de aparelho real.**
+
+| | |
+|---|---|
+| visor sem filtro | 15,2 fps |
+| visor com P&B a 70 % | 15,2 fps |
+| com P&B a 100 % + Raio de sol | 15,2 fps |
+| com P&B a 100 % + Tremor | 15,2 fps |
+| painel aberto, sete miniaturas | 13,4 fps |
+| arrastar a intensidade | **0,58 ms por passo**, 60 passos sem perder nenhum |
+| filtro na foto (640×480, uma vez) | +4 a 7 ms sobre os 0,2 ms do desenho cru |
+| o SliD lendo o quadro 128×96 com filtro ligado | 0,60 ms (pior 1,50 ms) |
+
+Os 15,2 fps são o teto da câmera falsa desta bancada, não um limite do app: o
+que a tabela mostra é que **as quatro condições dão o mesmo número**. Filtro de
+CSS é composto pela GPU e o efeito é uma camada a mais; nenhum dos dois disputa
+a linha principal com a análise da aula. Zero tarefas longas em todas as
+condições.
+
+O custo do filtro na foto é real mas acontece **uma vez por disparo**, no
+`ctx.filter` de um canvas de 640×480 — não por quadro.

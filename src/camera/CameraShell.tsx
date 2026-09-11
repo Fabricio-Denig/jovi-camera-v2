@@ -10,7 +10,10 @@ import { TopBar, nextAspect, nextTimer, type TimerSeconds } from "./TopBar";
 import { photoWindow, type AspectRatio } from "./aspect";
 import { FrameGuides } from "./FrameGuides";
 import { FilterStrip } from "./FilterStrip";
-import { findFilter } from "./filters";
+import { FiltersSheet } from "./FiltersSheet";
+import { EffectLayer } from "./EffectLayer";
+import { applyFilter, DEFAULT_INTENSITY } from "./filters";
+import { useFrameSample } from "./useFrameSample";
 import { SettingsSheet, DEFAULT_SETTINGS, type CameraSettings } from "./SettingsSheet";
 import { useTorch } from "./useTorch";
 import { useCamera } from "./useCamera";
@@ -86,7 +89,17 @@ export function CameraShell({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settings, setSettings] = useState<CameraSettings>(DEFAULT_SETTINGS);
   const [filterId, setFilterId] = useState("nenhum");
+  /*
+   * A intensidade vive aqui, ao lado do filtro, e não dentro do painel: é
+   * daqui que saem **as duas** aparências — a do visor e a da foto. Guardar
+   * isso no painel deixaria a foto sair com o valor cheio enquanto o preview
+   * mostrava setenta por cento.
+   */
+  const [intensity, setIntensity] = useState(DEFAULT_INTENSITY);
+  const [effectId, setEffectId] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(true);
+  /** O painel completo do Figma, aberto pela ponta da própria tira. */
+  const [filtersSheetOpen, setFiltersSheetOpen] = useState(false);
   /** Segundos restantes da contagem, ou null quando não há contagem. */
   const [countdown, setCountdown] = useState<number | null>(null);
 
@@ -111,11 +124,31 @@ export function CameraShell({
     { foto: Blob; regiao: ContentBounds | null } | null
   >(null);
   /*
-   * Nenhum filtro sobre uma aula. Um momento em P&B ou com sépia é a câmera
-   * mudando o que ela guardou de uma lousa, e o material de estudo não pode
-   * carregar uma escolha estética feita antes da aula começar.
+   * Nenhuma aparência sobre uma aula. Um momento em P&B, com sépia ou com uma
+   * luz de canto desenhada por cima é a câmera mudando o que ela guardou de
+   * uma lousa, e o material de estudo não pode carregar uma escolha estética
+   * feita antes da aula começar.
+   *
+   * Estas duas linhas são a única fonte de aparência do app: a de cima
+   * alimenta o visor e o `ctx.filter` da captura; a de baixo, a camada do
+   * efeito nos dois lugares.
    */
-  const filtro = isSlid ? findFilter("nenhum") : findFilter(filterId);
+  const filtroCss = isSlid ? "none" : applyFilter(filterId, intensity);
+  const efeitoAtivo = isSlid ? null : effectId;
+
+  /*
+   * A tira e o painel escolhem pelo mesmo caminho, para não divergirem no que
+   * acontece com a intensidade ao trocar de filtro.
+   *
+   * Sair de "Nenhum" acende o filtro na intensidade padrão. Trocar entre dois
+   * filtros preserva o valor: quem já ajustou está comparando naquela força, e
+   * devolver 70 % a cada toque desfaz o ajuste feito.
+   */
+  function escolherFiltro(id: string) {
+    if (filterId === "nenhum" && id !== "nenhum") setIntensity(DEFAULT_INTENSITY);
+    setFilterId(id);
+  }
+
   const slid = useSlidSession({
     videoRef,
     // Only look for a board when the suggestion could actually be acted on.
@@ -130,9 +163,34 @@ export function CameraShell({
     status === "ready" && isScanner && scanned === null,
   );
 
+  /*
+   * Uma amostra do visor, compartilhada pela tira e pelo painel. Ela só é
+   * tirada onde há miniatura para mostrar — em SliD, no Scanner e com a tira
+   * fechada não há laço nem canvas rodando.
+   */
+  const amostra = useFrameSample(
+    videoRef,
+    status === "ready" &&
+      !isSlid &&
+      !isScanner &&
+      mode.kind === "photo" &&
+      (filtersOpen || filtersSheetOpen),
+  );
+
   useEffect(() => {
     onBoardDetected(slid.boardDetected);
   }, [slid.boardDetected, onBoardDetected]);
+
+  /*
+   * Trocar de modo fecha o painel de filtros.
+   *
+   * Ele é desenhado fora do bloco da câmera de Foto, para poder cobrir a tela
+   * inteira, e sem isto ficaria aberto por cima de uma aula ou de uma folha —
+   * telas onde filtro não existe.
+   */
+  useEffect(() => {
+    setFiltersSheetOpen(false);
+  }, [modeId]);
 
   const [confirmingFinish, setConfirmingFinish] = useState(false);
   // Two ways out, two answers. Ending the class on purpose always earns its
@@ -210,7 +268,8 @@ export function CameraShell({
     const { blob, width, height } = await capturePhotoFromVideo(videoRef.current, {
       mirrored: facing === "user" && settings.mirrorSelfie,
       zoom: zoom.digital,
-      filter: filtro.css,
+      filter: filtroCss,
+      effect: efeitoAtivo,
       window: photoWindow(
         aspect,
         videoRef.current.videoWidth,
@@ -317,8 +376,13 @@ export function CameraShell({
         videoRef={videoRef}
         facing={facing}
         zoom={zoom.digital}
-        filter={filtro.css}
+        filter={filtroCss}
+        shaking={efeitoAtivo === "tremor"}
       />
+
+      {/* Camada do efeito: irmã do vídeo, nunca um filtro dele — é o que
+          mantém cru o quadro que o SliD analisa. */}
+      <EffectLayer effectId={efeitoAtivo} />
 
       {isReady && !isSlid && mode.kind === "photo" && (
         <FrameGuides aspect={aspect} grid={settings.grid} />
@@ -573,9 +637,10 @@ export function CameraShell({
                 {filtersOpen && (
                   <div className="w-full animate-[slid-enter_220ms_ease-out]">
                     <FilterStrip
-                      videoRef={videoRef}
+                      amostra={amostra}
                       active={filterId}
-                      onSelect={setFilterId}
+                      onSelect={escolherFiltro}
+                      onOpenPanel={() => setFiltersSheetOpen(true)}
                       mirrored={facing === "user"}
                     />
                   </div>
@@ -654,6 +719,24 @@ export function CameraShell({
           </button>
         </div>
       )}
+
+      {/*
+       * O painel completo. Ele lê e escreve o mesmo estado da tira: escolher
+       * aqui muda o visor atrás, e fechar não perde nada — filtro,
+       * intensidade e efeito moram na câmera, não no painel.
+       */}
+      <FiltersSheet
+        open={filtersSheetOpen}
+        filterId={filterId}
+        intensity={intensity}
+        effectId={effectId}
+        amostra={amostra}
+        mirrored={facing === "user"}
+        onSelectFilter={escolherFiltro}
+        onIntensity={setIntensity}
+        onSelectEffect={setEffectId}
+        onClose={() => setFiltersSheetOpen(false)}
+      />
 
       <SettingsSheet
         open={settingsOpen}
