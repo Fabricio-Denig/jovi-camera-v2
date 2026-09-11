@@ -30,6 +30,7 @@ node tests/qa-robustez.mjs             # os caminhos ruins: permissão, banco, c
 node tests/qa-intervalo.mjs            # o time-lapse, que deixou de ser prévia
 node tests/qa-noturno.mjs              # o modo Noite, e a medida que o autoriza
 node tests/qa-acessibilidade.mjs       # nome, alvo e cabeçalho, nas sete telas
+node tests/qa-galeria.mjs              # onde cada coisa guardada tem de estar
 node tests/perf-filtros.mjs             # relatório, não teste com veredito
 node tests/perf-app.mjs                 # o custo do app inteiro, também relatório
 ```
@@ -65,6 +66,7 @@ semente (`ruido()` em `caminhos.mjs`). `SLID_CENAS`, `SLID_APP` e
 | `qa-intervalo` | o modo Intervalo grava um quadro por intervalo e monta um vídeo que o navegador abre? Trocar de modo no meio guarda o que já foi capturado? E poucos quadros dizem por quê, em vez de salvar um arquivo que não toca? |
 | `qa-noturno` | **a medida que autoriza o modo Noite a existir**: a média de N quadros corta o ruído por √N? Medido contra o teórico, com margem de 15 % — mais folga que isso deixaria passar uma implementação que lê o mesmo quadro N vezes e não melhora nada. E a tela diz o que o modo não faz? |
 | `qa-acessibilidade` | percorre as sete telas e pergunta de cada controle visível: tem nome que um leitor de tela anuncie? tem 32 px de alvo? toda imagem declara `alt`? os cabeçalhos sobem sem pular nível? Não é auditoria completa — contraste percebido e ordem de leitura pedem olho humano — mas cobre o que mais quebra na prática. |
+| `qa-galeria` | onde cada coisa guardada tem de estar — e onde **não** pode estar. Um momento do SliD também é um JPEG, mas o estudante não tirou aquela foto: misturar as duas coisas faria "Fotos" virar um depósito. Cobre também o filtro por matéria, a lixeira que devolve inteiro, e a galeria vazia dizendo o que fazer. |
 | `qa-virar` | o botão de virar câmera está na fileira do obturador, à direita, como no Figma? Forja um segundo dispositivo de vídeo, porque a câmera falsa do Chromium expõe só um e o app — corretamente — esconde o botão. |
 
 ## Os geradores

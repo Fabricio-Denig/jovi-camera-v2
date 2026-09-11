@@ -25,7 +25,7 @@ está em relação a cada uma, e o que falta.
 | SliD ativo | `321:296` | alta | **total** | ✅ | `qa-slid-dinamico`, `qa-slid-listen` |
 | Modos | `337:443` | alta | parcial — **8 de 16 modos são reais**, 8 são prévia e dizem isso | ✅ | `qa-modos`, `qa-intervalo`, `qa-noturno` |
 | Filtros | `333:169` | **completa** | **total** | ✅ 320–430 | `qa-filtros` |
-| Galeria | `339:540` | alta | **total** | ✅ | `qa-golden`, `qa-robustez` |
+| Galeria | `339:540` | alta | **total** | ✅ | `qa-galeria`, `qa-robustez` |
 | Resumo | `339:611` | alta | **total** | ✅ 375–430 | `qa-resumo`, `qa-demo-banca` |
 
 Nenhum **P0** aberto: a jornada inteira roda, e `qa-demo-banca` prova isso em
