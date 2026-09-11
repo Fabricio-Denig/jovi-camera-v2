@@ -99,6 +99,24 @@ const entrarNoSlid = async (p) => {
   await p.waitForTimeout(2500);
 };
 
+/**
+ * Sair do SliD pela barra de modos, como o estudante sai.
+ *
+ * Em repouso o SliD esconde os controles — a tela é o quadro, não o app —, e a
+ * barra de modos vai junto. O toque no visor é o que a traz de volta. Chamar
+ * "Foto" direto esperava trinta segundos por um botão que existe e está
+ * coberto: a primeira versão deste arquivo fazia isso e o teste morria sem
+ * chegar a medir nada.
+ */
+async function sairDoSlid(p) {
+  const mostrar = p.getByRole("button", { name: "Mostrar controles" });
+  if ((await mostrar.count()) > 0) {
+    await mostrar.click();
+    await p.waitForTimeout(700);
+  }
+  await sairDoSlid(p);
+}
+
 async function encerrar(p) {
   const mostrar = p.getByRole("button", { name: "Mostrar controles" });
   if ((await mostrar.count()) > 0) await mostrar.click();
@@ -168,7 +186,7 @@ console.log("\n== sair do SliD sem encerrar: apaga também ==");
   const { b, p, erros } = await abrir();
   await entrarNoSlid(p);
   await p.waitForTimeout(1800);
-  await p.getByRole("button", { name: "Foto", exact: true }).click();
+  await sairDoSlid(p);
   await p.waitForTimeout(2000);
   const depois = await microfones(p);
   check(depois.vivas === 0, `trocar de modo apaga (${depois.vivas} de ${depois.abertas})`);
@@ -193,7 +211,7 @@ console.log("\n== sair ENQUANTO a permissão está aberta ==");
   await entrarNoSlid(p);
   // Sai antes de a permissão chegar.
   await p.waitForTimeout(600);
-  await p.getByRole("button", { name: "Foto", exact: true }).click();
+  await sairDoSlid(p);
   // Tempo de sobra para a permissão chegar (atrasada) e o código continuar.
   await p.waitForTimeout(7000);
 
@@ -221,7 +239,7 @@ console.log("\n== aula, saída, nova aula: não sobra track da anterior ==");
   const { b, p, erros } = await abrir();
   await entrarNoSlid(p);
   await p.waitForTimeout(1500);
-  await p.getByRole("button", { name: "Foto", exact: true }).click();
+  await sairDoSlid(p);
   await p.waitForTimeout(1500);
   await entrarNoSlid(p);
   await p.waitForTimeout(1500);
@@ -232,7 +250,7 @@ console.log("\n== aula, saída, nova aula: não sobra track da anterior ==");
     `só a da aula atual está viva (${durante.vivas} de ${durante.abertas})`,
   );
 
-  await p.getByRole("button", { name: "Foto", exact: true }).click();
+  await sairDoSlid(p);
   await p.waitForTimeout(1800);
   const fim = await microfones(p);
   check(fim.vivas === 0, `e no fim nenhuma (${fim.vivas} de ${fim.abertas})`);
