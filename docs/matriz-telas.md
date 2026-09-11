@@ -97,3 +97,34 @@ Nenhum item abaixo tem como ser respondido nesta bancada.
 | **Projetor real em 2x** | a regressão manual de ouro do SliD, já validada uma vez |
 
 O checklist está em `docs/checklist-aparelho.md`.
+
+---
+
+## O que o app custa (medido em 11/set)
+
+Chromium de mesa com câmera falsa. **Não é medida de aparelho real** — serve
+para responder uma pergunta comparativa: o app ficou mais caro nesta semana?
+
+| | |
+|---|---|
+| primeiro pixel | **104 ms** |
+| baixado na abertura | **3 arquivos** · JS 110 kB · CSS 10 kB |
+| Tesseract na abertura | **0 kB** — os 4 MB só entram quando alguém pede |
+| visor em Foto, com a detecção do SliD rodando | 15,3 fps · **zero tarefas longas** |
+| visor em SliD, com o Listen gravando | 15,3 fps · **zero tarefas longas** |
+| memória JS, em repouso e depois de uma aula inteira | **7 MB → 7 MB** |
+| abrir uma aula guardada (toque → tela pronta) | **97 ms** |
+| trocar de aba dentro da aula | 20–33 ms |
+
+Os 15,3 fps são o teto da câmera falsa desta bancada, não um limite do app: o
+que a tabela mostra é que **gravar áudio e analisar a aula ao mesmo tempo dá o
+mesmo número que a câmera parada**, com zero tarefas longas nas duas.
+
+A memória não subir depois de uma sessão inteira com gravação é o número que
+mais tranquiliza: object URLs revogados, canvas soltos, e o microfone
+liberado.
+
+Duas medições da primeira versão deste relatório estavam medindo as **esperas
+do próprio teste** — "abrir a aula" somava 1,9 s de `waitForTimeout` meus, e a
+leitura dos momentos era checada antes de começar. As duas foram corrigidas; a
+segunda foi removida, porque não há marcador na tela para esperar sem inventar.

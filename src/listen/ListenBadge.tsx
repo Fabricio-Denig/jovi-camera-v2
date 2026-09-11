@@ -81,7 +81,10 @@ export function ListenBadge({
           type="button"
           onClick={onDesligar}
           aria-label="Desligar o áudio desta aula"
-          className="-mr-1.5 ml-0.5 flex size-7 items-center justify-center rounded-full text-[12px] text-ink-muted transition-transform active:scale-90 active:opacity-70"
+          // 36 px de alvo, com o ✕ desenhado no tamanho de antes: um botão de
+          // 28 px é pequeno demais para um dedo, e este é o controle de
+          // desligar a gravação — o que mais precisa ser fácil de acertar.
+          className="-mr-2 -my-1 ml-0 flex size-9 items-center justify-center rounded-full text-[12px] text-ink-muted transition-transform active:scale-90 active:opacity-70"
         >
           ✕
         </button>

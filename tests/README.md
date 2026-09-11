@@ -29,7 +29,9 @@ node tests/qa-demo-banca.mjs           # a jornada inteira, na ordem da apresent
 node tests/qa-robustez.mjs             # os caminhos ruins: permissão, banco, clipboard, tela
 node tests/qa-intervalo.mjs            # o time-lapse, que deixou de ser prévia
 node tests/qa-noturno.mjs              # o modo Noite, e a medida que o autoriza
+node tests/qa-acessibilidade.mjs       # nome, alvo e cabeçalho, nas sete telas
 node tests/perf-filtros.mjs             # relatório, não teste com veredito
+node tests/perf-app.mjs                 # o custo do app inteiro, também relatório
 ```
 
 As cenas são geradas em `tests/cenas/` e **não vão para o repositório** — são
@@ -54,6 +56,7 @@ semente (`ruido()` em `caminhos.mjs`). `SLID_CENAS`, `SLID_APP` e
 | `qa-scanner` | o modo Documento de ponta a ponta: entra pelos Modos, acha a folha, captura, revisa, escolhe aparência, salva e aparece na galeria **sem virar aula**. É o critério de pronto da fase 1 escrito como teste. |
 | `qa-modos` | o painel de modos é uma folha sobre a câmera, com grade de 3 colunas, card de sugestão maior, e **nenhum selo de detecção quando não há aula na frente**? |
 | `qa-filtros` | a foto salva sai com a **mesma** aparência que o visor mostrava, em cada intensidade? A intensidade mexe de verdade? Filtro e efeito continuam separados? E, a pergunta que mais importa: **o quadro que o SliD analisa continua cru com um filtro ligado?** |
+| `perf-app` | o custo do app inteiro: abertura, tamanho baixado, quadros por segundo com a detecção e o Listen rodando, memória, e o tempo de abrir uma aula. Relatório, não veredito. |
 | `perf-filtros` | quanto custam filtro e efeito no visor, no arraste da intensidade, na captura e na leitura do quadro pelo SliD. É relatório, não veredito. |
 | `qa-resumo` | a tela da aula: o cabeçalho-cartão responde as seis perguntas? As três abas existem, nenhuma se chama IA, e a aba Texto não repete o título? "Copiar texto" copia mesmo? E as ações rápidas somem onde o navegador não as oferece? |
 | `qa-slid-listen` | o **Listen**: grava áudio de verdade, mostra que está gravando, guarda o arquivo com a aula, e sobrevive a recarregar a página. E a pergunta que mais importa: **microfone negado, ausente ou quebrado deixa See e Identify inteiros?** |
@@ -61,6 +64,7 @@ semente (`ruido()` em `caminhos.mjs`). `SLID_CENAS`, `SLID_APP` e
 | `qa-robustez` | os caminhos ruins, um a um: câmera negada, IndexedDB recusado, área de transferência bloqueada, uma câmera só, deitado, e 320 px. A pergunta de todos: **a tela diz o que aconteceu, ou só não funciona?** |
 | `qa-intervalo` | o modo Intervalo grava um quadro por intervalo e monta um vídeo que o navegador abre? Trocar de modo no meio guarda o que já foi capturado? E poucos quadros dizem por quê, em vez de salvar um arquivo que não toca? |
 | `qa-noturno` | **a medida que autoriza o modo Noite a existir**: a média de N quadros corta o ruído por √N? Medido contra o teórico, com margem de 15 % — mais folga que isso deixaria passar uma implementação que lê o mesmo quadro N vezes e não melhora nada. E a tela diz o que o modo não faz? |
+| `qa-acessibilidade` | percorre as sete telas e pergunta de cada controle visível: tem nome que um leitor de tela anuncie? tem 32 px de alvo? toda imagem declara `alt`? os cabeçalhos sobem sem pular nível? Não é auditoria completa — contraste percebido e ordem de leitura pedem olho humano — mas cobre o que mais quebra na prática. |
 | `qa-virar` | o botão de virar câmera está na fileira do obturador, à direita, como no Figma? Forja um segundo dispositivo de vídeo, porque a câmera falsa do Chromium expõe só um e o app — corretamente — esconde o botão. |
 
 ## Os geradores
