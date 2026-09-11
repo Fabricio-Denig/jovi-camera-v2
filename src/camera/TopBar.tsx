@@ -9,7 +9,8 @@ interface TopBarProps {
   torchAvailable: boolean;
   torchOn: boolean;
   onToggleTorch: () => void;
-  timer: TimerSeconds;
+  /** `null` esconde o controle: há modo em que o temporizador não tem efeito. */
+  timer: TimerSeconds | null;
   onCycleTimer: () => void;
   aspect: AspectRatio;
   onCycleAspect: () => void;
@@ -81,6 +82,7 @@ export function TopBar({
         <span />
       ) : (
         <div className="flex items-center gap-1.5">
+          {timer !== null && (
           <button
             type="button"
             onClick={onCycleTimer}
@@ -96,6 +98,7 @@ export function TopBar({
             <ClockIcon />
             {timer > 0 && <span>{timer}s</span>}
           </button>
+          )}
 
           <button
             type="button"

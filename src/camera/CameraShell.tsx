@@ -133,6 +133,12 @@ export function CameraShell({
   const isScanner = mode.id === "scanner";
   /** O modo Intervalo tem o seu próprio ciclo de gravação, e não o do vídeo. */
   const isTimelapse = mode.id === "timelapse";
+  /*
+   * "Instantâneo" promete disparar imediatamente, sem ajustes prévios — e
+   * respeitava o temporizador, o que fazia a promessa ser falsa. Um modo que
+   * diz uma coisa e faz outra é pior que um modo a menos.
+   */
+  const isSnapshot = mode.id === "snapshot";
   /** O modo Noite, que empilha quadros em vez de disparar uma vez. */
   const isNight = mode.id === "night";
   const [nivelNoturno, setNivelNoturno] = useState<NivelNoturno>("medio");
@@ -551,7 +557,8 @@ export function CameraShell({
           setCountdown(null);
           return;
         }
-        if (timer > 0) {
+        // O Instantâneo passa por cima do temporizador: é o que o nome diz.
+        if (timer > 0 && !isSnapshot) {
           setCountdown(timer);
           return;
         }
@@ -878,7 +885,9 @@ export function CameraShell({
             torchAvailable={torch.available}
             torchOn={torch.on}
             onToggleTorch={torch.toggle}
-            timer={timer}
+            // Sem controle de temporizador onde ele não teria efeito: um botão
+            // que muda um número que ninguém lê é botão cenográfico.
+            timer={isSnapshot ? null : timer}
             onCycleTimer={() => setTimer(nextTimer)}
             aspect={aspect}
             onCycleAspect={() => setAspect(nextAspect)}
