@@ -24,7 +24,7 @@ está em relação a cada uma, e o que falta.
 | Detecção | `312:322` | alta | **total** | ✅ | `qa-slid-realworld`, `qa-moldura`, `qa-dica` |
 | SliD ativo | `321:296` | alta | **total** | ✅ | `qa-slid-dinamico`, `qa-slid-listen` |
 | Modos | `337:443` | alta | parcial — 6 de 16 modos são prévia, e dizem isso | ✅ | `qa-modos`, `qa-intervalo`, `qa-noturno` |
-| Filtros | `333:169` | alta | **total** | ✅ 375–430 | `qa-filtros` |
+| Filtros | `333:169` | **completa** | **total** | ✅ 320–430 | `qa-filtros` |
 | Galeria | `339:540` | alta | **total** | ✅ | `qa-golden`, `qa-robustez` |
 | Resumo | `339:611` | alta | **total** | ✅ 375–430 | `qa-resumo`, `qa-demo-banca` |
 
@@ -58,9 +58,10 @@ lenta, superlua) está registrado como tal, para não custar um ciclo de
 descoberta.
 
 ### Filtros — `333:169`
-**P2 — a comparação partida com divisor arrastável.** Única peça do wireframe
-que falta, e a mais cara. Com a intensidade contínua funcionando, dá para
-comparar arrastando de 0 a 100.
+**Nada relevante** desde 11/set: a comparação partida entrou, e com ela a tela
+está inteira — menos o botão "Aplicar", que não vai existir por decisão de
+produto (o filtro já é aplicado ao vivo; um "Aplicar" depois disso ou não faz
+nada, ou diz que o que estava na tela ainda não valia).
 
 ### Galeria — `339:540`
 Nada relevante. A ordem das abas (Fotos · SliD · Todas · Favoritos · Vídeos) é

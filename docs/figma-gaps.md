@@ -295,7 +295,7 @@ tirar a cena da frente; o painel é onde se ajusta. A porta entre elas é a
 | "Raio de sol" e "Tremor" no meio dos favoritos | ✅ **corrigido**: são efeitos, e têm seção própria | `filters.ts` · `EffectLayer.tsx` |
 | Selo circular de 20 px no card escolhido | ✅ com a estrela de favoritar movida para o canto de baixo, para os dois não dividirem o mesmo canto | `FiltersSheet.tsx` |
 | Botão **"Aplicar"** no topo | ➖ **não vai existir** | ver nota |
-| **`PREVIEW AO VIVO`** com divisor arrastável | ⏳ não feito | ver nota |
+| **`PREVIEW AO VIVO`** com divisor arrastável | ✅ **11/set** — duas cópias da mesma amostra, uma recortada por `clip-path` | `CompareSlider.tsx` |
 
 **"Aplicar" não vai existir, e isso é uma regra de produto vencendo o
 wireframe.** O filtro já é aplicado ao vivo no visor no instante do toque —
@@ -303,10 +303,25 @@ wireframe.** O filtro já é aplicado ao vivo no visor no instante do toque —
 só pode significar duas coisas: ou não faz nada, ou o que estava na tela ainda
 não valia. As duas são piores que não ter o botão.
 
-**A comparação partida ficou para depois.** É a única peça do `Filtros v2` que
-falta, e é a mais cara: exige um segundo canvas do mesmo quadro e um divisor
-arrastável. Vale como refinamento, não como bloqueio — com a intensidade
-contínua funcionando, dá para comparar arrastando de 0 a 100.
+**A comparação partida entrou em 11/set, e saiu mais barata do que parecia.**
+Não é um segundo canvas: são duas cópias da **mesma** amostra que a tira e os
+cards já usam, a de cima recortada por `clip-path`. Nenhuma decodificação a
+mais.
+
+Ela justifica a própria existência ao lado da intensidade porque as duas
+respondem a perguntas diferentes: a intensidade pergunta "quanto"; a
+comparação pergunta "vale a pena?" — e responder isso exige ver as duas
+versões **ao mesmo tempo**, não uma depois da outra.
+
+Junto veio uma medida: a amostra subiu de 96×128 para 240×320. No tamanho
+antigo ela alimentava miniaturas de 56 px; esticada para os 350 px da
+comparação virava um borrão, o que anula o ponto de comparar. Quatro vezes mais
+pixels num JPEG a cada dois segundos e meio não mudou nada no desempenho —
+medido, o painel aberto passou de 13,4 para 14,2 fps e o arraste da intensidade
+de 0,58 para 0,48 ms por passo.
+
+**Com isso, o `Filtros v2` está inteiro** — menos o botão "Aplicar", que não vai
+existir por decisão de produto.
 
 ### O que custa (medido, `perf-filtros.mjs`)
 
