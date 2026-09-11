@@ -1,9 +1,5 @@
 import { useEffect, useState } from "react";
-import {
-  REASON_LABELS,
-  type SlidCapture,
-  type SlidStatus,
-} from "./useSlidSession";
+import { REASON_LABELS, type SlidCapture, type SlidStatus } from "./useSlidSession";
 import { useObjectUrl } from "../shared/hooks/useObjectUrl";
 import { formatClock } from "../shared/lib/time";
 

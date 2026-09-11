@@ -88,9 +88,7 @@ export function ClassHeaderCard({
           <button
             type="button"
             onClick={onEditar}
-            aria-label={
-              editando ? "Concluir edição do nome" : "Editar o nome da aula"
-            }
+            aria-label={editando ? "Concluir edição do nome" : "Editar o nome da aula"}
             aria-pressed={editando}
             className={`-mr-1 -mt-1 flex size-9 shrink-0 items-center justify-center rounded-full text-[13px] transition-transform active:scale-90 ${
               editando ? "bg-accent-soft text-accent" : "text-ink-muted"
@@ -106,9 +104,7 @@ export function ClassHeaderCard({
             onClick={onAbrirMateria}
             aria-expanded={materiaAberta}
             className={`min-h-7 rounded-full px-2.5 text-[12px] font-medium transition-all duration-200 active:scale-95 active:opacity-70 ${
-              discipline
-                ? "bg-accent-soft text-accent"
-                : "bg-surface text-ink-muted"
+              discipline ? "bg-accent-soft text-accent" : "bg-surface text-ink-muted"
             }`}
           >
             {discipline ?? "Escolher matéria"}

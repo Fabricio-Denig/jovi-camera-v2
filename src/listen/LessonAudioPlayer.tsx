@@ -48,10 +48,7 @@ export function LessonAudioPlayer({
       try {
         el.currentTime = alvo;
         setPosicao(alvo);
-        void el
-          .play()
-          .then(() => setTocando(true))
-          .catch(() => {});
+        void el.play().then(() => setTocando(true)).catch(() => {});
       } catch {
         /* o arquivo ainda não sabe procurar; o próximo toque resolve */
       }
@@ -112,9 +109,7 @@ export function LessonAudioPlayer({
                   .catch(() => setErro(true));
               }
             }}
-            aria-label={
-              tocando ? "Pausar o áudio da aula" : "Tocar o áudio da aula"
-            }
+            aria-label={tocando ? "Pausar o áudio da aula" : "Tocar o áudio da aula"}
             className="flex size-11 shrink-0 items-center justify-center rounded-full bg-accent text-[15px] text-accent-ink transition-transform active:scale-90"
           >
             <span aria-hidden="true">{tocando ? "❚❚" : "▶"}</span>

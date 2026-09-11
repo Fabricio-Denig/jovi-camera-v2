@@ -46,11 +46,7 @@ export function ClassTabs({
             aria-controls={`painel-${aba.id}`}
             onClick={() => onSelect(aba.id)}
             className={`relative min-h-11 flex-1 px-2 pb-2.5 pt-1 text-[14px] font-medium transition-colors ${
-              escolhida
-                ? "text-ink"
-                : vazia
-                  ? "text-ink-muted/45"
-                  : "text-ink-muted"
+              escolhida ? "text-ink" : vazia ? "text-ink-muted/45" : "text-ink-muted"
             }`}
           >
             {aba.label}

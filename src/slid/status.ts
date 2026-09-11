@@ -72,9 +72,7 @@ export const STATUS_STYLES: Record<ClassStatus, StatusStyle> = {
 };
 
 /** Aulas gravadas antes disto — ou com um status que deixou de existir — não têm. */
-export function readStatus(
-  value: string | undefined | null,
-): ClassStatus | null {
+export function readStatus(value: string | undefined | null): ClassStatus | null {
   return value && (CLASS_STATUSES as readonly string[]).includes(value)
     ? (value as ClassStatus)
     : null;

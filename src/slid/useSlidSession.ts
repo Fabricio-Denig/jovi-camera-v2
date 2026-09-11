@@ -223,9 +223,7 @@ export function useSlidSession({
   const [elapsedMs, setElapsedMs] = useState(0);
   const [boardDetected, setBoardDetected] = useState(false);
   const [sceneReady, setSceneReady] = useState(false);
-  const [contentBounds, setContentBounds] = useState<ContentBounds | null>(
-    null,
-  );
+  const [contentBounds, setContentBounds] = useState<ContentBounds | null>(null);
   const [weighing, setWeighing] = useState(false);
   const [diagnostics, setDiagnostics] = useState<SlidDiagnostics | null>(null);
   const [framingHint, setFramingHint] = useState<FramingHint | null>(null);
@@ -307,9 +305,7 @@ export function useSlidSession({
   /** Every window of one frame, in the order the analysis expects them. */
   const sampleAll = useCallback(
     (video: HTMLVideoElement) =>
-      ANALYSIS_SCALES.map((scale) =>
-        sampleFrame(video, zoomRef.current * scale),
-      ),
+      ANALYSIS_SCALES.map((scale) => sampleFrame(video, zoomRef.current * scale)),
     [],
   );
 
@@ -324,9 +320,7 @@ export function useSlidSession({
    */
   const smoothBounds = useCallback((next: ContentBounds | null) => {
     if (!next) return smoothBoundsRef.current;
-    const historico = [...boundsHistoryRef.current, next].slice(
-      -ENVELOPE_TICKS,
-    );
+    const historico = [...boundsHistoryRef.current, next].slice(-ENVELOPE_TICKS);
     boundsHistoryRef.current = historico;
 
     const esquerda = Math.min(...historico.map((b) => b.x));
@@ -424,8 +418,7 @@ export function useSlidSession({
           reason,
           marks,
           refinements: 0,
-          completedAtMs:
-            Date.now() - startedAtRef.current - pausedTotalRef.current,
+          completedAtMs: Date.now() - startedAtRef.current - pausedTotalRef.current,
         };
         setCaptures((prev) => [...prev, moment]);
         setLastMoment(moment);
@@ -519,9 +512,7 @@ export function useSlidSession({
         // reconhecer a aula sem conseguir delimitá-la, e piscar o contorno a
         // cada tique desses é pior do que mantê-lo onde estava.
         if (scene.bounds)
-          setContentBounds(
-            smoothBounds(boundsAtScale(scene.bounds, scene.scale)),
-          );
+          setContentBounds(smoothBounds(boundsAtScale(scene.bounds, scene.scale)));
         const confirmed = detectionCountRef.current >= DETECTION_TICKS;
         setBoardDetected(confirmed);
         setWeighing(!confirmed);
@@ -574,11 +565,7 @@ export function useSlidSession({
       publishDiagnostics(() =>
         "readings" in scene
           ? (scene as ScaledScene)
-          : {
-              ...scene,
-              readings: [{ ...scene, scale: scene.scale }],
-              tooSmall: false,
-            },
+          : { ...scene, readings: [{ ...scene, scale: scene.scale }], tooSmall: false },
       );
       if ("readings" in scene) noteFraming(scene as ScaledScene);
       else if (scene.isStudy) {
@@ -598,9 +585,7 @@ export function useSlidSession({
         sceneOkRef.current++;
         if (!sceneArmedRef.current) scaleRef.current = scene.scale;
         boundsRef.current = scene.bounds;
-        setContentBounds(
-          smoothBounds(boundsAtScale(scene.bounds, scaleRef.current)),
-        );
+        setContentBounds(smoothBounds(boundsAtScale(scene.bounds, scaleRef.current)));
         if (sceneOkRef.current >= SCENE_ARM_TICKS && !sceneArmedRef.current) {
           sceneArmedRef.current = true;
           setSceneReady(true);
@@ -661,10 +646,7 @@ export function useSlidSession({
       // old content and the new. A slide with fewer lines than the one before
       // shrinks the box, and measuring only the new box hid the lines that had
       // gone — a slide change registered a 7 % loss instead of 27 %.
-      const content = unionBounds(
-        referenceBoundsRef.current,
-        boundsRef.current,
-      );
+      const content = unionBounds(referenceBoundsRef.current, boundsRef.current);
       const outside = contentDelta(reference, marks, content, "outside");
       if (outside.added + outside.removed > REFRAMED) {
         // A propped-up phone still twitches, and a slide that changed on the

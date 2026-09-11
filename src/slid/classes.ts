@@ -119,14 +119,11 @@ export async function getClassById(id: string): Promise<ClassRecord | null> {
  */
 async function editClass(
   id: string,
-  change: (
-    session: NonNullable<CapturedMedia["session"]>,
-  ) => NonNullable<CapturedMedia["session"]>,
+  change: (session: NonNullable<CapturedMedia["session"]>) => NonNullable<
+    CapturedMedia["session"]
+  >,
 ): Promise<void> {
-  const captures = [
-    ...(await getAllCaptures()),
-    ...(await getTrashedCaptures()),
-  ];
+  const captures = [...(await getAllCaptures()), ...(await getTrashedCaptures())];
   for (const media of captures) {
     if (media.session?.id !== id) continue;
     await saveCapture({ ...media, session: change(media.session) });

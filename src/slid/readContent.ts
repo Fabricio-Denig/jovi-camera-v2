@@ -149,9 +149,7 @@ export function describeMoment(
   // calling it a formula stays right where quoting it would be wrong. The gate
   // belongs on the line, not on the label.
   const picked = clean(
-    kind === "formula"
-      ? trimStrayToken(pickLine(focus, kind))
-      : pickLine(focus, kind),
+    kind === "formula" ? trimStrayToken(pickLine(focus, kind)) : pickLine(focus, kind),
   );
   const detail =
     (confidence ?? 100) >= DETAIL_CONFIDENCE && picked && readsAsDetail(picked)
@@ -161,6 +159,7 @@ export function describeMoment(
   if (reason === "manual") {
     return { label: "Você marcou este momento", detail, kind, heading: null };
   }
+
 
   // A slide or a board almost always names its own topic, and that heading is
   // a far better title than any category ever is: "Leis de Newton" instead of
@@ -174,9 +173,7 @@ export function describeMoment(
   // and filed it again. It is the same topic with more on it, and that is what
   // the row should say. Working out what the row before was called is enough to
   // catch both cases with one rule.
-  const previousHeading = previousLines.length
-    ? pickHeading(previousLines)
-    : null;
+  const previousHeading = previousLines.length ? pickHeading(previousLines) : null;
   const title = heading ?? KIND_LABELS[kind];
   const previousTitle = previousLines.length
     ? (previousHeading ?? KIND_LABELS[classifyContent(previousLines)])
@@ -186,9 +183,7 @@ export function describeMoment(
   );
 
   return {
-    label: continued
-      ? fallbackLabel(reason, { ...options, refined: true })
-      : title,
+    label: continued ? fallbackLabel(reason, { ...options, refined: true }) : title,
     detail: heading && detail === heading ? null : detail,
     kind,
     heading,
@@ -570,9 +565,7 @@ function describeFocus(kinds: [ContentKind, number][]): string | null {
   const strong = ranked.filter(([, count]) => count >= 2).slice(0, 2);
   const chosen = strong.length > 0 ? strong : ranked.slice(0, 1);
   if (chosen.length === 0) return null;
-  const names = chosen.map(
-    ([kind, count]) => KIND_NAMES[kind][count === 1 ? 0 : 1],
-  );
+  const names = chosen.map(([kind, count]) => KIND_NAMES[kind][count === 1 ? 0 : 1]);
   return names.length === 1 ? names[0] : `${names[0]} e ${names[1]}`;
 }
 
@@ -653,39 +646,10 @@ function capitalise(text: string): string {
 }
 
 const STOPWORDS = new Set([
-  "para",
-  "como",
-  "cada",
-  "quando",
-  "onde",
-  "pelo",
-  "pela",
-  "esse",
-  "essa",
-  "isso",
-  "aquele",
-  "aquela",
-  "temos",
-  "sendo",
-  "então",
-  "entao",
-  "mais",
-  "menos",
-  "muito",
-  "pode",
-  "deve",
-  "seja",
-  "está",
-  "esta",
-  "sobre",
-  "outro",
-  "outra",
-  "todos",
-  "todas",
-  "http",
-  "https",
-  "porque",
-  "assim",
+  "para", "como", "cada", "quando", "onde", "pelo", "pela", "esse", "essa",
+  "isso", "aquele", "aquela", "temos", "sendo", "então", "entao", "mais",
+  "menos", "muito", "pode", "deve", "seja", "está", "esta", "sobre", "outro",
+  "outra", "todos", "todas", "http", "https", "porque", "assim",
 ]);
 
 /**

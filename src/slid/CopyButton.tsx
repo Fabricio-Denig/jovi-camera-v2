@@ -33,9 +33,7 @@ export function CopyButton({
       <button
         type="button"
         disabled={vazio}
-        onClick={async () =>
-          setEstado((await copyText(texto)) ? "copiado" : "falhou")
-        }
+        onClick={async () => setEstado((await copyText(texto)) ? "copiado" : "falhou")}
         className={`flex min-h-11 w-full items-center justify-center gap-2 rounded-xl text-[14px] font-medium transition-all duration-200 active:scale-[0.99] disabled:opacity-40 ${
           estado === "copiado"
             ? "bg-accent-soft text-accent"
