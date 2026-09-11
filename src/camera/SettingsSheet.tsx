@@ -53,6 +53,34 @@ export function SettingsSheet({
             onChange({ ...settings, mirrorSelfie: !settings.mirrorSelfie })
           }
         />
+
+        {/*
+          Onde a pessoa procura quando quer saber, e não quando está no meio de
+          uma aula.
+
+          O mesmo texto está no "Saiba mais" do SliD, que é onde ele aparece na
+          hora do recurso. Aqui ele fica acessível sempre — é o lugar em que se
+          procura por "o que esse app faz com meus dados" quando a pergunta vem
+          depois, e não durante.
+
+          As duas frases são separadas porque as duas coisas são separadas: o
+          arquivo de áudio dá para afirmar que fica no aparelho; o que o
+          reconhecimento do navegador faz com o som, não. Por isso a palavra
+          "local" não cobre as duas.
+        */}
+        <section className="mt-1 rounded-2xl bg-surface-2 px-4 py-3.5">
+          <h3 className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
+            Áudio e transcrição das aulas
+          </h3>
+          <p className="mt-1.5 text-[12.5px] leading-snug text-ink">
+            O áudio da aula é gravado pelo app e fica guardado neste aparelho.
+          </p>
+          <p className="mt-1 text-[12px] leading-snug text-ink-muted">
+            Quando o navegador oferece transcrição da fala, quem reconhece é
+            ele — e, dependendo do navegador, isso pode usar o serviço de
+            reconhecimento de voz dele. O app não controla essa parte.
+          </p>
+        </section>
       </div>
     </BottomSheet>
   );
