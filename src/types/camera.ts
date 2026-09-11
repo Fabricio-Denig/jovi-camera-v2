@@ -31,6 +31,18 @@ export interface CapturedMedia {
   /** A aparência escolhida na revisão do documento: Original, Documento, P&B. */
   look?: string;
   /**
+   * O texto lido de um documento, quando alguém pediu para extrair.
+   *
+   * Guardado porque extrair e perder é meia funcionalidade: uma pessoa que
+   * lê a folha na revisão e salva espera encontrar aquilo de novo. Reler
+   * custaria os quatro megabytes de WASM outra vez.
+   *
+   * Peneirado pela mesma regra do resto do app — o que não leu como língua
+   * nem como fórmula não chega aqui, e o texto bruto do reconhecimento não é
+   * guardado em lugar nenhum.
+   */
+  text?: string[];
+  /**
    * When it was thrown away. Set rather than deleted, so the trash can give it
    * back: a lecture is not something to lose to one stray tap.
    */

@@ -42,6 +42,7 @@ import { NightBar } from "../night/NightBar";
 import { acharNivel, empilharQuadros, type NivelNoturno } from "../night/stackFrames";
 import { ListenBadge, SeeListenIdentify } from "../listen/ListenBadge";
 import {
+  SemEspacoError,
   getLatestCapture,
   saveCapture,
   saveLessonAudio,
@@ -353,8 +354,14 @@ export function CameraShell({
       await saveCapture(media);
       setLastCapture(media);
       onCaptureSaved();
-    } catch {
-      setCaptureError("Não foi possível salvar a captura no dispositivo.");
+    } catch (erro) {
+      // "Não deu para salvar" é um beco sem saída; "o espaço acabou, apague
+      // alguma coisa" é uma instrução. A diferença vale a distinção.
+      setCaptureError(
+        erro instanceof SemEspacoError
+          ? "O espaço deste navegador acabou. Apague fotos ou aulas na Galeria e tente de novo."
+          : "Não foi possível salvar a captura no dispositivo.",
+      );
     } finally {
       setIsSaving(false);
     }
@@ -650,7 +657,7 @@ export function CameraShell({
           foto={scanned.foto}
           detectado={scanned.regiao}
           onRefazer={() => setScanned(null)}
-          onSalvar={async (arquivo, aparencia) => {
+          onSalvar={async (arquivo, aparencia, texto) => {
             await persist({
               id: crypto.randomUUID(),
               kind: "photo",
@@ -663,6 +670,9 @@ export function CameraShell({
               // registrada. Não é aula, e não vira aula.
               source: "scanner",
               look: aparencia,
+              // Vazio quando ninguém pediu para extrair. Extrair e perder
+              // seria meia funcionalidade.
+              ...(texto.length > 0 ? { text: texto } : {}),
             });
             setScanned(null);
           }}
@@ -776,8 +786,15 @@ export function CameraShell({
                   startedAtMs: audioComecouEmRef.current,
                   createdAt: savedAt,
                 });
-              } catch {
-                /* a aula fica sem áudio, e continua aula */
+              } catch (erro) {
+                // A aula fica sem áudio e continua aula — as imagens e o texto
+                // já estão salvos. Mas se foi falta de espaço, vale dizer:
+                // é o único caso em que a pessoa pode fazer algo.
+                if (erro instanceof SemEspacoError) {
+                  setCaptureError(
+                    "A aula foi salva, mas não coube o áudio: o espaço deste navegador acabou.",
+                  );
+                }
               }
               setGravacao(null);
               audioComecouEmRef.current = 0;

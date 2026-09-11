@@ -119,6 +119,43 @@ console.log("\n== IndexedDB recusado ==");
   await b.close();
 }
 
+console.log("\n== espaço acabou ==");
+{
+  const { b, p, erros } = await abrir({
+    quebrar: () => {
+      /* O navegador recusando por cota. É o caso real de uma aula de uma hora
+         com áudio, ou de um time-lapse longo — e a resposta a ele é diferente
+         de todos os outros erros: há o que fazer. */
+      const original = IDBObjectStore.prototype.put;
+      IDBObjectStore.prototype.put = function (...args) {
+        const req = original.apply(this, args);
+        setTimeout(() => {
+          const e = new DOMException("cheio", "QuotaExceededError");
+          Object.defineProperty(this.transaction, "error", { value: e, configurable: true });
+          this.transaction.onerror?.({ target: this.transaction });
+        }, 0);
+        return req;
+      };
+    },
+  });
+
+  await p.getByRole("button", { name: /Tirar foto/i }).first().click();
+  await p.waitForTimeout(2500);
+  const corpo = await p.locator("body").innerText();
+  check(
+    /espaço.*acabou|sem espaço/i.test(corpo),
+    "a tela diz que o espaço acabou",
+    corpo.split("\n").find((l) => /espaço/i.test(l)) ?? corpo.split("\n").slice(-3).join(" · "),
+  );
+  check(
+    /Apague|Galeria/i.test(corpo),
+    "e diz o que fazer — é a diferença entre um beco e uma instrução",
+  );
+  check((await p.locator("video").count()) === 1, "e a câmera continua viva");
+  check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
+  await b.close();
+}
+
 console.log("\n== área de transferência negada ==");
 {
   const b = await chromium.launch({

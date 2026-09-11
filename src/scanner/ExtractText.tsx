@@ -28,10 +28,13 @@ export function ExtractText({
   foto,
   crop,
   lookCss,
+  onTexto,
 }: {
   foto: Blob;
   crop: ContentBounds;
   lookCss: string;
+  /** O que foi lido sobe para a revisão, que o guarda junto com o documento. */
+  onTexto: (linhas: string[]) => void;
 }) {
   const [estado, setEstado] = useState<Estado>("parado");
   const [linhas, setLinhas] = useState<string[]>([]);
@@ -47,6 +50,7 @@ export function ExtractText({
       // vira texto na tela. "ao do 20 grau LÁ" não ajuda ninguém a estudar.
       const lidas = readableLines(text, confidence, 40);
       setLinhas(lidas);
+      onTexto(lidas);
       setEstado(lidas.length > 0 ? "leu" : "vazio");
     } catch {
       setEstado("falhou");

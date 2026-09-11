@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { CopyButton } from "../slid/CopyButton";
 import { useObjectUrl } from "../shared/hooks/useObjectUrl";
 import type { CapturedMedia } from "../types/camera";
 
@@ -25,6 +27,15 @@ export function CaptureViewer({
   onTrash,
 }: CaptureViewerProps) {
   const url = useObjectUrl(media.blob);
+  /*
+   * O texto de um documento fica recolhido por padrão.
+   *
+   * A pessoa abriu a captura para **ver** a captura; um bloco de texto
+   * ocupando metade da tela empurraria a imagem para fora. Recolhido, ele diz
+   * que existe e sai do caminho.
+   */
+  const [textoAberto, setTextoAberto] = useState(false);
+  const texto = media.text ?? [];
 
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-black">
@@ -61,6 +72,45 @@ export function CaptureViewer({
           />
         )}
       </div>
+
+      {texto.length > 0 && (
+        <div className="shrink-0 px-4 pb-1">
+          <button
+            type="button"
+            onClick={() => setTextoAberto((a) => !a)}
+            aria-expanded={textoAberto}
+            className="flex min-h-11 w-full items-center justify-between rounded-xl bg-surface-2 px-3 text-[13px] font-medium text-ink transition-transform active:scale-[0.99]"
+          >
+            <span>
+              Texto desta folha{" "}
+              <span className="font-normal text-ink-muted">
+                · {texto.length} {texto.length === 1 ? "linha" : "linhas"}
+              </span>
+            </span>
+            <span aria-hidden="true" className="text-ink-muted">
+              {textoAberto ? "⌃" : "⌄"}
+            </span>
+          </button>
+
+          {textoAberto && (
+            <div className="mt-2 animate-[slid-enter_200ms_ease-out] rounded-xl bg-surface-2 p-3">
+              <ul className="max-h-40 overflow-y-auto">
+                {texto.map((linha, i) => (
+                  <li
+                    key={`${i}-${linha}`}
+                    className="break-words py-0.5 text-[13px] leading-snug text-ink"
+                  >
+                    {linha}
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-2.5">
+                <CopyButton texto={texto.join("\n")} />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {(onToggleFavorite || onTrash) && (
         <div className="flex items-center justify-center gap-3 px-5 pb-[max(16px,env(safe-area-inset-bottom))] pt-3">

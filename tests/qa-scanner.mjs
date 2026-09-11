@@ -156,6 +156,40 @@ console.log("\n== extrair texto: sob demanda, e sem bloquear salvar ==");
     "e há como copiar o que leu",
   );
 
+  /* Extrair e perder seria meia funcionalidade: quem leu a folha na revisão
+     espera encontrar aquilo de novo depois de salvar. */
+  await revisao.getByRole("button", { name: /Salvar na galeria/i }).click();
+  await p.waitForTimeout(2500);
+
+  const guardado = await p.evaluate(async () => {
+    const db = await new Promise((r) => {
+      const q = indexedDB.open("jovi-camera-v2");
+      q.onsuccess = () => r(q.result);
+    });
+    const all = await new Promise((r) => {
+      const q = db.transaction("captures", "readonly").objectStore("captures").getAll();
+      q.onsuccess = () => r(q.result);
+    });
+    db.close();
+    const doc = all.find((c) => c.source === "scanner");
+    return doc ? { linhas: doc.text?.length ?? 0, primeira: doc.text?.[0] ?? "" } : null;
+  });
+  console.log("        " + JSON.stringify(guardado));
+  check(guardado?.linhas > 0, "o texto foi guardado com o documento", `${guardado?.linhas} linhas`);
+
+  await p.getByRole("button", { name: "Galeria", exact: true }).click();
+  await p.waitForTimeout(1800);
+  await p.locator("ul li img").first().click();
+  await p.waitForTimeout(1200);
+  const visor = await p.locator("body").innerText();
+  check(/Texto desta folha/i.test(visor), "e a captura aberta mostra que ele existe");
+  await p.getByRole("button", { name: /Texto desta folha/i }).click();
+  await p.waitForTimeout(500);
+  check(
+    /funcao|quadratica|Grau|equacoes/i.test(await p.locator("body").innerText()),
+    "com o texto lido dentro",
+  );
+
   check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
   await b.close();
 }
