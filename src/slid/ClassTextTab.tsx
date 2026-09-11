@@ -1,5 +1,6 @@
 import { useObjectUrl } from "../shared/hooks/useObjectUrl";
 import { CopyButton } from "./CopyButton";
+import { ListenFromHere } from "./ListenFromHere";
 import { linesWithoutTitle, momentsAsText } from "./classText";
 import { formatClock } from "../shared/lib/time";
 import type { ClassMoment, ClassRecord } from "./classes";
@@ -17,7 +18,14 @@ import type { ClassMoment, ClassRecord } from "./classes";
  * as linhas lidas, e a imagem daquele momento ao lado — texto e captura na
  * mesma caixa, que é o que deixa conferir uma leitura sem sair da tela.
  */
-export function ClassTextTab({ record }: { record: ClassRecord }) {
+export function ClassTextTab({
+  record,
+  onOuvir,
+}: {
+  record: ClassRecord;
+  /** Presente só quando a aula tem gravação. */
+  onOuvir?: (atMs: number) => void;
+}) {
   const comConteudo = record.moments.filter(
     (m) => linesWithoutTitle(m).length > 0,
   );
@@ -41,7 +49,11 @@ export function ClassTextTab({ record }: { record: ClassRecord }) {
   return (
     <div className="flex flex-col gap-3">
       {comConteudo.map((momento) => (
-        <BlocoDeMomento key={momento.media.id} momento={momento} />
+        <BlocoDeMomento
+          key={momento.media.id}
+          momento={momento}
+          onOuvir={onOuvir}
+        />
       ))}
 
       <div className="pt-1">
@@ -51,7 +63,13 @@ export function ClassTextTab({ record }: { record: ClassRecord }) {
   );
 }
 
-function BlocoDeMomento({ momento }: { momento: ClassMoment }) {
+function BlocoDeMomento({
+  momento,
+  onOuvir,
+}: {
+  momento: ClassMoment;
+  onOuvir?: (atMs: number) => void;
+}) {
   const url = useObjectUrl(momento.media.blob);
   const linhas = linesWithoutTitle(momento);
 
@@ -64,6 +82,12 @@ function BlocoDeMomento({ momento }: { momento: ClassMoment }) {
         {momento.category && (
           <span className="rounded bg-accent/12 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent">
             {momento.category}
+          </span>
+        )}
+        {/* Ao lado do horário, que é a informação com que ele conversa. */}
+        {onOuvir && (
+          <span className="ml-auto">
+            <ListenFromHere atMs={momento.atMs} onOuvir={onOuvir} compacto />
           </span>
         )}
       </div>

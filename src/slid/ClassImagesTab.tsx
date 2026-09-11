@@ -1,4 +1,5 @@
 import { useObjectUrl } from "../shared/hooks/useObjectUrl";
+import { ListenFromHere } from "./ListenFromHere";
 import { formatClock } from "../shared/lib/time";
 import type { ClassMoment } from "./classes";
 
@@ -17,9 +18,12 @@ import type { ClassMoment } from "./classes";
 export function ClassImagesTab({
   momentos,
   onAbrir,
+  onOuvir,
 }: {
   momentos: ClassMoment[];
   onAbrir: (index: number) => void;
+  /** Presente só quando a aula tem gravação. */
+  onOuvir?: (atMs: number) => void;
 }) {
   if (momentos.length === 0) {
     return (
@@ -33,7 +37,11 @@ export function ClassImagesTab({
     <ul className="grid grid-cols-2 gap-2.5">
       {momentos.map((momento, index) => (
         <li key={momento.media.id}>
-          <CartaoDeMomento momento={momento} onAbrir={() => onAbrir(index)} />
+          <CartaoDeMomento
+            momento={momento}
+            onAbrir={() => onAbrir(index)}
+            onOuvir={onOuvir}
+          />
         </li>
       ))}
     </ul>
@@ -43,13 +51,16 @@ export function ClassImagesTab({
 function CartaoDeMomento({
   momento,
   onAbrir,
+  onOuvir,
 }: {
   momento: ClassMoment;
   onAbrir: () => void;
+  onOuvir?: (atMs: number) => void;
 }) {
   const url = useObjectUrl(momento.media.blob);
 
   return (
+    <div className="relative">
     <button
       type="button"
       onClick={onAbrir}
@@ -73,5 +84,15 @@ function CartaoDeMomento({
         )}
       </span>
     </button>
+
+    {/* Fora do botão do card, e não dentro: um <button> dentro de outro é
+        HTML inválido, e o navegador desfaz o aninhamento de um jeito que
+        deixa o de dentro inalcançável. */}
+    {onOuvir && (
+      <span className="absolute right-1.5 top-1.5">
+        <ListenFromHere atMs={momento.atMs} onOuvir={onOuvir} compacto />
+      </span>
+    )}
+    </div>
   );
 }

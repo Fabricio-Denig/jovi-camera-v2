@@ -211,7 +211,7 @@ console.log("\n== a foto salva sai como o visor mostrava ==");
 
       // A última foto guardada, lida do próprio banco do app.
       const db = await new Promise((r) => {
-        const req = indexedDB.open("jovi-camera-v2", 1);
+        const req = indexedDB.open("jovi-camera-v2");
         req.onsuccess = () => r(req.result);
       });
       const itens = await new Promise((r) => {
@@ -299,7 +299,7 @@ console.log("\n== a foto salva sai como o visor mostrava ==");
     ctxCru.drawImage(video, 0, 0, w, h);
 
     const db = await new Promise((r) => {
-      const req = indexedDB.open("jovi-camera-v2", 1);
+      const req = indexedDB.open("jovi-camera-v2");
       req.onsuccess = () => r(req.result);
     });
     const itens = await new Promise((r) => {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { capturePhotoFromVideo } from "./capturePhoto";
 import { CaptureThumb } from "./CaptureThumb";
 import { CaptureViewer } from "./CaptureViewer";
@@ -35,7 +35,13 @@ import { SlidSuggestion } from "../slid/SlidSuggestion";
 import { SlidDebugPanel } from "../slid/SlidDebugPanel";
 import { SlidSummary } from "../slid/SlidSummary";
 import { useSlidSession } from "../slid/useSlidSession";
-import { getLatestCapture, saveCapture } from "../shared/lib/mediaStore";
+import { useListen } from "../listen/useListen";
+import { ListenBadge, SeeListenIdentify } from "../listen/ListenBadge";
+import {
+  getLatestCapture,
+  saveCapture,
+  saveLessonAudio,
+} from "../shared/lib/mediaStore";
 import type { CapturedMedia } from "../types/camera";
 
 /** Diagnostics stay out of the demo but remain one query param away if the camera misbehaves on stage. */
@@ -149,6 +155,29 @@ export function CameraShell({
     setFilterId(id);
   }
 
+  /*
+   * O **Listen** do SliD. Ele vive ao lado da sessão e não dentro dela: o
+   * detector é o núcleo validado em projetor real, e um recurso novo não pode
+   * poder quebrá-lo. Se a gravação falhar, falha sozinha.
+   */
+  const listen = useListen();
+  /** O que foi gravado da aula, esperando a hora de ser guardado com ela. */
+  const [gravacao, setGravacao] = useState<{
+    blob: Blob;
+    mimeType: string;
+    durationMs: number;
+  } | null>(null);
+  /*
+   * Quantos milissegundos de aula já tinham passado quando o áudio começou.
+   *
+   * Não é zero, e tratá-lo como zero é o defeito que faria "ouvir deste
+   * ponto" cair sempre no lugar errado: entre entrar no SliD e o microfone
+   * abrir existe a caixa de permissão, que a pessoa pode demorar segundos —
+   * ou minutos — para responder. Guardado aqui e subtraído lá, cada momento
+   * aponta para o instante certo da gravação.
+   */
+  const audioComecouEmRef = useRef(0);
+
   const slid = useSlidSession({
     videoRef,
     // Only look for a board when the suggestion could actually be acted on.
@@ -206,6 +235,28 @@ export function CameraShell({
 
   // Entering SliD from the mode bar starts the session directly, so the mode
   // and the session never disagree about what is happening.
+  /*
+   * O microfone é pedido ao entrar no SliD, e só ali.
+   *
+   * Depois da câmera, nunca antes: duas caixas de permissão ao mesmo tempo é
+   * como se perde as duas. E nunca fora de uma sessão — fora dela não há o que
+   * gravar, e um microfone aberto sem aula é exatamente a impressão que este
+   * recurso não pode dar.
+   *
+   * O `void` no início é a decisão inteira deste bloco: ninguém espera o
+   * resultado. Microfone negado, ausente ou quebrado deixa a sessão de pé e o
+   * SliD continua vendo e identificando.
+   */
+  useEffect(() => {
+    if (isSlid && status === "ready" && listen.status === "parado" && !gravacao) {
+      const naSessao = slid.elapsedMs;
+      void listen.start().then((deu) => {
+        if (deu) audioComecouEmRef.current = naSessao;
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSlid, status]);
+
   useEffect(() => {
     if (isSlid && slid.status === "idle") {
       // SliD is used with the phone propped up facing the class. Inheriting the
@@ -217,6 +268,28 @@ export function CameraShell({
     if (!isSlid && slid.status !== "idle" && slid.status !== "finished") {
       slid.finish();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSlid]);
+
+  /*
+   * A gravação termina quando a aula termina, e o que foi gravado espera aqui
+   * até o resumo dizer se a aula será guardada ou descartada.
+   *
+   * Parar aqui e não no `onSave` é o que faz o áudio sobreviver ao descarte da
+   * aula: o microfone é solto no instante em que a sessão acaba, e não fica
+   * aberto enquanto o estudante escolhe a matéria.
+   */
+  useEffect(() => {
+    if (slid.status !== "finished" || !listen.gravando) return;
+    void listen.stop().then((resultado) => {
+      if (resultado) setGravacao(resultado);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slid.status]);
+
+  /* Sair do SliD sem encerrar pela tela de resumo também solta o microfone. */
+  useEffect(() => {
+    if (!isSlid && listen.gravando) listen.disable();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSlid]);
 
@@ -532,6 +605,22 @@ export function CameraShell({
           onResume={slid.resume}
           onFinish={slid.finish}
           onConfirmingChange={setConfirmingFinish}
+          listen={
+            <ListenBadge
+              status={listen.status}
+              elapsedMs={listen.elapsedMs}
+              level={listen.level}
+              onDesligar={listen.disable}
+              onTentarDeNovo={() => void listen.start()}
+            />
+          }
+          promessa={
+            <SeeListenIdentify
+              vendo={slid.sceneReady}
+              ouvindo={listen.status === "ouvindo"}
+              identificou={slid.captures.length}
+            />
+          }
         />
       )}
 
@@ -578,6 +667,27 @@ export function CameraShell({
                 },
               });
             }
+            // O áudio vai para o armazém próprio, com a chave desta sessão:
+            // um arquivo por aula, e não a mesma gravação repetida em cada
+            // momento. Falhar aqui não pode custar a aula — as imagens e o
+            // texto já estão salvos, e uma aula sem áudio é muito melhor que
+            // nenhuma aula.
+            if (gravacao) {
+              try {
+                await saveLessonAudio({
+                  sessionId,
+                  blob: gravacao.blob,
+                  mimeType: gravacao.mimeType,
+                  durationMs: gravacao.durationMs,
+                  startedAtMs: audioComecouEmRef.current,
+                  createdAt: savedAt,
+                });
+              } catch {
+                /* a aula fica sem áudio, e continua aula */
+              }
+              setGravacao(null);
+              audioComecouEmRef.current = 0;
+            }
             onCaptureSaved();
             slid.reset();
             onSelectMode("photo");
@@ -588,6 +698,9 @@ export function CameraShell({
             setTimeout(() => setSavedClass(null), 5000);
           }}
           onDiscard={() => {
+            // Descartar a aula descarta a gravação junto. Guardar o áudio de
+            // uma aula que a pessoa jogou fora seria guardar escondido.
+            setGravacao(null);
             slid.reset();
             onSelectMode("photo");
           }}

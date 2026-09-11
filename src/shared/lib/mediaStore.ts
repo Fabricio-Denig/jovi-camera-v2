@@ -8,8 +8,22 @@ import type { CapturedMedia } from "../../types/camera";
  */
 
 const DB_NAME = "jovi-camera-v2";
-const DB_VERSION = 1;
+/**
+ * v2 acrescentou o armazém de áudio. A subida é aditiva — cria o que falta e
+ * não toca no que existe —, então uma aula guardada antes do Listen continua
+ * abrindo, só que sem gravação.
+ */
+const DB_VERSION = 2;
 const STORE_NAME = "captures";
+/**
+ * O áudio da aula, num armazém próprio e com a chave da sessão.
+ *
+ * Fora de `captures` de propósito: os campos de aula são denormalizados em
+ * cada momento, e uma gravação de quarenta minutos repetida em doze momentos
+ * seriam centenas de megabytes do mesmo áudio. Um objeto por aula, com
+ * marcadores de tempo, é o que a aula precisa.
+ */
+const AUDIO_STORE = "lessonAudio";
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -18,6 +32,9 @@ function openDb(): Promise<IDBDatabase> {
       const db = request.result;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         db.createObjectStore(STORE_NAME, { keyPath: "id" });
+      }
+      if (!db.objectStoreNames.contains(AUDIO_STORE)) {
+        db.createObjectStore(AUDIO_STORE, { keyPath: "sessionId" });
       }
     };
     request.onsuccess = () => resolve(request.result);
@@ -110,6 +127,63 @@ export async function deleteCapturesForever(
     const tx = db.transaction(STORE_NAME, "readwrite");
     const store = tx.objectStore(STORE_NAME);
     for (const id of doomed) store.delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+  db.close();
+}
+
+/**
+ * A gravação de uma aula: um arquivo só, com marcadores.
+ *
+ * Cortar o áudio em trinta pedaços — um por momento — exigiria trinta
+ * `MediaRecorder` ou uma remontagem que o navegador não faz sem biblioteca de
+ * áudio. Um arquivo com marcadores de tempo dá a mesma experiência ("ouvir
+ * deste ponto") sendo muito mais robusto: se a gravação falhar no meio, o que
+ * já foi gravado continua inteiro.
+ */
+export interface LessonAudio {
+  sessionId: string;
+  blob: Blob;
+  mimeType: string;
+  /** Quanto tempo de áudio existe, em ms, medido pelo relógio da sessão. */
+  durationMs: number;
+  /** Quando a gravação começou, em ms desde o início da sessão. */
+  startedAtMs: number;
+  createdAt: number;
+}
+
+export async function saveLessonAudio(audio: LessonAudio): Promise<void> {
+  const db = await openDb();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(AUDIO_STORE, "readwrite");
+    tx.objectStore(AUDIO_STORE).put(audio);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+  db.close();
+}
+
+export async function getLessonAudio(
+  sessionId: string,
+): Promise<LessonAudio | undefined> {
+  const db = await openDb();
+  const found = await new Promise<LessonAudio | undefined>((resolve, reject) => {
+    const tx = db.transaction(AUDIO_STORE, "readonly");
+    const request = tx.objectStore(AUDIO_STORE).get(sessionId);
+    request.onsuccess = () => resolve(request.result as LessonAudio | undefined);
+    request.onerror = () => reject(request.error);
+  });
+  db.close();
+  return found;
+}
+
+/** Sai junto com a aula, quando a aula sai de vez. */
+export async function deleteLessonAudio(sessionId: string): Promise<void> {
+  const db = await openDb();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(AUDIO_STORE, "readwrite");
+    tx.objectStore(AUDIO_STORE).delete(sessionId);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });

@@ -19,6 +19,10 @@ interface SlidOverlayProps {
   onFinish: () => void;
   /** The confirmation owns the whole screen, navigation included. */
   onConfirmingChange: (confirming: boolean) => void;
+  /** O selo do Listen, montado por quem é dono da gravação. */
+  listen?: React.ReactNode;
+  /** As três letras do produto, quando há o que mostrar nelas. */
+  promessa?: React.ReactNode;
 }
 
 /** How long the controls stay up after a tap before the screen goes quiet again. */
@@ -52,6 +56,8 @@ export function SlidOverlay({
   onResume,
   onFinish,
   onConfirmingChange,
+  listen,
+  promessa,
 }: SlidOverlayProps) {
   const running = status === "running";
   // Saying "acompanhando a aula" while the camera faces a wall is the kind of
@@ -125,6 +131,11 @@ export function SlidOverlay({
             {formatClock(elapsedMs)}
           </span>
         </div>
+
+        {/* O Listen logo abaixo do estado da sessão: as duas coisas que a
+            câmera está fazendo, uma sobre a outra. */}
+        {listen}
+        {promessa}
 
         {running && lastMoment && (
           // Keyed by the moment so each new one mounts its own toast, instead

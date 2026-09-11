@@ -66,9 +66,16 @@ export async function semearAula(page, aula = AULA) {
         c.toBlob(r, "image/jpeg", 0.9);
       });
 
-    const db = await new Promise((r) => {
-      const q = indexedDB.open("jovi-camera-v2", 1);
+    /*
+     * Sem número de versão, de propósito: o app subiu o banco para v2 quando
+     * o Listen entrou, e abrir pedindo v1 devolve `VersionError` — o teste
+     * inteiro morria com "execution context destroyed" por causa disso.
+     * Sem versão, anexa ao que existe, qualquer que seja.
+     */
+    const db = await new Promise((r, x) => {
+      const q = indexedDB.open("jovi-camera-v2");
       q.onsuccess = () => r(q.result);
+      q.onerror = () => x(q.error);
     });
 
     // Os blobs antes da transação: um `await` no meio dela a fecha sozinha.

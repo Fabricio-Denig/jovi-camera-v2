@@ -9,6 +9,8 @@ import { linesWithoutTitle } from "./classText";
 import { DisciplinePicker } from "./DisciplinePicker";
 import { StatusPicker } from "./StatusPicker";
 import { type ClassStatus } from "./status";
+import { LessonAudioPlayer } from "../listen/LessonAudioPlayer";
+import { getLessonAudio, type LessonAudio } from "../shared/lib/mediaStore";
 import {
   getClassById,
   renameClass,
@@ -59,6 +61,10 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
    * dado certo, e abrir numa aba vazia faz a tela parecer quebrada.
    */
   const [tab, setTab] = useState<ClassTab>("imagens");
+  /** A gravação desta aula, quando ela tem uma. */
+  const [audio, setAudio] = useState<LessonAudio | null>(null);
+  /** Para onde o player deve pular, quando um momento pede. */
+  const [seekTo, setSeekTo] = useState<number | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -67,6 +73,14 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
       setRecord(found);
       setName(found?.subject ?? "");
     });
+    // O áudio vem de um armazém próprio e falha sozinho: uma aula sem
+    // gravação abre igual, e uma leitura que der errado não pode impedir a
+    // aula de abrir.
+    void getLessonAudio(classId)
+      .then((achado) => {
+        if (active && achado) setAudio(achado);
+      })
+      .catch(() => {});
     return () => {
       active = false;
     };
@@ -226,11 +240,51 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
         aria-labelledby={`aba-${tab}`}
         className="min-h-0 flex-1 overflow-y-auto px-4 py-4"
       >
-        {tab === "imagens" && (
-          <ClassImagesTab momentos={record.moments} onAbrir={setReviewing} />
+        {/* O player fica fora das abas, e de propósito: o áudio é da aula
+            inteira, não de uma das três vistas dela. Assim "ouvir deste ponto"
+            na aba Imagens não faz o player sumir ao trocar para Texto. */}
+        {audio && (
+          <div className="mb-4">
+            <LessonAudioPlayer
+              audio={audio}
+              seekTo={seekTo}
+              onSeeked={() => setSeekTo(null)}
+            />
+          </div>
         )}
-        {tab === "texto" && <ClassTextTab record={record} />}
-        {tab === "resumo" && <ClassSummaryTab record={record} />}
+
+        {tab === "imagens" && (
+          <ClassImagesTab
+            momentos={record.moments}
+            onAbrir={setReviewing}
+            onOuvir={
+              audio
+                ? (atMs) => setSeekTo(Math.max(0, atMs - audio.startedAtMs))
+                : undefined
+            }
+          />
+        )}
+        {tab === "texto" && (
+          <ClassTextTab
+            record={record}
+            onOuvir={
+              audio
+                ? (atMs) => setSeekTo(Math.max(0, atMs - audio.startedAtMs))
+                : undefined
+            }
+          />
+        )}
+        {tab === "resumo" && (
+          <ClassSummaryTab
+            record={record}
+            temAudio={Boolean(audio)}
+            onOuvir={
+              audio
+                ? (atMs) => setSeekTo(Math.max(0, atMs - audio.startedAtMs))
+                : undefined
+            }
+          />
+        )}
       </div>
 
       {record.moments.length > 0 && (

@@ -1,4 +1,5 @@
 import { CopyButton } from "./CopyButton";
+import { ListenFromHere } from "./ListenFromHere";
 import { classAsText } from "./classText";
 import { KIND_NAMES, overviewWithStatus, type ContentKind } from "./readContent";
 import { STATUS_STYLES } from "./status";
@@ -20,12 +21,29 @@ import type { ClassRecord } from "./classes";
  * convincente de uma aula que não aconteceu é a pior coisa que esta tela
  * poderia produzir.
  */
-export function ClassSummaryTab({ record }: { record: ClassRecord }) {
+export function ClassSummaryTab({
+  record,
+  temAudio = false,
+  onOuvir,
+}: {
+  record: ClassRecord;
+  /** A aula tem gravação — dito no resumo, porque é fato sobre a aula. */
+  temAudio?: boolean;
+  onOuvir?: (atMs: number) => void;
+}) {
   const nada =
     !record.overview && record.topics.length === 0 && record.kinds.length === 0;
 
   return (
     <div className="flex flex-col gap-5">
+      {/* Que a aula foi gravada é um fato sobre ela, e entra no resumo como
+          qualquer outro — não como propaganda de um recurso. */}
+      {temAudio && (
+        <p className="-mb-2 text-[12.5px] text-ink-muted">
+          Esta aula tem gravação de áudio.
+        </p>
+      )}
+
       {record.overview && (
         <p className="text-[15px] leading-relaxed text-ink">
           {overviewWithStatus(
@@ -99,6 +117,9 @@ export function ClassSummaryTab({ record }: { record: ClassRecord }) {
                 <span className="min-w-0 flex-1 text-[13.5px] leading-snug text-ink">
                   {momento.label}
                 </span>
+                {onOuvir && (
+                  <ListenFromHere atMs={momento.atMs} onOuvir={onOuvir} compacto />
+                )}
               </li>
             ))}
           </ol>

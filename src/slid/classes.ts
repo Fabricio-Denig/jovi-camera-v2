@@ -1,5 +1,6 @@
 import {
   deleteCapturesForever,
+  deleteLessonAudio,
   getAllCaptures,
   getTrashedCaptures,
   restoreCaptures,
@@ -182,4 +183,8 @@ export async function restoreClass(id: string): Promise<void> {
 
 export async function deleteClassForever(id: string): Promise<void> {
   await deleteCapturesForever((media) => media.session?.id === id);
+  // A gravação sai junto. Um áudio de quarenta minutos sobrevivendo a uma aula
+  // apagada de vez seria, ao mesmo tempo, lixo ocupando espaço e uma gravação
+  // guardada depois de a pessoa ter mandado apagar tudo.
+  await deleteLessonAudio(id).catch(() => {});
 }
