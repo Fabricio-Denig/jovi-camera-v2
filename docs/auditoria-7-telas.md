@@ -86,6 +86,45 @@ As três estão no `checklist-aparelho.md`, que é o documento que fecha a
 lacuna — e que diz, na primeira linha de cada seção, o que ele não conseguiu
 provar sozinho.
 
+## A tela do SliD ativo, medida (Fase 4)
+
+A pergunta era se as últimas funcionalidades tinham transformado a tela numa
+cabine de avião. Medi em vez de opinar, a 390 px:
+
+| y | elemento | altura |
+|---|---|---|
+| 70 | `Acompanhando a aula 00:03` | 35 |
+| 113 | `Ouvindo 00:03 ✕` | 40 |
+| 140 | miniatura do momento (trilha, à direita) | 58 |
+| 161 | `See · Listen · Identify 1` | 32 |
+| 201 | `Novo tópico no quadro` (transitório) | 35 |
+
+**70 → 236 px = 28 % da altura da tela.** Com a linha da fala ligada passaria
+de 31 %.
+
+### O que eu **não** mudei, e por quê
+
+O relógio aparece duas vezes — na pílula da sessão e no selo do Listen — e a
+primeira reação é chamar isso de redundância. Não é: o áudio pode começar
+depois da sessão, porque entre entrar no SliD e a pessoa responder à caixa de
+permissão passam segundos. Os dois números diferem, e a diferença é
+informação. Há decisão registrada e teste protegendo (`qa-slid-listen`:
+*"há um relógio para a sessão e outro para o áudio"*).
+
+Também não juntei a pílula da sessão com o selo do Listen numa linha só: as
+duas somam 431 px de largura e a tela tem 390.
+
+### O que mudei
+
+A linha da fala e a linha `SEE · LISTEN · IDENTIFY` passam a **se revezar** em
+vez de empilhar. As duas dizem a mesma coisa por meios diferentes — a primeira
+é a promessa em três bolinhas, a segunda é a promessa acontecendo — e a
+segunda prova muito melhor. No caso comum, em que o navegador não transcreve,
+nada muda: a medição depois da troca continua 28 %.
+
+É a mudança mais conservadora que responde à pergunta, e ela tem teto medido:
+`qa-slid-listen` passou a reprovar se a coluna ultrapassar 30 % da tela.
+
 ## Uma suíte que não é determinística, e o que isso custa
 
 Medido em 11/set, rodando `qa-moldura` duas vezes — uma contra a `main`, outra
