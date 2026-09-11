@@ -15,6 +15,7 @@ node tests/render-dinamico.mjs         # cenas que mudam com o tempo
 node tests/render-documento.mjs        # folha sobre a mesa, para o Scanner
 node tests/render-cores.mjs            # a única cena COLORIDA, para os filtros
 node tests/render-texto.mjs            # uma folha com TEXTO de verdade, para o OCR
+node tests/render-noturno.mjs          # um quarto escuro com ruído de sensor real
 node tests/qa-slid-realworld.mjs
 node tests/qa-slid-dinamico.mjs
 node tests/qa-moldura.mjs
@@ -27,6 +28,7 @@ node tests/qa-slid-listen.mjs
 node tests/qa-demo-banca.mjs           # a jornada inteira, na ordem da apresentação
 node tests/qa-robustez.mjs             # os caminhos ruins: permissão, banco, clipboard, tela
 node tests/qa-intervalo.mjs            # o time-lapse, que deixou de ser prévia
+node tests/qa-noturno.mjs              # o modo Noite, e a medida que o autoriza
 node tests/perf-filtros.mjs             # relatório, não teste com veredito
 ```
 
@@ -58,6 +60,7 @@ semente (`ruido()` em `caminhos.mjs`). `SLID_CENAS`, `SLID_APP` e
 | `qa-demo-banca` | **a jornada inteira, na ordem em que uma pessoa a percorre.** Três caminhos: SliD com áudio do reconhecimento ao PDF; SliD sem microfone; e o Scanner do catálogo ao arquivo. Os outros testes provam que cada peça funciona; este prova que elas se encaixam — e é o único jeito de saber, antes da apresentação, que a demonstração roda. |
 | `qa-robustez` | os caminhos ruins, um a um: câmera negada, IndexedDB recusado, área de transferência bloqueada, uma câmera só, deitado, e 320 px. A pergunta de todos: **a tela diz o que aconteceu, ou só não funciona?** |
 | `qa-intervalo` | o modo Intervalo grava um quadro por intervalo e monta um vídeo que o navegador abre? Trocar de modo no meio guarda o que já foi capturado? E poucos quadros dizem por quê, em vez de salvar um arquivo que não toca? |
+| `qa-noturno` | **a medida que autoriza o modo Noite a existir**: a média de N quadros corta o ruído por √N? Medido contra o teórico, com margem de 15 % — mais folga que isso deixaria passar uma implementação que lê o mesmo quadro N vezes e não melhora nada. E a tela diz o que o modo não faz? |
 | `qa-virar` | o botão de virar câmera está na fileira do obturador, à direita, como no Figma? Forja um segundo dispositivo de vídeo, porque a câmera falsa do Chromium expõe só um e o app — corretamente — esconde o botão. |
 
 ## Os geradores

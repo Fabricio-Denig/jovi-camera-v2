@@ -38,6 +38,8 @@ import { useSlidSession } from "../slid/useSlidSession";
 import { useListen } from "../listen/useListen";
 import { useTimelapse } from "../timelapse/useTimelapse";
 import { TimelapseBar } from "../timelapse/TimelapseBar";
+import { NightBar } from "../night/NightBar";
+import { acharNivel, empilharQuadros, type NivelNoturno } from "../night/stackFrames";
 import { ListenBadge, SeeListenIdentify } from "../listen/ListenBadge";
 import {
   getLatestCapture,
@@ -130,6 +132,11 @@ export function CameraShell({
   const isScanner = mode.id === "scanner";
   /** O modo Intervalo tem o seu próprio ciclo de gravação, e não o do vídeo. */
   const isTimelapse = mode.id === "timelapse";
+  /** O modo Noite, que empilha quadros em vez de disparar uma vez. */
+  const isNight = mode.id === "night";
+  const [nivelNoturno, setNivelNoturno] = useState<NivelNoturno>("medio");
+  const [noturnoProgresso, setNoturnoProgresso] = useState(0);
+  const [empilhando, setEmpilhando] = useState(false);
   const [scanned, setScanned] = useState<
     { foto: Blob; regiao: ContentBounds | null } | null
   >(null);
@@ -428,6 +435,34 @@ export function CameraShell({
 
       if (isScanner) {
         await dispararDocumento();
+        return;
+      }
+
+      if (isNight) {
+        if (empilhando || !videoRef.current) return;
+        const nivel = acharNivel(nivelNoturno);
+        setEmpilhando(true);
+        setNoturnoProgresso(0);
+        try {
+          const { blob, width, height } = await empilharQuadros(
+            videoRef.current,
+            nivel.quadros,
+            nivel.segundos,
+            { aoProgredir: setNoturnoProgresso },
+          );
+          await persist({
+            id: crypto.randomUUID(),
+            kind: "photo",
+            blob,
+            mimeType: blob.type,
+            createdAt: Date.now(),
+            width,
+            height,
+          });
+        } finally {
+          setEmpilhando(false);
+          setNoturnoProgresso(0);
+        }
         return;
       }
 
@@ -797,6 +832,15 @@ export function CameraShell({
               </>
             )}
 
+            {isNight && (
+              <NightBar
+                nivel={nivelNoturno}
+                onNivel={setNivelNoturno}
+                progresso={noturnoProgresso}
+                ocupado={empilhando}
+              />
+            )}
+
             {isTimelapse && (
               <TimelapseBar
                 status={timelapse.status}
@@ -810,7 +854,7 @@ export function CameraShell({
               />
             )}
 
-            {mode.kind === "photo" && !isScanner && (
+            {mode.kind === "photo" && !isScanner && !isNight && (
               <div className="flex w-full flex-col items-center gap-1.5">
                 <button
                   type="button"
@@ -849,6 +893,7 @@ export function CameraShell({
                 <ShutterButton
                   mode={mode.kind}
                   isRecording={isTimelapse ? timelapse.gravando : recorder.isRecording}
+                  busy={empilhando}
                   onPress={handleShutterPress}
                   disabled={mode.fidelity === "simulated"}
                 />

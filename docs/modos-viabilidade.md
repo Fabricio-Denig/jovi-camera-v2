@@ -17,7 +17,7 @@ Tesseract.js rodando local, IndexedDB, e a análise de quadro do SliD.
 | **Vídeo** | real | — | `MediaRecorder` | — | — |
 | **SliD** | real *(validado em projetor, 2x)* | — | análise de quadro própria | — | — |
 | **Documento / Scanner** | **real** *(fase 1 e 2)* | — | canvas para detectar bordas por gradiente, transformação de perspectiva com `setTransform`, Tesseract já embarcado, filtro de contraste já existe | médio | **1ª** |
-| **Noturno** | prévia | **Sim, versão honesta** | empilhar N quadros do vídeo em canvas e tirar a média — reduz ruído de verdade; `exposureCompensation` via `applyConstraints` quando o aparelho expõe | baixo | **2ª** |
+| **Noturno / Noite** | **real** *(11/set)* | — | média de N quadros em `Float32Array` | — | — |
 | **Time-lapse / Intervalo** | **real** *(11/set)* | — | `canvas.captureStream(0)` + `requestFrame()` + `MediaRecorder` | — | — |
 | **Retrato** | prévia | Parcial e arriscado | separar pessoa do fundo pede segmentação; sem biblioteca pesada, só dá para desfocar por distância do centro — o que erra em qualquer foto que não seja um busto centralizado | alto para ficar honesto | 4ª |
 | **Panorâmica** | prévia | Difícil | costura de quadros pede casamento de características; sem OpenCV vira colagem com emenda visível | alto | baixa |
@@ -45,7 +45,8 @@ card dizendo o que faria — que é honesto e é o que o Figma desenha.
 
 ## O que virou real, e por quê
 
-**Scanner** (10/set) e **Intervalo** (11/set) saíram da lista de prévias.
+**Scanner** (10/set), **Intervalo** e **Noite** (11/set) saíram da lista de
+prévias.
 
 O Intervalo é o modo criativo mais honesto que dá para fazer no navegador, e
 vale registrar por quê: um time-lapse **é** um quadro a cada N segundos tocados
@@ -62,3 +63,33 @@ Sobram **sete prévias**, e cada uma diz "Prévia" no card com um cartão
 explicando o que faria. Das sete, as que ainda poderiam virar reais estão
 acima com o esforço estimado; **câmera lenta** e **superlua** não podem, e
 estão registradas como tal para não custarem um ciclo de descoberta.
+
+
+### Noite: a metade honesta
+
+Um celular faz foto noturna empilhando exposições **e alinhando-as**. Alinhar
+exige casar características entre quadros, que é o que pediria OpenCV. A outra
+metade — tirar a média de N quadros — é a que mais rende e não precisa de nada.
+
+E ela não é aproximação: o ruído de sensor é aleatório e independente entre
+quadros, o sinal não é. Somar N e dividir por N mantém o sinal e divide o
+desvio do ruído por √N.
+
+**Medido na bancada, contra o teórico:**
+
+| quadros | ruído σ | ganho | teórico |
+|---|---|---|---|
+| 1 | 12,75 | — | — |
+| 4 | 6,36 | **2,00×** | 2,00× |
+| 8 | 4,52 | **2,82×** | 2,83× |
+| 16 | 3,23 | **3,95×** | 4,00× |
+
+E o sinal fica intacto: média 93,0 → 93,1. A conta limpa, não muda a exposição.
+
+O que o modo **não** faz está escrito na tela, e não só no código: ele não
+alinha nada, então celular tremendo borra. "Apoie o celular — este modo não
+corrige tremor" é a diferença entre um modo que funciona e um que a pessoa acha
+quebrado.
+
+O acumulador é `Float32Array` e não um canvas, por um motivo prático: somar
+dezesseis quadros de oito bits num canvas satura tudo acima de 255 no terceiro.
