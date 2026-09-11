@@ -106,6 +106,18 @@ async function abrir({
   return { b, p, erros };
 }
 
+async function abrirAulaNaGaleria(p) {
+  await p.getByRole("button", { name: "Galeria", exact: true }).click();
+  await p.waitForTimeout(1200);
+  await p
+    .getByRole("tablist", { name: "Filtrar a galeria" })
+    .getByRole("tab", { name: /^SliD/ })
+    .click();
+  await p.waitForTimeout(900);
+  await p.locator("article button").first().click();
+  await p.waitForTimeout(1500);
+}
+
 const entrarNoSlid = async (p) => {
   await p.getByRole("button", { name: "SliD", exact: true }).click();
   await p.waitForTimeout(2500);
@@ -441,6 +453,72 @@ console.log("\n== desligar o áudio à mão vale para o resto da aula ==");
     );
   } else {
     check(true, "(sem botão Ativar neste estado — o áudio ficou desligado)");
+  }
+
+  check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
+  await b.close();
+}
+
+console.log("\n== lixeira e volta: o áudio acompanha a aula ==");
+{
+  const { b, p, erros } = await abrir();
+  await entrarNoSlid(p);
+  await p.waitForTimeout(12000);
+  await encerrar(p);
+  await p.getByRole("button", { name: /salvar|guardar/i }).first().click();
+  await p.waitForTimeout(3000);
+  await abrirAulaNaGaleria(p);
+  check(/Áudio da aula/i.test(await p.locator("body").innerText()), "a aula tem áudio");
+
+  // Para a lixeira, pelo cartão "Excluir" das ações rápidas.
+  await p
+    .getByRole("tablist", { name: "Conteúdo da aula" })
+    .getByRole("tab", { name: "Resumo" })
+    .click();
+  await p.waitForTimeout(600);
+  await p.getByRole("button", { name: /^Excluir$/ }).click();
+  await p.waitForTimeout(2000);
+
+  /* A gravação fica num armazém próprio, com a chave da sessão. Só sai quando
+     a aula sai de vez — e uma aula na lixeira não saiu de vez. */
+  const naLixeira = await p.evaluate(async () => {
+    const db = await new Promise((r) => {
+      const q = indexedDB.open("jovi-camera-v2");
+      q.onsuccess = () => r(q.result);
+    });
+    const chaves = await new Promise((r) => {
+      const q = db.transaction("lessonAudio", "readonly").objectStore("lessonAudio").getAllKeys();
+      q.onsuccess = () => r(q.result);
+    });
+    db.close();
+    return chaves.length;
+  });
+  check(naLixeira === 1, "na lixeira, a gravação continua guardada", `${naLixeira}`);
+
+  // Restaurar devolve a aula inteira, com o áudio.
+  await p
+    .getByRole("tablist", { name: "Filtrar a galeria" })
+    .getByRole("tab", { name: /lixeira/i })
+    .click()
+    .catch(() => {});
+  await p.waitForTimeout(1200);
+  const restaurar = p.getByRole("button", { name: /restaurar/i }).first();
+  if ((await restaurar.count()) > 0) {
+    await restaurar.click();
+    await p.waitForTimeout(2000);
+    await p
+      .getByRole("tablist", { name: "Filtrar a galeria" })
+      .getByRole("tab", { name: /^SliD/ })
+      .click();
+    await p.waitForTimeout(1000);
+    await p.locator("article button").first().click();
+    await p.waitForTimeout(1500);
+    check(
+      /Áudio da aula/i.test(await p.locator("body").innerText()),
+      "e restaurar devolve a aula com o áudio",
+    );
+  } else {
+    check(false, "a lixeira oferece restaurar");
   }
 
   check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
