@@ -16,6 +16,7 @@ import {
   type ContentKind,
 } from "./readContent";
 import { useOcr } from "./useOcr";
+import { formatClock } from "../shared/lib/time";
 import type { SlidCapture, SlidStats } from "./useSlidSession";
 
 /**
@@ -50,6 +51,8 @@ interface SlidSummaryProps {
   captures: SlidCapture[];
   stats: SlidStats;
   elapsedMs: number;
+  /** Quanto de áudio a sessão gravou, em ms. Zero quando não houve gravação. */
+  audioMs?: number;
   onSave: (aula: SavedClass) => void;
   onDiscard: () => void;
 }
@@ -72,6 +75,7 @@ export function SlidSummary({
   captures,
   stats,
   elapsedMs,
+  audioMs = 0,
   onSave,
   onDiscard,
 }: SlidSummaryProps) {
@@ -214,6 +218,23 @@ export function SlidSummary({
                   ? "Menos de um minuto acompanhado."
                   : `${minutes} ${minutes === 1 ? "minuto" : "minutos"} acompanhados.`}
             </p>
+
+            {/*
+             * O áudio é parte do que está sendo guardado, e esta é a tela em
+             * que o estudante decide guardar. Sem esta linha ele salvava a
+             * aula sem saber que a gravação vinha junto — e uma pessoa que
+             * descobre depois que foi gravada tem razão de se incomodar,
+             * mesmo tendo autorizado o microfone no começo.
+             */}
+            {audioMs > 0 && (
+              <p className="flex items-center gap-2 rounded-xl bg-surface-2 px-3 py-2 text-[13px] text-ink">
+                <MicSummaryIcon />
+                <span>
+                  {formatClock(audioMs)} de áudio gravados, guardados com a aula
+                  neste aparelho.
+                </span>
+              </p>
+            )}
 
             {/* 2. Do que a aula tratou — linhas que o professor escreveu. */}
             {topics.length > 0 && (
@@ -396,5 +417,26 @@ function DiscardConfirm({
         </div>
       </div>
     </div>
+  );
+}
+
+/** O microfone da linha de áudio. Em SVG: a cobertura de emoji varia. */
+function MicSummaryIcon() {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className="shrink-0 text-accent"
+    >
+      <rect x="9" y="2" width="6" height="11" rx="3" />
+      <path d="M5 10a7 7 0 0 0 14 0M12 17v4" />
+    </svg>
   );
 }

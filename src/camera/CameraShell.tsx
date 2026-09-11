@@ -687,6 +687,7 @@ export function CameraShell({
           captures={slid.captures}
           stats={slid.stats}
           elapsedMs={slid.elapsedMs}
+          audioMs={gravacao?.durationMs ?? 0}
           onSave={async ({ subject, discipline, status, moments, topics, kinds, overview }) => {
             const sessionId = crypto.randomUUID();
             const savedAt = Date.now();
