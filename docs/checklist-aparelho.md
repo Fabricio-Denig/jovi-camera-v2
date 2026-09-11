@@ -114,3 +114,64 @@ E a regra que não pode quebrar:
 
 Anote a largura da sua tela (Ajustes → Sobre, ou o modelo do aparelho) se algum
 item de corte falhar.
+
+---
+
+## G — Listen (ciclo de 11/set)
+
+O Listen inteiro é a parte do produto com **menos** cobertura possível nesta
+bancada: o Chromium de mesa grava webm/opus, e é só isso que ele sabe dizer.
+Qual formato cada celular escolhe, se o áudio toca depois de fechar o app, e se
+o microfone é solto de verdade — só o aparelho responde.
+
+Entre no **SliD** e autorize o microfone:
+
+- [ ] a caixa de permissão do microfone aparece **depois** da câmera, não junto
+- [ ] o selo diz **"Ouvindo"** com o relógio andando
+- [ ] **falar perto do celular mexe a barrinha de nível** (é a prova de que o
+      microfone está vivo, e não congelado)
+- [ ] o ✕ ao lado do selo desliga o áudio sem encerrar a aula
+- [ ] encerrar a aula mostra, no resumo, **quanto de áudio foi gravado**
+- [ ] depois de salvar, **o indicador de microfone do sistema apaga** (a bolinha
+      laranja/verde no iPhone, o ícone na barra do Android) — se ficar aceso, é
+      defeito e é o mais grave desta seção
+- [ ] a aula na galeria mostra o **selo de microfone** no card
+- [ ] abrir a aula mostra o player, e **ele toca**
+- [ ] **"Ouvir" num momento salta o áudio para aquele ponto** — confira com o
+      relógio do player
+- [ ] feche o app por completo, reabra, abra a aula: **o áudio continua lá**
+
+Agora **negue** o microfone (recuse a permissão, ou bloqueie nas configurações
+do site) e entre no SliD de novo:
+
+- [ ] o selo diz **"Áudio desativado"**
+- [ ] a sessão continua: momentos são guardados normalmente
+- [ ] a aula salva **não** mostra player nem botão de ouvir
+- [ ] o botão "Ativar" no selo abre o pedido de permissão de novo
+
+Anote qual navegador e qual sistema, e **qual formato o arquivo saiu** se
+conseguir ver (o resumo não mostra, mas um vídeo compartilhado diria).
+
+---
+
+## H — Intervalo e Noite (ciclo de 11/set)
+
+**Intervalo**, em Modos → Intervalo:
+
+- [ ] escolha 1s, grave por ~30 s apontando para algo que muda
+- [ ] a tela mostra quadros, tempo real e duração do vídeo enquanto grava
+- [ ] parar salva um vídeo na galeria, e **ele toca**
+- [ ] o vídeo está mesmo acelerado
+- [ ] trocar de modo no meio **não perde** o que já foi capturado
+
+**Noite**, em Modos → Noite, **num lugar realmente escuro**:
+
+- [ ] escolha "Longo", apoie o celular numa superfície e dispare
+- [ ] a tela diz que está juntando quadros
+- [ ] compare a foto com uma tirada em modo Foto no mesmo lugar: **a do
+      Noturno tem menos granulado**
+- [ ] tire uma com o celular na mão e confirme que ela **borra** — é o
+      comportamento esperado, e é por isso que a tela pede para apoiar
+
+O granulado é o item que importa. Se não houver diferença visível num ambiente
+escuro de verdade, anote — a medição da bancada diz que deveria haver.

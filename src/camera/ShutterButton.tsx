@@ -3,6 +3,8 @@ interface ShutterButtonProps {
   isRecording: boolean;
   onPress: () => void;
   disabled?: boolean;
+  /** Ocupado com uma captura que leva tempo — o Noturno empilhando quadros. */
+  busy?: boolean;
 }
 
 /** Single shutter control. White ring = photo. Turns into a pulsing red square while recording video. */
@@ -11,6 +13,7 @@ export function ShutterButton({
   isRecording,
   onPress,
   disabled = false,
+  busy = false,
 }: ShutterButtonProps) {
   const isVideoArmed = mode === "video";
 
@@ -18,7 +21,7 @@ export function ShutterButton({
     <button
       type="button"
       onClick={onPress}
-      disabled={disabled}
+      disabled={disabled || busy}
       aria-label={
         isVideoArmed
           ? isRecording
