@@ -26,6 +26,7 @@ export function FiltersSheet({
   intensity,
   effectId,
   amostra,
+  mirrored,
   onSelectFilter,
   onIntensity,
   onSelectEffect,
@@ -37,6 +38,8 @@ export function FiltersSheet({
   effectId: string | null;
   /** Um quadro do visor, para os cards mostrarem a cena real. */
   amostra: string | null;
+  /** A frontal é espelhada na tela; o card tem de mostrar o mesmo lado. */
+  mirrored: boolean;
   onSelectFilter: (id: string) => void;
   onIntensity: (valor: number) => void;
   onSelectEffect: (id: string | null) => void;
@@ -44,6 +47,14 @@ export function FiltersSheet({
 }) {
   const { favoritos, alternar } = useFilterFavorites();
   const temIntensidade = filterId !== "nenhum";
+  /*
+   * Só favoritos que ainda existem. A lista vem do aparelho e pode ser de uma
+   * versão anterior do app; sem esta peneira, um filtro que saiu da grade
+   * voltaria como uma pílula "★ Nenhum" que troca o filtro em uso por nada.
+   */
+  const favoritosVivos = favoritos.filter((id) =>
+    CAMERA_FILTERS.some((f) => f.id === id),
+  );
 
   const cards = useMemo(
     () =>
@@ -82,7 +93,10 @@ export function FiltersSheet({
                       src={amostra}
                       alt=""
                       className="size-full object-cover"
-                      style={{ filter: css === "none" ? undefined : css }}
+                      style={{
+                        filter: css === "none" ? undefined : css,
+                        transform: mirrored ? "scaleX(-1)" : undefined,
+                      }}
                     />
                   )}
                 </span>
@@ -211,13 +225,13 @@ export function FiltersSheet({
         })}
       </ul>
 
-      {favoritos.length > 0 && (
+      {favoritosVivos.length > 0 && (
         <>
           <h3 className="mb-2.5 mt-6 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
             Filtros favoritos
           </h3>
           <ul className="flex flex-wrap gap-2">
-            {favoritos.map((id) => {
+            {favoritosVivos.map((id) => {
               const f = findFilter(id);
               return (
                 <li key={id}>

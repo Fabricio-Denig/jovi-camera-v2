@@ -124,13 +124,16 @@ export function CameraShell({
     { foto: Blob; regiao: ContentBounds | null } | null
   >(null);
   /*
-   * Nenhum filtro sobre uma aula. Um momento em P&B ou com sépia é a câmera
-   * mudando o que ela guardou de uma lousa, e o material de estudo não pode
-   * carregar uma escolha estética feita antes da aula começar.
+   * Nenhuma aparência sobre uma aula. Um momento em P&B, com sépia ou com uma
+   * luz de canto desenhada por cima é a câmera mudando o que ela guardou de
+   * uma lousa, e o material de estudo não pode carregar uma escolha estética
+   * feita antes da aula começar.
+   *
+   * Estas duas linhas são a única fonte de aparência do app: a de cima
+   * alimenta o visor e o `ctx.filter` da captura; a de baixo, a camada do
+   * efeito nos dois lugares.
    */
-  /** A única string de aparência do app: visor e captura leem esta. */
   const filtroCss = isSlid ? "none" : applyFilter(filterId, intensity);
-  /** Mesma regra do filtro: nenhum efeito por cima de uma aula. */
   const efeitoAtivo = isSlid ? null : effectId;
 
   /*
@@ -145,6 +148,7 @@ export function CameraShell({
     if (filterId === "nenhum" && id !== "nenhum") setIntensity(DEFAULT_INTENSITY);
     setFilterId(id);
   }
+
   const slid = useSlidSession({
     videoRef,
     // Only look for a board when the suggestion could actually be acted on.
@@ -176,6 +180,17 @@ export function CameraShell({
   useEffect(() => {
     onBoardDetected(slid.boardDetected);
   }, [slid.boardDetected, onBoardDetected]);
+
+  /*
+   * Trocar de modo fecha o painel de filtros.
+   *
+   * Ele é desenhado fora do bloco da câmera de Foto, para poder cobrir a tela
+   * inteira, e sem isto ficaria aberto por cima de uma aula ou de uma folha —
+   * telas onde filtro não existe.
+   */
+  useEffect(() => {
+    setFiltersSheetOpen(false);
+  }, [modeId]);
 
   const [confirmingFinish, setConfirmingFinish] = useState(false);
   // Two ways out, two answers. Ending the class on purpose always earns its
@@ -716,6 +731,7 @@ export function CameraShell({
         intensity={intensity}
         effectId={effectId}
         amostra={amostra}
+        mirrored={facing === "user"}
         onSelectFilter={escolherFiltro}
         onIntensity={setIntensity}
         onSelectEffect={setEffectId}

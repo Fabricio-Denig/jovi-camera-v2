@@ -43,7 +43,7 @@ export function sunbeamCss(): string {
  * então a altura é comprimida na mesma proporção da caixa. Sem isso a luz sai
  * redonda na foto e oval na tela.
  */
-export function paintSunbeam(
+function paintSunbeam(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,

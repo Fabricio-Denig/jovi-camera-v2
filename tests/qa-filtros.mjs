@@ -268,6 +268,63 @@ console.log("\n== a foto salva sai como o visor mostrava ==");
     );
   }
 
+  /*
+   * O Raio de sol também tem de chegar na foto — é uma camada que fica, ao
+   * contrário do Tremor, que é movimento e não sobrevive a um quadro parado.
+   * A luz entra pelo canto superior direito, então é lá que ela é medida.
+   */
+  await abrirPainel(p);
+  await p.getByRole("dialog", { name: "Filtros" }).getByRole("button", { name: /^Nenhum/ }).click();
+  await p.getByRole("dialog", { name: "Filtros" }).getByRole("button", { name: /^Raio de sol/ }).click();
+  await p.waitForTimeout(300);
+  await p.getByRole("dialog", { name: "Filtros" }).getByRole("button", { name: "Fechar painel" }).click();
+  await p.waitForTimeout(400);
+  await disparar();
+
+  const luz = await p.evaluate(async () => {
+    const brilho = (ctx, w, h) => {
+      // Só o canto superior direito, que é por onde a luz entra.
+      const d = ctx.getImageData(Math.floor(w * 0.6), 0, Math.floor(w * 0.4), Math.floor(h * 0.3)).data;
+      let soma = 0;
+      for (let i = 0; i < d.length; i += 4) soma += (d[i] + d[i + 1] + d[i + 2]) / 3;
+      return soma / (d.length / 4);
+    };
+    const w = 160;
+    const h = 120;
+    const video = document.querySelector("video");
+    const cru = document.createElement("canvas");
+    cru.width = w;
+    cru.height = h;
+    const ctxCru = cru.getContext("2d", { willReadFrequently: true });
+    ctxCru.drawImage(video, 0, 0, w, h);
+
+    const db = await new Promise((r) => {
+      const req = indexedDB.open("jovi-camera-v2", 1);
+      req.onsuccess = () => r(req.result);
+    });
+    const itens = await new Promise((r) => {
+      const req = db.transaction("captures", "readonly").objectStore("captures").getAll();
+      req.onsuccess = () => r(req.result);
+    });
+    db.close();
+    const ultima = itens.sort((a, z) => z.createdAt - a.createdAt)[0];
+    const bmp = await createImageBitmap(ultima.blob);
+    const foto = document.createElement("canvas");
+    foto.width = w;
+    foto.height = h;
+    const ctxFoto = foto.getContext("2d", { willReadFrequently: true });
+    ctxFoto.drawImage(bmp, 0, 0, w, h);
+    return { cru: brilho(ctxCru, w, h), foto: brilho(ctxFoto, w, h) };
+  });
+  console.log(
+    `        canto superior direito: cru ${luz.cru.toFixed(1)} · foto ${luz.foto.toFixed(1)}`,
+  );
+  check(
+    luz.foto > luz.cru + 12,
+    "Raio de sol: a luz também chega na foto salva, não só no visor",
+    `+${(luz.foto - luz.cru).toFixed(1)} de brilho no canto`,
+  );
+
   check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
   await b.close();
 }

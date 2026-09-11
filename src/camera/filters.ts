@@ -184,11 +184,6 @@ export const CAMERA_EFFECTS: CameraEffect[] = [
   },
 ];
 
-export function findEffect(id: string | null): CameraEffect | null {
-  if (!id) return null;
-  return CAMERA_EFFECTS.find((e) => e.id === id) ?? null;
-}
-
 /** Nem todo navegador desenha com filtro no canvas; a foto sai limpa se não der. */
 export function canvasSupportsFilter(): boolean {
   try {
