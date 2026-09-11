@@ -17,6 +17,7 @@ import {
 import {
   deleteCapturesForever,
   getAllCaptures,
+  getSessionsWithAudio,
   getTrashedCaptures,
   restoreCaptures,
   setFavorite,
@@ -83,6 +84,8 @@ export function GalleryPage({
    * morta que não pode existir.
    */
   const [semArmazenamento, setSemArmazenamento] = useState(false);
+  /** Quais aulas têm gravação. Só as chaves — os arquivos ficam no banco. */
+  const [comAudio, setComAudio] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     let active = true;
@@ -91,10 +94,14 @@ export function GalleryPage({
       getClasses(),
       getTrashedCaptures(),
       getTrashedClasses(),
+      // Falha sozinho: uma galeria sem o selo de áudio é muito melhor que uma
+      // galeria que não abre porque o armazém de áudio não existe ainda.
+      getSessionsWithAudio().catch(() => new Set<string>()),
     ])
-      .then(([items, records, trashed, trashedRecords]) => {
+      .then(([items, records, trashed, trashedRecords, audios]) => {
         if (!active) return;
         setSemArmazenamento(false);
+        setComAudio(audios);
         setMedia(items);
         setClasses(records);
         setTrashedMedia(trashed.filter((item) => !item.session));
@@ -270,6 +277,7 @@ export function GalleryPage({
           active={discipline}
           favorites={favoriteClasses}
           statusCounts={statusCounts}
+          comAudio={comAudio}
           onSelectDiscipline={setDiscipline}
           onOpenClass={onOpenClass}
           onManage={() => setManaging(true)}
@@ -419,6 +427,7 @@ function SlidView({
   active,
   favorites,
   statusCounts,
+  comAudio,
   onSelectDiscipline,
   onOpenClass,
   onManage,
@@ -429,6 +438,8 @@ function SlidView({
   active: string;
   favorites: number;
   statusCounts: Map<ClassStatus, number>;
+  /** Ids das aulas que têm gravação. */
+  comAudio: Set<string>;
   onSelectDiscipline: (id: string) => void;
   onOpenClass: (id: string) => void;
   onManage: () => void;
@@ -524,7 +535,11 @@ function SlidView({
                 className="animate-[slid-enter_280ms_ease-out_both]"
                 style={{ animationDelay: `${Math.min(index, 6) * 34}ms` }}
               >
-                <ClassAlbumCard record={record} onOpen={() => onOpenClass(record.id)} />
+                <ClassAlbumCard
+                  record={record}
+                  temAudio={comAudio.has(record.id)}
+                  onOpen={() => onOpenClass(record.id)}
+                />
               </li>
             ))}
           </ul>

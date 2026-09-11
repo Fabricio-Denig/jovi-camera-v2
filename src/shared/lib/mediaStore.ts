@@ -178,6 +178,25 @@ export async function getLessonAudio(
   return found;
 }
 
+/**
+ * Quais aulas têm gravação — só as chaves, nunca os arquivos.
+ *
+ * A galeria precisa saber quais aulas foram gravadas para dizer isso no card,
+ * e ler os blobs para descobrir carregaria dezenas de megabytes de áudio para
+ * desenhar um ícone. `getAllKeys` devolve só os identificadores.
+ */
+export async function getSessionsWithAudio(): Promise<Set<string>> {
+  const db = await openDb();
+  const chaves = await new Promise<IDBValidKey[]>((resolve, reject) => {
+    const tx = db.transaction(AUDIO_STORE, "readonly");
+    const request = tx.objectStore(AUDIO_STORE).getAllKeys();
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  db.close();
+  return new Set(chaves.map(String));
+}
+
 /** Sai junto com a aula, quando a aula sai de vez. */
 export async function deleteLessonAudio(sessionId: string): Promise<void> {
   const db = await openDb();

@@ -55,10 +55,14 @@ export function SlidSuggestion({ onAccept, onDismiss }: SlidSuggestionProps) {
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-[12.5px] font-semibold text-ink">
-            SliD · Captura inteligente das aulas
+            SliD · vê, ouve e organiza a aula
           </p>
+          {/* O texto tinha ficado desatualizado: ele falava só em capturar, e
+              o produto passou a gravar o áudio também. O nome é See, Listen
+              and Identify — a primeira coisa que alguém lê sobre o recurso
+              precisa dizer as três. */}
           <p className="mt-0.5 text-[11.5px] leading-snug text-ink-muted">
-            Captura automaticamente enquanto você assiste. Organiza por matéria.
+            Guarda cada momento do quadro, grava o áudio e organiza por matéria.
           </p>
           {/* "Saiba mais" abre aqui mesmo, e não leva a lugar nenhum: durante
               uma aula, tirar o estudante da câmera para explicar a câmera é
@@ -66,8 +70,9 @@ export function SlidSuggestion({ onAccept, onDismiss }: SlidSuggestionProps) {
           {expandido && (
             <p className="mt-1.5 animate-[slid-enter_200ms_ease-out] text-[11.5px] leading-snug text-ink-muted">
               Você apoia o celular e assiste. O SliD guarda cada momento em que o
-              quadro muda, e no fim entrega a aula em ordem, com o que
-              reconheceu — sem você tocar em nada.
+              quadro muda e grava o áudio da aula, e no fim entrega tudo em
+              ordem — com o que reconheceu, e com o áudio ligado a cada momento.
+              O microfone é pedido na hora, e a aula funciona sem ele.
             </p>
           )}
           <button

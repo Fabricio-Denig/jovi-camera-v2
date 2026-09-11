@@ -17,9 +17,12 @@ import { formatDate } from "../shared/lib/time";
  */
 export function ClassAlbumCard({
   record,
+  temAudio = false,
   onOpen,
 }: {
   record: ClassRecord;
+  /** A aula foi gravada — o card diz, porque é o que se procura na galeria. */
+  temAudio?: boolean;
   onOpen: () => void;
 }) {
   const url = useObjectUrl(record.moments[0]?.media.blob);
@@ -67,12 +70,22 @@ export function ClassAlbumCard({
         </span>
       )}
 
-      {record.favorite && (
-        <span
-          aria-label="Favorita"
-          className="absolute right-2.5 top-2.5 text-[13px] text-white drop-shadow"
-        >
-          ★
+      {/*
+       * "Esta aula eu gravei" é uma das perguntas que se faz olhando a
+       * galeria, e sem o selo a única resposta era abrir cada aula.
+       *
+       * Numa pílula escura, e não com sombra: o pior caso deste card é uma
+       * lousa branca — quase todo o card vira quase branco, e um ícone branco
+       * com sombra desaparece nele. Medido: o selo de microfone ficou
+       * invisível na primeira tentativa.
+       */}
+      {(temAudio || record.favorite) && (
+        <span className="absolute right-2 top-2 flex items-center gap-1.5 rounded-full bg-black/55 px-1.5 py-1 text-[12px] leading-none text-white backdrop-blur">
+          {/* Um SVG e não o emoji 🎙: a cobertura de emoji varia por sistema,
+              e medido aqui o glifo não desenhou nada — um selo invisível é a
+              mesma coisa que selo nenhum. */}
+          {temAudio && <MicIcon />}
+          {record.favorite && <span aria-label="Favorita">★</span>}
         </span>
       )}
 
@@ -103,5 +116,26 @@ export function ClassAlbumCard({
         className="absolute inset-0 rounded-2xl"
       />
     </article>
+  );
+}
+
+/** O microfone do selo de gravação. */
+function MicIcon() {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.1"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      role="img"
+      aria-label="Com gravação de áudio"
+    >
+      <rect x="9" y="2" width="6" height="11" rx="3" />
+      <path d="M5 10a7 7 0 0 0 14 0M12 17v4" />
+    </svg>
   );
 }
