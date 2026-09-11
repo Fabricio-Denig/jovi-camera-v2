@@ -1,12 +1,31 @@
+import { useState } from "react";
 import { useObjectUrl } from "../shared/hooks/useObjectUrl";
 import { CopyButton } from "./CopyButton";
 import { ListenFromHere } from "./ListenFromHere";
 import { linesWithoutTitle, momentsAsText } from "./classText";
 import { formatClock } from "../shared/lib/time";
 import type { ClassMoment, ClassRecord } from "./classes";
+import { TranscriptView } from "../listen/TranscriptView";
+import type { TranscriptSegment } from "../shared/lib/mediaStore";
+
+type Fonte = "quadro" | "fala";
 
 /**
- * A aba Texto: o que a câmera leu, organizado por momento.
+ * A aba Texto: as duas fontes de texto que a aula tem.
+ *
+ * **Texto do quadro** é o que a câmera leu; **Transcrição da aula** é o que
+ * foi dito. Duas fontes e não duas abas: a fidelidade ao `Resumo v2` são três
+ * abas, e uma quarta quebraria a tela desenhada. Um seletor aqui dentro
+ * respeita o desenho e resolve o problema que ele não previa — o de a aula
+ * ter texto vindo de dois lugares diferentes.
+ *
+ * A ordem tem motivo. O quadro vem primeiro quando existe, porque é o que o
+ * estudante apontou a câmera para guardar. Quando ele não existe — e o teste
+ * no celular mostrou que acontece —, a transcrição assume o lugar em vez de
+ * a aba dizer que não há texto nenhum enquanto quarenta minutos de fala estão
+ * salvos ali do lado.
+ *
+ * O que a câmera leu, organizado por momento.
  *
  * Não é despejo de OCR, e a diferença está no que não aparece. O que o
  * reconhecimento devolveu e não passou no teste de leitura — nem língua, nem
@@ -21,16 +40,29 @@ import type { ClassMoment, ClassRecord } from "./classes";
 export function ClassTextTab({
   record,
   onOuvir,
+  transcript = [],
+  transcriptStatus,
 }: {
   record: ClassRecord;
   /** Presente só quando a aula tem gravação. */
   onOuvir?: (atMs: number) => void;
+  /** A fala reconhecida desta aula, quando houve. */
+  transcript?: TranscriptSegment[];
+  /** Como a transcrição terminou, para a tela poder dizer a verdade. */
+  transcriptStatus?: "ok" | "indisponivel" | "desligada";
 }) {
   const comConteudo = record.moments.filter(
     (m) => linesWithoutTitle(m).length > 0,
   );
+  const temQuadro = comConteudo.length > 0;
+  const temFala = transcript.some((s) => s.final && s.text.trim());
 
-  if (comConteudo.length === 0) {
+  // Abre na fonte que tem conteúdo. Abrir no quadro vazio de uma aula cuja
+  // fala foi transcrita inteira é a tela mentindo sobre o que ela tem.
+  const [fonte, setFonte] = useState<Fonte>(temQuadro ? "quadro" : "fala");
+  const atual: Fonte = fonte === "quadro" && !temQuadro ? "fala" : fonte;
+
+  if (!temQuadro && !temFala) {
     return (
       <div className="pt-8 text-center">
         <p className="text-sm text-ink-muted">
@@ -42,24 +74,105 @@ export function ClassTextTab({
           Acontece com letra à mão, com slide distante e com pouca luz. As
           imagens dos momentos continuam inteiras na aba Imagens.
         </p>
+        {/* E, quando dá, dizer o que aconteceu com a outra fonte: uma aula
+            sem texto por dois motivos diferentes pede duas respostas
+            diferentes. */}
+        {transcriptStatus === "indisponivel" && (
+          <p className="mx-auto mt-2 max-w-[34ch] text-[13px] leading-snug text-ink-muted/75">
+            A transcrição da fala não funcionou neste navegador. O áudio da aula
+            continua salvo.
+          </p>
+        )}
       </div>
     );
   }
 
   return (
     <div className="flex flex-col gap-3">
-      {comConteudo.map((momento) => (
-        <BlocoDeMomento
-          key={momento.media.id}
-          momento={momento}
-          onOuvir={onOuvir}
-        />
-      ))}
+      {/* O seletor só aparece quando há escolha a fazer. Com uma fonte só,
+          dois chips em que um está sempre vazio é ruído. */}
+      {temQuadro && temFala && (
+        <div
+          role="tablist"
+          aria-label="Fonte do texto"
+          className="flex gap-1.5"
+        >
+          <Chip
+            id="quadro"
+            rotulo="Texto do quadro"
+            n={comConteudo.length}
+            escolhido={atual === "quadro"}
+            onEscolher={() => setFonte("quadro")}
+          />
+          <Chip
+            id="fala"
+            rotulo="Transcrição da aula"
+            escolhido={atual === "fala"}
+            onEscolher={() => setFonte("fala")}
+          />
+        </div>
+      )}
 
-      <div className="pt-1">
-        <CopyButton texto={momentsAsText(record)} />
-      </div>
+      {/* Sem quadro, a transcrição assume — e diz por que está sozinha. */}
+      {!temQuadro && temFala && (
+        <p className="rounded-xl bg-surface-2 px-3 py-2 text-[12.5px] leading-snug text-ink-muted">
+          A câmera não conseguiu ler o quadro nesta aula. Abaixo está o que foi
+          falado.
+        </p>
+      )}
+
+      {atual === "quadro" ? (
+        <>
+          {comConteudo.map((momento) => (
+            <BlocoDeMomento
+              key={momento.media.id}
+              momento={momento}
+              onOuvir={onOuvir}
+            />
+          ))}
+
+          <div className="pt-1">
+            <CopyButton texto={momentsAsText(record)} />
+          </div>
+        </>
+      ) : (
+        <TranscriptView segments={transcript} onOuvir={onOuvir} />
+      )}
     </div>
+  );
+}
+
+function Chip({
+  id,
+  rotulo,
+  n,
+  escolhido,
+  onEscolher,
+}: {
+  id: string;
+  rotulo: string;
+  n?: number;
+  escolhido: boolean;
+  onEscolher: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      id={`fonte-${id}`}
+      aria-selected={escolhido}
+      onClick={onEscolher}
+      className={`min-h-9 rounded-full px-3 text-[12.5px] font-medium transition-colors ${
+        escolhido ? "bg-accent-soft text-accent" : "bg-surface-2 text-ink-muted"
+      }`}
+    >
+      {rotulo}
+      {n !== undefined && (
+        <span className="ml-1 font-mono text-[11px] tabular-nums opacity-70">
+          {n}
+        </span>
+      )}
+    </button>
   );
 }
 

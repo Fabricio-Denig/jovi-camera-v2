@@ -23,17 +23,19 @@ import { useCallback, useEffect, useRef, useState } from "react";
  * é `MediaRecorder` gravando para IndexedDB, sem rede nenhuma.
  */
 
-/** Um trecho de fala, ancorado no relógio da sessão. */
-export interface TranscriptSegment {
-  /** Milissegundos desde o início da sessão. */
-  startMs: number;
-  endMs: number;
-  text: string;
-  /** Falso enquanto o reconhecimento ainda pode mudar o texto. */
-  final: boolean;
-  /** Só quando a API fornece um número que signifique algo. */
-  confidence?: number;
-}
+/*
+ * O trecho de fala vem de `mediaStore` e não é redefinido aqui.
+ *
+ * Duas cópias da mesma interface — uma no gancho, outra no armazém — são duas
+ * cópias que combinam hoje e divergem no dia em que uma ganhar um campo. Como
+ * o que vale é o que sobrevive ao fechar do app, a forma pertence a quem
+ * guarda.
+ *
+ * O `startMs` é o relógio **da sessão**, não o do arquivo de áudio: é o mesmo
+ * eixo de `capture.atMs`, e é o que deixa fala e momento se encontrarem.
+ */
+export type { TranscriptSegment } from "../shared/lib/mediaStore";
+import type { TranscriptSegment } from "../shared/lib/mediaStore";
 
 export type TranscriptStatus =
   /** Nem tentou ainda. */
@@ -265,7 +267,7 @@ export function useTranscript({
           return;
         }
       }
-      religarRef.current = window.setTimeout(ligar, RELIGAR_MS);
+      religarRef.current = window.setTimeout(() => ligarRef.current?.(), RELIGAR_MS);
     };
 
     try {
@@ -277,6 +279,19 @@ export function useTranscript({
       recRef.current = null;
     }
   }, [idioma, soltar]);
+
+  /*
+   * O religamento chama pelo ref, não pela variável.
+   *
+   * `ligar` precisa se agendar de novo, e uma função que captura a si mesma
+   * captura a versão daquele render — a que ainda tem o idioma antigo depois
+   * de uma troca. Pelo ref, cada religamento pega a versão atual, e a
+   * recursão deixa de ser uma referência a algo ainda em construção.
+   */
+  const ligarRef = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    ligarRef.current = ligar;
+  }, [ligar]);
 
   /** Começa a transcrever. Só por gesto explícito de quem é dono da sessão. */
   const start = useCallback(() => {

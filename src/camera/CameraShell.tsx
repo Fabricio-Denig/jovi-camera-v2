@@ -14,7 +14,11 @@ import { FiltersSheet } from "./FiltersSheet";
 import { EffectLayer } from "./EffectLayer";
 import { FOOD_LOOK, applyFilter, DEFAULT_INTENSITY } from "./filters";
 import { useFrameSample } from "./useFrameSample";
-import { SettingsSheet, DEFAULT_SETTINGS, type CameraSettings } from "./SettingsSheet";
+import {
+  SettingsSheet,
+  DEFAULT_SETTINGS,
+  type CameraSettings,
+} from "./SettingsSheet";
 import { useTorch } from "./useTorch";
 import { useCamera } from "./useCamera";
 import { useZoom } from "./useZoom";
@@ -36,10 +40,16 @@ import { SlidDebugPanel } from "../slid/SlidDebugPanel";
 import { SlidSummary } from "../slid/SlidSummary";
 import { useSlidSession } from "../slid/useSlidSession";
 import { useListen } from "../listen/useListen";
+import { useTranscript } from "../listen/useTranscript";
+import type { TranscriptSegment } from "../listen/useTranscript";
 import { useTimelapse } from "../timelapse/useTimelapse";
 import { TimelapseBar } from "../timelapse/TimelapseBar";
 import { NightBar } from "../night/NightBar";
-import { acharNivel, empilharQuadros, type NivelNoturno } from "../night/stackFrames";
+import {
+  acharNivel,
+  empilharQuadros,
+  type NivelNoturno,
+} from "../night/stackFrames";
 import { ListenBadge, SeeListenIdentify } from "../listen/ListenBadge";
 import {
   SemEspacoError,
@@ -176,9 +186,10 @@ export function CameraShell({
   const [nivelNoturno, setNivelNoturno] = useState<NivelNoturno>("medio");
   const [noturnoProgresso, setNoturnoProgresso] = useState(0);
   const [empilhando, setEmpilhando] = useState(false);
-  const [scanned, setScanned] = useState<
-    { foto: Blob; regiao: ContentBounds | null } | null
-  >(null);
+  const [scanned, setScanned] = useState<{
+    foto: Blob;
+    regiao: ContentBounds | null;
+  } | null>(null);
   /*
    * Nenhuma aparência sobre uma aula. Um momento em P&B, com sépia ou com uma
    * luz de canto desenhada por cima é a câmera mudando o que ela guardou de
@@ -203,7 +214,8 @@ export function CameraShell({
    * devolver 70 % a cada toque desfaz o ajuste feito.
    */
   function escolherFiltro(id: string) {
-    if (filterId === "nenhum" && id !== "nenhum") setIntensity(DEFAULT_INTENSITY);
+    if (filterId === "nenhum" && id !== "nenhum")
+      setIntensity(DEFAULT_INTENSITY);
     setFilterId(id);
   }
 
@@ -219,6 +231,15 @@ export function CameraShell({
     blob: Blob;
     mimeType: string;
     durationMs: number;
+    /*
+     * Ancorados no relógio da sessão, como `capture.atMs` — e não no relógio
+     * da gravação. É o que deixa um trecho de fala e um momento guardado
+     * serem comparados direto, sem ninguém lembrar de somar o atraso da caixa
+     * de permissão. A conversão para o tempo do arquivo acontece num lugar só,
+     * no tocador, do mesmo jeito que já acontece com os momentos.
+     */
+    transcript: TranscriptSegment[];
+    transcriptStatus: "ok" | "indisponivel" | "desligada";
   } | null>(null);
   /*
    * Quantos milissegundos de aula já tinham passado quando o áudio começou.
@@ -262,6 +283,23 @@ export function CameraShell({
     zoom: zoom.digital,
     diagnosing: slidDebug,
   });
+
+  /*
+   * A fala virando texto, ao lado da gravação.
+   *
+   * Depois da sessão porque ele precisa do relógio dela: cada trecho nasce
+   * com a hora da aula, e é essa hora que liga o que foi dito ao que foi
+   * fotografado. `elapsedRef` existe para o gancho poder perguntar as horas
+   * sem virar dependência de render — a sessão avança de décimo em décimo de
+   * segundo, e refazer o reconhecimento nesse ritmo seria o oposto de
+   * transcrever.
+   *
+   * E a regra que não se negocia: isto pode falhar inteiro sem que o SliD
+   * sinta. Ver e identificar não passam por aqui.
+   */
+  const elapsedRef = useRef(0);
+  elapsedRef.current = slid.elapsedMs;
+  const transcript = useTranscript({ agoraMs: () => elapsedRef.current });
 
   const documento = useDocumentScan(
     videoRef,
@@ -335,7 +373,18 @@ export function CameraShell({
     ) {
       const naSessao = slid.elapsedMs;
       void listen.start().then((deu) => {
-        if (deu) audioComecouEmRef.current = naSessao;
+        if (!deu) return;
+        audioComecouEmRef.current = naSessao;
+        /*
+         * A transcrição começa junto com a gravação e nunca antes: sem
+         * microfone concedido não há o que reconhecer, e pedir reconhecimento
+         * com o microfone negado só produziria um `not-allowed` para tratar.
+         *
+         * Ela é uma segunda camada sobre o mesmo som, não uma alternativa à
+         * primeira. Se falhar, o arquivo da aula continua sendo gravado — que
+         * é a garantia que o estudante realmente precisa.
+         */
+        transcript.start();
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -365,8 +414,22 @@ export function CameraShell({
    */
   useEffect(() => {
     if (slid.status !== "finished" || !listen.gravando) return;
+    // A transcrição para primeiro e devolve o que entendeu: parar depois
+    // deixaria o `setGravacao` guardar uma lista que ainda ia crescer.
+    const falado = transcript.stop();
+    const estado =
+      falado.length > 0
+        ? ("ok" as const)
+        : transcript.status === "indisponivel" || transcript.status === "falhou"
+          ? ("indisponivel" as const)
+          : ("desligada" as const);
     void listen.stop().then((resultado) => {
-      if (resultado) setGravacao(resultado);
+      if (resultado)
+        setGravacao({
+          ...resultado,
+          transcript: falado,
+          transcriptStatus: estado,
+        });
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slid.status]);
@@ -397,6 +460,10 @@ export function CameraShell({
   /* Sair do SliD sem encerrar pela tela de resumo também solta o microfone. */
   useEffect(() => {
     if (!isSlid && listen.gravando) listen.disable();
+    // O reconhecimento sai junto. Deixá-lo vivo fora da sessão seria um
+    // microfone aberto sem aula — exatamente a impressão que o Listen não
+    // pode dar.
+    if (!isSlid) transcript.disable();
     // Sair do SliD fecha a sessão; a próxima começa com a pergunta em aberto.
     if (!isSlid) audioDispensadoRef.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -414,7 +481,8 @@ export function CameraShell({
    * tipo de diálogo que ensina a pessoa a ignorar diálogos.
    */
   useEffect(() => {
-    const rodando = isSlid && (slid.status === "running" || slid.status === "paused");
+    const rodando =
+      isSlid && (slid.status === "running" || slid.status === "paused");
     const gravandoIntervalo = timelapse.gravando;
     if (!rodando && !gravandoIntervalo) return;
 
@@ -476,26 +544,32 @@ export function CameraShell({
       void dispararFoto();
       return;
     }
-    const timeout = setTimeout(() => setCountdown((n) => (n === null ? null : n - 1)), 1000);
+    const timeout = setTimeout(
+      () => setCountdown((n) => (n === null ? null : n - 1)),
+      1000,
+    );
     return () => clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [countdown]);
 
   async function dispararFoto() {
     if (!videoRef.current) return;
-    const { blob, width, height } = await capturePhotoFromVideo(videoRef.current, {
-      mirrored: facing === "user" && settings.mirrorSelfie,
-      zoom: zoom.digital,
-      filter: filtroCss,
-      effect: efeitoAtivo,
-      window: photoWindow(
-        aspect,
-        videoRef.current.videoWidth,
-        videoRef.current.videoHeight,
-        videoRef.current.clientWidth,
-        videoRef.current.clientHeight,
-      ),
-    });
+    const { blob, width, height } = await capturePhotoFromVideo(
+      videoRef.current,
+      {
+        mirrored: facing === "user" && settings.mirrorSelfie,
+        zoom: zoom.digital,
+        filter: filtroCss,
+        effect: efeitoAtivo,
+        window: photoWindow(
+          aspect,
+          videoRef.current.videoWidth,
+          videoRef.current.videoHeight,
+          videoRef.current.clientWidth,
+          videoRef.current.clientHeight,
+        ),
+      },
+    );
     await persist({
       id: crypto.randomUUID(),
       kind: "photo",
@@ -788,7 +862,9 @@ export function CameraShell({
           fazer com as mãos, e é a primeira, antes de apoiar o celular. */}
       {isReady && isSlid && slid.status !== "finished" && (
         <div className="pointer-events-auto absolute bottom-28 left-4 z-30 flex flex-col items-start gap-2">
-          {slid.framingHint === "distante" && <FramingHint zoomLevel={zoom.level} />}
+          {slid.framingHint === "distante" && (
+            <FramingHint zoomLevel={zoom.level} />
+          )}
           <ZoomControl level={zoom.level} onSelect={zoom.setLevel} />
         </div>
       )}
@@ -816,12 +892,24 @@ export function CameraShell({
               onDesligar={() => {
                 audioDispensadoRef.current = true;
                 listen.disable();
+                /*
+                 * Desligar o áudio desliga a transcrição, e `disable` é o
+                 * caminho que zera a intenção dentro do gancho: o
+                 * reconhecimento religa sozinho quando o navegador encerra o
+                 * turno, mas nunca depois de a pessoa ter dito que não quer.
+                 * A intenção do usuário vence qualquer religamento.
+                 */
+                transcript.disable();
               }}
               // Tocar em "Ativar" é mudar de ideia, e desfaz a dispensa.
               onTentarDeNovo={() => {
                 audioDispensadoRef.current = false;
-                void listen.start();
+                void listen.start().then((deu) => {
+                  if (deu) transcript.start();
+                });
               }}
+              transcrevendo={transcript.transcrevendo}
+              falaRecente={transcript.parcial}
             />
           }
           promessa={
@@ -840,7 +928,15 @@ export function CameraShell({
           stats={slid.stats}
           elapsedMs={slid.elapsedMs}
           audioMs={gravacao?.durationMs ?? 0}
-          onSave={async ({ subject, discipline, status, moments, topics, kinds, overview }) => {
+          onSave={async ({
+            subject,
+            discipline,
+            status,
+            moments,
+            topics,
+            kinds,
+            overview,
+          }) => {
             const sessionId = crypto.randomUUID();
             const savedAt = Date.now();
             const described = new Map(moments.map((m) => [m.id, m]));
@@ -892,6 +988,8 @@ export function CameraShell({
                   durationMs: gravacao.durationMs,
                   startedAtMs: audioComecouEmRef.current,
                   createdAt: savedAt,
+                  transcript: gravacao.transcript,
+                  transcriptStatus: gravacao.transcriptStatus,
                 });
               } catch (erro) {
                 // A aula fica sem áudio e continua aula — as imagens e o texto
@@ -1043,7 +1141,9 @@ export function CameraShell({
               <div className="flex justify-center">
                 <ShutterButton
                   mode={mode.kind}
-                  isRecording={isTimelapse ? timelapse.gravando : recorder.isRecording}
+                  isRecording={
+                    isTimelapse ? timelapse.gravando : recorder.isRecording
+                  }
                   busy={empilhando}
                   onPress={handleShutterPress}
                   disabled={mode.fidelity === "simulated"}

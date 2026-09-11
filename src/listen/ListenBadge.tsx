@@ -24,6 +24,8 @@ export function ListenBadge({
   onDesligar,
   onTentarDeNovo,
   compacto = false,
+  transcrevendo = false,
+  falaRecente,
 }: {
   status: ListenStatus;
   elapsedMs: number;
@@ -33,6 +35,14 @@ export function ListenBadge({
   onTentarDeNovo?: () => void;
   /** Sem o botão, para caber ao lado de outras coisas. */
   compacto?: boolean;
+  /**
+   * Há prova de que o reconhecimento de fala está funcionando — um resultado
+   * chegou. Nunca "a API existe": no Chromium desta bancada ela existe,
+   * constrói, inicia e morre em `audio-capture`.
+   */
+  transcrevendo?: boolean;
+  /** A última coisa dita, para uma linha só. */
+  falaRecente?: string;
 }) {
   const ouvindo = status === "ouvindo";
   const pausado = status === "pausado";
@@ -41,7 +51,13 @@ export function ListenBadge({
     status === "pedindo"
       ? "Pedindo o microfone"
       : ouvindo
-        ? "Ouvindo"
+        ? // A transcrição aparece como uma segunda palavra no mesmo selo, e
+          // só quando está acontecendo de verdade. Um segundo selo roubaria
+          // a área do quadro; prometer "Transcrevendo" enquanto não chega
+          // resultado nenhum seria pior ainda.
+          transcrevendo
+          ? "Ouvindo · Transcrevendo"
+          : "Ouvindo"
         : pausado
           ? "Áudio pausado"
           : status === "negado"
@@ -53,59 +69,85 @@ export function ListenBadge({
                 : "Áudio desligado";
 
   return (
-    // Ouvindo → Áudio desativado é uma mudança que precisa ser anunciada: ela
-    // responde "estou sendo gravado?", que é pergunta de quem não está olhando.
-    <div
-      role="status"
-      aria-live="polite"
-      className="pointer-events-auto flex items-center gap-2 rounded-full bg-canvas/90 px-3 py-1.5 backdrop-blur"
-    >
-      {ouvindo ? (
-        <MedidorDeVoz level={level} />
-      ) : (
-        <span
-          aria-hidden="true"
-          className={`size-2 rounded-full ${
-            pausado ? "bg-warn" : status === "pedindo" ? "animate-pulse bg-accent" : "bg-ink-muted/50"
-          }`}
-        />
-      )}
+    <div className="pointer-events-auto flex max-w-[min(78vw,320px)] flex-col items-start gap-1">
+      {/* Ouvindo → Áudio desativado é uma mudança que precisa ser anunciada: ela
+        responde "estou sendo gravado?", que é pergunta de quem não está olhando. */}
+      <div
+        role="status"
+        aria-live="polite"
+        className="pointer-events-auto flex items-center gap-2 rounded-full bg-canvas/90 px-3 py-1.5 backdrop-blur"
+      >
+        {ouvindo ? (
+          <MedidorDeVoz level={level} />
+        ) : (
+          <span
+            aria-hidden="true"
+            className={`size-2 rounded-full ${
+              pausado
+                ? "bg-warn"
+                : status === "pedindo"
+                  ? "animate-pulse bg-accent"
+                  : "bg-ink-muted/50"
+            }`}
+          />
+        )}
 
-      <span className="text-[12px] font-semibold text-ink">{texto}</span>
+        <span className="text-[12px] font-semibold text-ink">{texto}</span>
 
-      {(ouvindo || pausado) && (
-        <span className="font-mono text-[11.5px] tabular-nums text-ink-muted">
-          {formatClock(elapsedMs)}
-        </span>
-      )}
+        {(ouvindo || pausado) && (
+          <span className="font-mono text-[11.5px] tabular-nums text-ink-muted">
+            {formatClock(elapsedMs)}
+          </span>
+        )}
 
-      {/* Desligar o áudio é um gesto que precisa estar sempre a uma distância
+        {/* Desligar o áudio é um gesto que precisa estar sempre a uma distância
           curta. Quem mudou de ideia no meio da aula não deve ter de encerrar a
           aula para parar de gravar. */}
-      {!compacto && (ouvindo || pausado) && onDesligar && (
-        <button
-          type="button"
-          onClick={onDesligar}
-          aria-label="Desligar o áudio desta aula"
-          // 36 px de alvo, com o ✕ desenhado no tamanho de antes: um botão de
-          // 28 px é pequeno demais para um dedo, e este é o controle de
-          // desligar a gravação — o que mais precisa ser fácil de acertar.
-          className="-mr-2 -my-1 ml-0 flex size-9 items-center justify-center rounded-full text-[12px] text-ink-muted transition-transform active:scale-90 active:opacity-70"
-        >
-          ✕
-        </button>
-      )}
+        {!compacto && (ouvindo || pausado) && onDesligar && (
+          <button
+            type="button"
+            onClick={onDesligar}
+            aria-label="Desligar o áudio desta aula"
+            // 36 px de alvo, com o ✕ desenhado no tamanho de antes: um botão de
+            // 28 px é pequeno demais para um dedo, e este é o controle de
+            // desligar a gravação — o que mais precisa ser fácil de acertar.
+            className="-mr-2 -my-1 ml-0 flex size-9 items-center justify-center rounded-full text-[12px] text-ink-muted transition-transform active:scale-90 active:opacity-70"
+          >
+            ✕
+          </button>
+        )}
 
-      {/* Negado é reversível: a pessoa pode liberar nas permissões do site e
+        {/* Negado é reversível: a pessoa pode liberar nas permissões do site e
           voltar. Indisponível não é, e por isso não ganha botão. */}
-      {!compacto && status === "negado" && onTentarDeNovo && (
-        <button
-          type="button"
-          onClick={onTentarDeNovo}
-          className="-mr-1.5 ml-0.5 min-h-7 rounded-full px-2 text-[11.5px] font-medium text-accent transition-transform active:scale-95"
+        {!compacto && status === "negado" && onTentarDeNovo && (
+          <button
+            type="button"
+            onClick={onTentarDeNovo}
+            className="-mr-1.5 ml-0.5 min-h-7 rounded-full px-2 text-[11.5px] font-medium text-accent transition-transform active:scale-95"
+          >
+            Ativar
+          </button>
+        )}
+      </div>
+
+      {/*
+        Uma linha do que está sendo dito agora — e uma só.
+        
+        Ela existe por um motivo específico: é a única prova, na tela, de que o
+        app entendeu a fala e não apenas gravou um arquivo. Sem ela
+        "Transcrevendo" é uma palavra que o estudante tem de acreditar.
+
+        Fora do `aria-live`: o texto muda a cada sílaba reconhecida, e um
+        leitor de tela lendo isso em voz alta durante uma aula seria hostil. O
+        estado da gravação, esse sim, continua anunciado no selo acima.
+      */}
+      {ouvindo && transcrevendo && falaRecente && (
+        <span
+          aria-hidden="true"
+          className="max-w-full truncate rounded-full bg-black/55 px-2.5 py-1 text-[11px] italic text-white/80 backdrop-blur"
         >
-          Ativar
-        </button>
+          {falaRecente}
+        </span>
       )}
     </div>
   );
@@ -156,7 +198,11 @@ export function SeeListenIdentify({
       <span aria-hidden="true" className="text-white/25">
         ·
       </span>
-      <Letra nome="Identify" aceso={identificou > 0} sufixo={identificou > 0 ? String(identificou) : undefined} />
+      <Letra
+        nome="Identify"
+        aceso={identificou > 0}
+        sufixo={identificou > 0 ? String(identificou) : undefined}
+      />
     </div>
   );
 }
@@ -186,7 +232,9 @@ function Letra({
         }`}
       >
         {nome}
-        {sufixo && <span className="ml-0.5 font-mono normal-case">{sufixo}</span>}
+        {sufixo && (
+          <span className="ml-0.5 font-mono normal-case">{sufixo}</span>
+        )}
       </span>
     </span>
   );

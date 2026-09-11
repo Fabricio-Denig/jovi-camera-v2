@@ -1,4 +1,5 @@
 import type { TranscriptSegment } from "../shared/lib/mediaStore";
+import { formatClock } from "../shared/lib/time";
 
 /**
  * O que dá para entender da fala sem chamar modelo nenhum.
@@ -71,10 +72,7 @@ export interface SpeechHighlight {
 }
 
 const semAcento = (t: string) =>
-  t
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "");
+  t.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
 /**
  * Os trechos em que alguém disse, com todas as letras, que aquilo importa.
@@ -122,7 +120,9 @@ const VAZIAS = new Set(
 );
 
 /** Quantas vezes cada termo aparece na fala, sem as palavras vazias. */
-export function contarTermos(segments: TranscriptSegment[]): [string, number][] {
+export function contarTermos(
+  segments: TranscriptSegment[],
+): [string, number][] {
   const contagem = new Map<string, { forma: string; n: number }>();
   for (const s of segments) {
     if (!s.final) continue;
@@ -187,9 +187,13 @@ export function legendaDaFala(
       // Pelo menos metade das palavras com conteúdo: uma frase inteira de
       // muleta não diz nada sobre a aula.
       const comConteudo = palavras.filter(
-        (p) => p.length >= 3 && !VAZIAS.has(semAcento(p.replace(/[^\p{L}\p{N}]/gu, ""))),
+        (p) =>
+          p.length >= 3 &&
+          !VAZIAS.has(semAcento(p.replace(/[^\p{L}\p{N}]/gu, ""))),
       );
-      return comConteudo.length >= Math.max(2, Math.floor(palavras.length * 0.35));
+      return (
+        comConteudo.length >= Math.max(2, Math.floor(palavras.length * 0.35))
+      );
     })
     .sort((a, b) => b.length - a.length);
 
@@ -313,4 +317,71 @@ export function topicosDaFala(
     .filter(([, n]) => n >= 3)
     .slice(0, limite)
     .map(([t]) => maiuscula(t));
+}
+
+/** Um parágrafo da aula falada: trechos vizinhos costurados, com uma hora só. */
+export interface BlocoDeFala {
+  atMs: number;
+  text: string;
+  /** Os destaques que caíram dentro deste bloco. */
+  marcado: boolean;
+}
+
+/**
+ * A fala em parágrafos, e não em trechos soltos.
+ *
+ * O reconhecimento devolve pedaços do tamanho que o navegador decide — às
+ * vezes três palavras, às vezes duas frases —, e uma tela com sessenta linhas
+ * de três palavras e sessenta horários é ilegível. Aqui eles são costurados
+ * até fechar meio minuto ou até a frase acabar, que é o tamanho em que a
+ * pessoa consegue reler a aula.
+ *
+ * Nada é reescrito: o texto de saída é a concatenação do texto de entrada.
+ */
+export function blocosDeFala(
+  segments: TranscriptSegment[],
+  maxMs = 30000,
+): BlocoDeFala[] {
+  const finais = segments.filter((s) => s.final && s.text.trim());
+  if (finais.length === 0) return [];
+  const marcas = new Set(acharDestaques(finais, 40).map((d) => d.atMs));
+
+  const blocos: BlocoDeFala[] = [];
+  let atual: { atMs: number; partes: string[]; marcado: boolean } | null = null;
+
+  const fechar = () => {
+    if (!atual) return;
+    blocos.push({
+      atMs: atual.atMs,
+      text: atual.partes.join(" "),
+      marcado: atual.marcado,
+    });
+    atual = null;
+  };
+
+  for (const s of finais) {
+    // Fecha **antes** de acrescentar, e não depois: fechando depois, o trecho
+    // que estourou o limite ainda entrava, e um bloco de meio minuto virava um
+    // de setenta segundos — que é de novo a parede de texto que este
+    // agrupamento existe para evitar.
+    if (atual && s.endMs - atual.atMs > maxMs) fechar();
+    if (!atual) atual = { atMs: s.startMs, partes: [], marcado: false };
+    atual.partes.push(s.text.trim());
+    if (marcas.has(s.startMs)) atual.marcado = true;
+
+    // Ponto final passado o terço do limite: respeitar a frase produz um
+    // parágrafo melhor que respeitar o cronômetro.
+    if (/[.!?…]$/.test(s.text.trim()) && s.endMs - atual.atMs >= maxMs / 3) {
+      fechar();
+    }
+  }
+  fechar();
+  return blocos;
+}
+
+/** A transcrição inteira como texto, com horários — para copiar e colar. */
+export function transcricaoComoTexto(segments: TranscriptSegment[]): string {
+  return blocosDeFala(segments)
+    .map((b) => `[${formatClock(b.atMs)}] ${b.text}`)
+    .join("\n\n");
 }
