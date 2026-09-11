@@ -338,6 +338,43 @@ export function SlidSummary({
             Voltar para a câmera
           </button>
         ) : (
+        <>
+        {/*
+         * A leitura rodava em silêncio, e isso custava texto sem avisar.
+         *
+         * Quem tocasse em "Salvar aula" antes de ela terminar guardava a aula
+         * com legendas de reserva e sem nenhuma linha lida — e a aba Texto
+         * abria dizendo "a câmera não conseguiu ler", que é mentira: ela
+         * conseguiria, só não tinha terminado.
+         *
+         * A barra não bloqueia o botão. Esperar é decisão de quem está com o
+         * celular na mão; o que não pode é decidir sem saber.
+         */}
+        {ocr.status === "running" && (
+          <div className="mb-2.5">
+            <div className="flex items-center justify-between text-[11.5px] text-ink-muted">
+              <span>Lendo o que está nos momentos…</span>
+              <span className="font-mono tabular-nums">
+                {Math.round(ocr.progress * captures.length)}/{captures.length}
+              </span>
+            </div>
+            <div className="mt-1 h-1 overflow-hidden rounded-full bg-surface-2">
+              <div
+                className="h-full rounded-full bg-accent transition-[width] duration-300"
+                style={{ width: `${Math.round(ocr.progress * 100)}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Falhou é diferente de não terminou, e a aula continua salvável. */}
+        {ocr.status === "error" && (
+          <p className="mb-2.5 text-[11.5px] leading-snug text-warn">
+            Não consegui ler o texto dos momentos neste aparelho. As imagens da
+            aula estão inteiras e podem ser salvas.
+          </p>
+        )}
+
         <button
           type="button"
           onClick={() =>
@@ -360,8 +397,9 @@ export function SlidSummary({
           }
           className="min-h-11 w-full rounded-xl bg-accent py-3 text-sm font-medium text-accent-ink transition-transform duration-150 active:scale-[0.98] active:opacity-80"
         >
-          Salvar aula
+          {ocr.status === "running" ? "Salvar aula mesmo assim" : "Salvar aula"}
         </button>
+        </>
         )}
       </footer>
     </div>

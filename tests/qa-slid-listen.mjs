@@ -219,6 +219,15 @@ console.log("\n== encerrar a aula fecha o arquivo e o guarda ==");
 
   const noResumo = await p.locator("body").innerText();
   check(/Resumo da aula/i.test(noResumo), "a aula encerra no resumo");
+  /*
+   * A leitura dos momentos rodava em silêncio, e salvar antes de ela terminar
+   * guardava a aula sem nenhuma linha lida — com a aba Texto abrindo depois
+   * dizendo "não consegui ler", que é mentira.
+   */
+  check(
+    /Salvar aula/.test(noResumo),
+    "e o resumo oferece salvar",
+  );
   /* Esta é a tela em que o estudante decide guardar. Ele precisa saber que a
      gravação vai junto **antes** de decidir — descobrir depois que foi
      gravado incomoda mesmo quem autorizou o microfone no começo. */
@@ -313,6 +322,70 @@ console.log("\n== a aula reaberta ainda tem o áudio ==");
   }));
   console.log(`        currentTime ${antes.toFixed(2)}s → ${depois.t.toFixed(2)}s`);
   check(depois.t > antes, "e tocar nele move o player para aquele ponto", `${depois.t.toFixed(2)}s`);
+
+  check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
+  await b.close();
+}
+
+console.log("\n== a leitura dos momentos não roda calada ==");
+{
+  const b = await chromium.launch({
+    executablePath: CHROMIUM,
+    args: [
+      "--use-fake-ui-for-media-stream",
+      "--use-fake-device-for-media-stream",
+      `--use-file-for-fake-video-capture=${CENAS}/fp-aula-slide-projetado.y4m`,
+    ],
+  });
+  const ctx = await b.newContext({
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+    hasTouch: true,
+    permissions: ["camera", "microphone"],
+  });
+  /*
+   * O motor de leitura é atrasado de propósito. Sem isso o OCR termina antes
+   * de o teste olhar, e a checagem passa pelo caminho fácil — provando nada
+   * sobre o estado que ela existe para cobrir.
+   */
+  await ctx.route(/tesseract/, async (rota) => {
+    await new Promise((r) => setTimeout(r, 4000));
+    await rota.continue();
+  });
+  const p = await ctx.newPage();
+  const erros = [];
+  p.on("pageerror", (e) => erros.push(String(e)));
+  await p.goto(APP + "/", { waitUntil: "networkidle" });
+  await p.waitForTimeout(2200);
+
+  await entrarNoSlid(p);
+  await p.waitForTimeout(12000);
+  await encerrar(p);
+  await p.waitForTimeout(600);
+
+  const durante = await p.locator("body").innerText();
+  check(
+    /Lendo o que está nos momentos/i.test(durante),
+    "o resumo diz que está lendo",
+    durante.split("\n").find((l) => /Lendo/i.test(l)) ?? durante.split("\n").slice(0, 3).join(" · "),
+  );
+  check(
+    /\d+\/\d+/.test(durante),
+    "com quantos momentos já leu",
+    /(\d+\/\d+)/.exec(durante)?.[1] ?? "",
+  );
+  /* O botão não é bloqueado: esperar é decisão de quem está com o celular na
+     mão. O que não pode é decidir sem saber. */
+  check(
+    /Salvar aula mesmo assim/i.test(durante),
+    "e o botão diz que salvar agora é salvar antes de terminar",
+  );
+
+  await p.waitForTimeout(30000);
+  check(
+    !/Lendo o que está nos momentos/i.test(await p.locator("body").innerText()),
+    "quando termina, a linha some",
+  );
 
   check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
   await b.close();
