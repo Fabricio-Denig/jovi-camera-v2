@@ -110,7 +110,18 @@ export function SlidOverlay({
       />
 
       <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex flex-col items-center gap-2 pt-[max(70px,calc(env(safe-area-inset-top)+54px))]">
-        <div className="flex items-center gap-2 rounded-full bg-canvas/90 px-3.5 py-2 backdrop-blur">
+        {/*
+         * `aria-live` aqui e não no aviso de cada momento: este texto muda
+         * poucas vezes numa aula — procurando, acompanhando, pausado — e é
+         * exatamente o que alguém que apoiou o celular e não está olhando
+         * precisa saber. Anunciar cada momento capturado seria interromper a
+         * aula a cada slide.
+         */}
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex items-center gap-2 rounded-full bg-canvas/90 px-3.5 py-2 backdrop-blur"
+        >
           <span
             className={
               !running

@@ -156,5 +156,74 @@ console.log("\n== um modo simulado não é botão morto ==");
   await b.close();
 }
 
+console.log("\n== o Instantâneo faz o que o nome diz ==");
+{
+  const { b, p, erros } = await abrir("fp-parede-rebocada-textura-forte.y4m", 4000);
+  await p.getByRole("dialog").getByRole("button", { name: /^Instantâneo/ }).first().click();
+  await p.waitForTimeout(2200);
+
+  /* O modo diz "dispara imediatamente, sem ajustes prévios" — e respeitava o
+     temporizador, o que fazia a promessa ser falsa. Um modo que diz uma coisa
+     e faz outra é pior que um modo a menos. */
+  check(
+    (await p.getByRole("button", { name: /temporizador/i }).count()) === 0,
+    "sem controle de temporizador, que aqui não teria efeito",
+  );
+
+  const antes = await p.evaluate(async () => {
+    const db = await new Promise((r) => {
+      const q = indexedDB.open("jovi-camera-v2");
+      q.onsuccess = () => r(q.result);
+    });
+    const n = await new Promise((r) => {
+      const q = db.transaction("captures", "readonly").objectStore("captures").count();
+      q.onsuccess = () => r(q.result);
+    });
+    db.close();
+    return n;
+  });
+
+  await p.getByRole("button", { name: /Tirar foto/i }).click();
+  // Um segundo e meio: se houvesse contagem de três segundos, nada teria sido
+  // salvo ainda.
+  await p.waitForTimeout(1500);
+  const depois = await p.evaluate(async () => {
+    const db = await new Promise((r) => {
+      const q = indexedDB.open("jovi-camera-v2");
+      q.onsuccess = () => r(q.result);
+    });
+    const n = await new Promise((r) => {
+      const q = db.transaction("captures", "readonly").objectStore("captures").count();
+      q.onsuccess = () => r(q.result);
+    });
+    db.close();
+    return n;
+  });
+  check(depois === antes + 1, "e a foto sai na hora", `${antes} → ${depois}`);
+  check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
+  await b.close();
+}
+
+console.log("\n== os números dos modos, contra o que os docs dizem ==");
+{
+  const { b, p, erros } = await abrir("fp-parede-rebocada-textura-forte.y4m", 4000);
+  /* Este bloco existe porque eu errei a conta: os docs diziam "6 de 16 são
+     prévia" quando eram 9, e ninguém nota um número errado num documento. O
+     app é a fonte, e o teste faz a contagem. */
+  const contagem = await p.evaluate(() => {
+    const cards = [...document.querySelectorAll("[role=dialog] li button")];
+    const previa = cards.filter((c) => /Prévia/i.test(c.innerText)).length;
+    return { total: cards.length, previa, reais: cards.length - previa };
+  });
+  console.log(
+    `        ${contagem.total} modos · ${contagem.reais} reais · ${contagem.previa} prévia`,
+  );
+  check(contagem.total === 16, "dezesseis modos no catálogo", `${contagem.total}`);
+  check(contagem.reais === 7, "sete reais", `${contagem.reais}`);
+  check(contagem.previa === 9, "nove prévias, e cada uma diz que é", `${contagem.previa}`);
+  check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
+  await b.close();
+}
+
 console.log(fail ? `\n${fail} FALHA(S)` : "\nTUDO PASSOU");
 process.exit(fail ? 1 : 0);

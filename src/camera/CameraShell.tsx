@@ -133,6 +133,12 @@ export function CameraShell({
   const isScanner = mode.id === "scanner";
   /** O modo Intervalo tem o seu próprio ciclo de gravação, e não o do vídeo. */
   const isTimelapse = mode.id === "timelapse";
+  /*
+   * "Instantâneo" promete disparar imediatamente, sem ajustes prévios — e
+   * respeitava o temporizador, o que fazia a promessa ser falsa. Um modo que
+   * diz uma coisa e faz outra é pior que um modo a menos.
+   */
+  const isSnapshot = mode.id === "snapshot";
   /** O modo Noite, que empilha quadros em vez de disparar uma vez. */
   const isNight = mode.id === "night";
   const [nivelNoturno, setNivelNoturno] = useState<NivelNoturno>("medio");
@@ -348,6 +354,32 @@ export function CameraShell({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSlid]);
 
+  /*
+   * Fechar a aba no meio de uma aula é a pior perda possível deste app.
+   *
+   * Uma sessão de quarenta minutos com áudio vive inteira na memória até o
+   * resumo salvar — e um gesto de fechar a aba, um toque no botão de voltar,
+   * ou um recarregar sem querer levam tudo. O navegador não deixa impedir
+   * isso, mas deixa perguntar, e perguntar é o que existe.
+   *
+   * Só enquanto há aula correndo: um aviso ao sair da câmera parada seria o
+   * tipo de diálogo que ensina a pessoa a ignorar diálogos.
+   */
+  useEffect(() => {
+    const rodando = isSlid && (slid.status === "running" || slid.status === "paused");
+    const gravandoIntervalo = timelapse.gravando;
+    if (!rodando && !gravandoIntervalo) return;
+
+    const aoSair = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      // O texto é ignorado pelos navegadores modernos, que mostram o deles.
+      // O que importa é o evento ser cancelado.
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", aoSair);
+    return () => window.removeEventListener("beforeunload", aoSair);
+  }, [isSlid, slid.status, timelapse.gravando]);
+
   useEffect(() => {
     requestCamera();
     // Runs once on mount. requestCamera is stable enough for this purpose and
@@ -525,7 +557,8 @@ export function CameraShell({
           setCountdown(null);
           return;
         }
-        if (timer > 0) {
+        // O Instantâneo passa por cima do temporizador: é o que o nome diz.
+        if (timer > 0 && !isSnapshot) {
           setCountdown(timer);
           return;
         }
@@ -852,7 +885,9 @@ export function CameraShell({
             torchAvailable={torch.available}
             torchOn={torch.on}
             onToggleTorch={torch.toggle}
-            timer={timer}
+            // Sem controle de temporizador onde ele não teria efeito: um botão
+            // que muda um número que ninguém lê é botão cenográfico.
+            timer={isSnapshot ? null : timer}
             onCycleTimer={() => setTimer(nextTimer)}
             aspect={aspect}
             onCycleAspect={() => setAspect(nextAspect)}

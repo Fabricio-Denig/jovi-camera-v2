@@ -53,7 +53,13 @@ export function ListenBadge({
                 : "Áudio desligado";
 
   return (
-    <div className="pointer-events-auto flex items-center gap-2 rounded-full bg-canvas/90 px-3 py-1.5 backdrop-blur">
+    // Ouvindo → Áudio desativado é uma mudança que precisa ser anunciada: ela
+    // responde "estou sendo gravado?", que é pergunta de quem não está olhando.
+    <div
+      role="status"
+      aria-live="polite"
+      className="pointer-events-auto flex items-center gap-2 rounded-full bg-canvas/90 px-3 py-1.5 backdrop-blur"
+    >
       {ouvindo ? (
         <MedidorDeVoz level={level} />
       ) : (

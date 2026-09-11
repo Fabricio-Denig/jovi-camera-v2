@@ -119,6 +119,43 @@ console.log("\n== IndexedDB recusado ==");
   await b.close();
 }
 
+console.log("\n== fechar a aba no meio de uma aula pergunta antes ==");
+{
+  const { b, p, erros } = await abrir({ cena: "fp-aula-slide-projetado.y4m" });
+
+  /* O navegador não deixa impedir a saída, mas deixa perguntar. Um `beforeunload`
+     cancelado é o que produz a caixa "sair do site?" — e uma sessão de quarenta
+     minutos com áudio vive inteira na memória até o resumo salvar. */
+  const cancelado = () =>
+    p.evaluate(() => {
+      const e = new Event("beforeunload", { cancelable: true });
+      window.dispatchEvent(e);
+      return e.defaultPrevented;
+    });
+
+  check(!(await cancelado()), "a câmera parada sai sem perguntar nada");
+
+  await p.getByRole("button", { name: "SliD", exact: true }).click();
+  await p.waitForTimeout(4000);
+  check(await cancelado(), "mas uma aula correndo pergunta antes de sair");
+
+  // Encerrar a aula devolve a saída livre: não há mais o que perder.
+  const mostrar = p.getByRole("button", { name: "Mostrar controles" });
+  if ((await mostrar.count()) > 0) await mostrar.click();
+  await p.waitForTimeout(700);
+  await p.getByRole("button", { name: /^Encerrar$/ }).first().click();
+  await p.waitForTimeout(700);
+  await p
+    .getByRole("dialog", { name: "Encerrar a aula" })
+    .getByRole("button", { name: /Salvar aula|^Encerrar$/ })
+    .click();
+  await p.waitForTimeout(2500);
+  check(!(await cancelado()), "e encerrada volta a sair sem perguntar");
+
+  check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
+  await b.close();
+}
+
 console.log("\n== espaço acabou ==");
 {
   const { b, p, erros } = await abrir({

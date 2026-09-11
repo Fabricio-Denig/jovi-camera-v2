@@ -152,6 +152,14 @@ do site) e entre no SliD de novo:
 Anote qual navegador e qual sistema, e **qual formato o arquivo saiu** se
 conseguir ver (o resumo não mostra, mas um vídeo compartilhado diria).
 
+E um último, que é o que mais dói se falhar:
+
+- [ ] com uma aula **correndo**, tente fechar a aba ou voltar — o navegador tem
+      de perguntar antes. Uma sessão de quarenta minutos vive inteira na
+      memória até o resumo salvar, e um gesto de fechar levaria tudo. No iOS
+      o Safari às vezes ignora esse aviso; se ignorar, **anote**, porque muda o
+      conselho que damos a quem for usar.
+
 ---
 
 ## H — Intervalo e Noite (ciclo de 11/set)
