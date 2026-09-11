@@ -49,7 +49,7 @@ export function QuickActions({
       <div className="flex gap-2">
         {temPrint && (
           <Cartao
-            icone="⇩"
+            icone={<DownloadIcon />}
             rotulo="Salvar PDF"
             onClick={() => {
               // A folha já está no documento, escondida. Imprimir a revela e
@@ -61,7 +61,7 @@ export function QuickActions({
 
         {temShare && (
           <Cartao
-            icone="↗"
+            icone={<ShareIcon />}
             rotulo="Compartilhar"
             ocupado={compartilhando}
             onClick={async () => {
@@ -74,12 +74,9 @@ export function QuickActions({
           />
         )}
 
-        <Cartao
-          icone="🗑"
-          rotulo="Excluir"
-          suave
-          onClick={onExcluir}
-        />
+        {/* Ícones em SVG e não em emoji: a cobertura varia por sistema, e um
+            cartão com o glifo faltando vira um retângulo com rótulo. */}
+        <Cartao icone={<TrashIcon />} rotulo="Excluir" suave onClick={onExcluir} />
       </div>
 
       {/* Onde nenhuma das duas existe, a tela diz o que dá para fazer em vez
@@ -114,7 +111,7 @@ function Cartao({
   ocupado = false,
   suave = false,
 }: {
-  icone: string;
+  icone: React.ReactNode;
   rotulo: string;
   onClick: () => void;
   ocupado?: boolean;
@@ -133,10 +130,56 @@ function Cartao({
           : "border-line bg-surface-2 text-ink"
       }`}
     >
-      <span aria-hidden="true" className="text-[19px] leading-none">
+      <span aria-hidden="true" className="flex h-[22px] items-center text-[19px] leading-none">
         {ocupado ? "…" : icone}
       </span>
       <span className="text-[11.5px] font-medium">{rotulo}</span>
     </button>
+  );
+}
+
+/** Os três ícones dos cartões, no traço fino do resto do app. */
+function Traco({ children }: { children: React.ReactNode }) {
+  return (
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {children}
+    </svg>
+  );
+}
+
+function DownloadIcon() {
+  return (
+    <Traco>
+      <path d="M12 3v12M7 11l5 5 5-5M4 20h16" />
+    </Traco>
+  );
+}
+
+function ShareIcon() {
+  return (
+    <Traco>
+      <circle cx="18" cy="5" r="2.6" />
+      <circle cx="6" cy="12" r="2.6" />
+      <circle cx="18" cy="19" r="2.6" />
+      <path d="M8.4 10.8 15.6 6.6M8.4 13.2l7.2 4.2" />
+    </Traco>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <Traco>
+      <path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13M10 11v6M14 11v6" />
+    </Traco>
   );
 }

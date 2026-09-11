@@ -147,7 +147,14 @@ export const MODES: CameraMode[] = [
     summary: "Captura a cada intervalo e junta tudo em um vídeo acelerado.",
     whenToUse: "Processos longos: um pôr do sol, uma obra, o céu mudando.",
     kind: "video",
-    fidelity: "simulated",
+    /*
+     * Real, e honesto de um jeito que quase nenhum outro modo criativo
+     * consegue ser no navegador: um time-lapse **é** exatamente isto — um
+     * quadro a cada N segundos, tocados em sequência. Não há aproximação.
+     * `canvas.captureStream(0)` mais `requestFrame()` põe exatamente um quadro
+     * por captura no arquivo.
+     */
+    fidelity: "real",
     section: "criativos",
     pinned: false,
     controls: ["Intervalo entre capturas", "Duração total"],

@@ -16,9 +16,9 @@ Tesseract.js rodando local, IndexedDB, e a análise de quadro do SliD.
 | **Foto** | real | — | canvas + `capturePhoto` | — | — |
 | **Vídeo** | real | — | `MediaRecorder` | — | — |
 | **SliD** | real *(validado em projetor, 2x)* | — | análise de quadro própria | — | — |
-| **Documento / Scanner** | prévia | **Sim — o candidato mais forte** | canvas para detectar bordas por gradiente, transformação de perspectiva com `setTransform`, Tesseract já embarcado, filtro de contraste já existe | médio | **1ª** |
+| **Documento / Scanner** | **real** *(fase 1 e 2)* | — | canvas para detectar bordas por gradiente, transformação de perspectiva com `setTransform`, Tesseract já embarcado, filtro de contraste já existe | médio | **1ª** |
 | **Noturno** | prévia | **Sim, versão honesta** | empilhar N quadros do vídeo em canvas e tirar a média — reduz ruído de verdade; `exposureCompensation` via `applyConstraints` quando o aparelho expõe | baixo | **2ª** |
-| **Time-lapse** | prévia | **Sim** | capturar um quadro a cada N segundos (o laço do SliD já faz isso) e montar com `MediaRecorder` sobre um `canvas.captureStream()` | médio | **3ª** |
+| **Time-lapse / Intervalo** | **real** *(11/set)* | — | `canvas.captureStream(0)` + `requestFrame()` + `MediaRecorder` | — | — |
 | **Retrato** | prévia | Parcial e arriscado | separar pessoa do fundo pede segmentação; sem biblioteca pesada, só dá para desfocar por distância do centro — o que erra em qualquer foto que não seja um busto centralizado | alto para ficar honesto | 4ª |
 | **Panorâmica** | prévia | Difícil | costura de quadros pede casamento de características; sem OpenCV vira colagem com emenda visível | alto | baixa |
 | **Câmera lenta** | prévia | **Não, no navegador** | precisa capturar a 120–240 fps; `getUserMedia` raramente entrega isso e `MediaRecorder` não controla a taxa de reprodução | — | — |
@@ -41,3 +41,24 @@ de um documento, contra sessão contínua de aula. Os dois não se misturam.
 Não é falta de esforço: o navegador não entrega o que o modo precisa. Registrar
 isso evita gastar um ciclo descobrindo de novo. Ele continua como prévia, com o
 card dizendo o que faria — que é honesto e é o que o Figma desenha.
+
+
+## O que virou real, e por quê
+
+**Scanner** (10/set) e **Intervalo** (11/set) saíram da lista de prévias.
+
+O Intervalo é o modo criativo mais honesto que dá para fazer no navegador, e
+vale registrar por quê: um time-lapse **é** um quadro a cada N segundos tocados
+em sequência — não há aproximação, nem efeito aplicado depois, nem
+característica de hardware sendo imitada. `canvas.captureStream(0)` não produz
+quadro sozinho; cada `requestFrame()` empurra exatamente um. Então o arquivo
+final tem tantos quadros quantas capturas houve, e a aceleração é o quociente
+entre o tempo real e a duração do vídeo, não um número escrito na tela.
+
+Medido: 19 quadros em 9 segundos a 500 ms, virando 1 s de vídeo — 6× mais
+rápido, em `video/webm;codecs=vp9`, 640×480, que o navegador abre.
+
+Sobram **sete prévias**, e cada uma diz "Prévia" no card com um cartão
+explicando o que faria. Das sete, as que ainda poderiam virar reais estão
+acima com o esforço estimado; **câmera lenta** e **superlua** não podem, e
+estão registradas como tal para não custarem um ciclo de descoberta.

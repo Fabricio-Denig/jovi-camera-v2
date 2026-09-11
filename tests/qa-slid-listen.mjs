@@ -189,9 +189,15 @@ console.log("\n== encerrar a aula fecha o arquivo e o guarda ==");
   await p.waitForTimeout(600);
   await encerrar(p);
 
+  const noResumo = await p.locator("body").innerText();
+  check(/Resumo da aula/i.test(noResumo), "a aula encerra no resumo");
+  /* Esta é a tela em que o estudante decide guardar. Ele precisa saber que a
+     gravação vai junto **antes** de decidir — descobrir depois que foi
+     gravado incomoda mesmo quem autorizou o microfone no começo. */
   check(
-    /Resumo da aula/i.test(await p.locator("body").innerText()),
-    "a aula encerra no resumo",
+    /de áudio gravados/i.test(noResumo),
+    "e o resumo diz quanto de áudio vai junto",
+    noResumo.split("\n").find((l) => /áudio/i.test(l)) ?? "",
   );
 
   // O microfone é hardware: encerrar tem de soltá-lo.
