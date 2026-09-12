@@ -984,12 +984,30 @@ export function CameraShell({
               falaRecente={transcript.parcial}
             />
           }
+          /*
+           * A promessa some quando algo melhor ocupa o lugar dela.
+           *
+           * Medido a 390 px: a coluna de cima do SliD ocupa 70→236 px, 28 % da
+           * altura da tela, em cinco elementos. Com a linha da fala ligada
+           * passaria de 31 % — quase um terço do visor coberto por selos, numa
+           * tela cujo conteúdo é o quadro.
+           *
+           * As duas coisas dizem a mesma coisa por meios diferentes: "SEE ·
+           * LISTEN · IDENTIFY" é a promessa em três bolinhas, e a frase que a
+           * pessoa acabou de falar é a promessa acontecendo. A segunda é prova
+           * muito melhor que a primeira, e nenhuma das duas precisa da outra.
+           *
+           * Então elas se revezam em vez de empilhar. No caso comum — e a
+           * maioria dos navegadores não transcreve — nada muda.
+           */
           promessa={
-            <SeeListenIdentify
-              vendo={slid.sceneReady}
-              ouvindo={listen.status === "ouvindo"}
-              identificou={slid.captures.length}
-            />
+            transcript.transcrevendo && transcript.parcial ? null : (
+              <SeeListenIdentify
+                vendo={slid.sceneReady}
+                ouvindo={listen.status === "ouvindo"}
+                identificou={slid.captures.length}
+              />
+            )
           }
         />
       )}

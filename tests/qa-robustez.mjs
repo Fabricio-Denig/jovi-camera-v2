@@ -334,5 +334,72 @@ console.log("\n== tela pequena (320 px) ==");
   await b.close();
 }
 
+console.log("\n== Web Share ausente: o botão não aparece, e o resto continua ==");
+{
+  /*
+   * Firefox de mesa e vários navegadores embutidos não têm `navigator.share`,
+   * e alguns têm `share` mas recusam tudo que não seja URL — por isso a
+   * detecção pergunta com `canShare` e não pela existência do método.
+   *
+   * Um botão "Compartilhar" que abre nada é pior que a ausência dele: a pessoa
+   * toca, não acontece nada, e passa a não confiar nos outros dois.
+   */
+  const { b, p, erros } = await abrir({
+    quebrar: () => {
+      delete Navigator.prototype.share;
+      delete Navigator.prototype.canShare;
+    },
+  });
+  await semearAula(p);
+  await p.reload({ waitUntil: "networkidle" });
+  await p.waitForTimeout(2000);
+  await abrirAula(p);
+  await p.getByRole("tab", { name: "Resumo", exact: true }).click();
+  await p.waitForTimeout(800);
+
+  const corpo = await p.locator("[role=tabpanel]").innerText();
+  check(
+    !/Compartilhar/i.test(corpo),
+    "sem cartão de compartilhar onde não dá para compartilhar",
+    corpo.slice(0, 90).replace(/\n/g, " · "),
+  );
+  check(
+    /Ações rápidas/i.test(corpo),
+    "a seção continua existindo com o que resta",
+  );
+  check(
+    /Salvar PDF|Copiar|Excluir/i.test(corpo),
+    "e as outras ações continuam lá",
+  );
+  check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
+  await b.close();
+}
+
+console.log("\n== lanterna ausente: o controle não é desenhado ==");
+{
+  /*
+   * A lanterna depende de o `MediaStreamTrack` expor `torch` nas capacidades,
+   * e a maioria dos aparelhos de mesa não expõe nenhuma. O teste força o caso
+   * removendo `getCapabilities` — um botão de lanterna que não acende é
+   * exatamente o elemento cenográfico que a regra proíbe.
+   */
+  const { b, p, erros } = await abrir({
+    quebrar: () => {
+      const proto = window.MediaStreamTrack && window.MediaStreamTrack.prototype;
+      if (proto) proto.getCapabilities = () => ({});
+    },
+  });
+  const lanterna = p.getByRole("button", { name: /lanterna/i });
+  check(
+    (await lanterna.count()) === 0,
+    "sem botão de lanterna neste aparelho",
+  );
+  // E a barra de cima continua inteira, com o que existe.
+  const corpo = await p.locator("body").innerText();
+  check(corpo.trim().length > 20, "a barra de cima continua de pé");
+  check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
+  await b.close();
+}
+
 console.log(fail === 0 ? "\nTUDO CERTO" : `\n${fail} FALHA(S)`);
 process.exit(fail === 0 ? 0 : 1);

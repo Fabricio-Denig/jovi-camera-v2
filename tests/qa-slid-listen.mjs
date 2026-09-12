@@ -712,6 +712,42 @@ console.log("\n== reconhecimento funcionando: o selo e a fala na tela ==");
     /prestem atenção nessa parte/i.test(corpo),
     "e uma linha do que está sendo dito aparece",
   );
+
+  /*
+   * A linha da fala e a promessa se revezam, não empilham.
+   *
+   * Medido a 390 px antes desta troca: a coluna de cima ocupava 28 % da altura
+   * da tela em cinco elementos, e com a linha da fala passaria de 31 % — quase
+   * um terço do visor coberto por selo, numa tela cujo conteúdo é o quadro.
+   *
+   * As duas dizem a mesma coisa por meios diferentes: "SEE · LISTEN ·
+   * IDENTIFY" é a promessa em três bolinhas, e a frase recém-falada é a
+   * promessa acontecendo. A segunda prova muito melhor, então ela toma o
+   * lugar em vez de somar.
+   */
+  check(
+    !/SEE\s*·?\s*LISTEN/i.test(corpo),
+    "e a linha das três letras cede o lugar em vez de empilhar",
+    corpo.split("\n").slice(0, 6).join(" · "),
+  );
+
+  const alturaDaColuna = await p.evaluate(() => {
+    const vh = window.innerHeight;
+    let fundo = 0;
+    for (const el of document.querySelectorAll("div")) {
+      const r = el.getBoundingClientRect();
+      if (r.width < 40 || r.height < 14 || r.width > window.innerWidth * 0.95) continue;
+      if (r.top > vh * 0.45) continue;
+      if (!(el.textContent || "").trim()) continue;
+      fundo = Math.max(fundo, r.top + r.height);
+    }
+    return { fundo: Math.round(fundo), fracao: +(fundo / vh).toFixed(3) };
+  });
+  check(
+    alturaDaColuna.fracao <= 0.3,
+    `a coluna de cima não passa de 30 % da tela (${(alturaDaColuna.fracao * 100).toFixed(1)} %)`,
+  );
+
   check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
   await b.close();
 }

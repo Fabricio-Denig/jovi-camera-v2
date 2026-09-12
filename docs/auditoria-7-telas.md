@@ -68,6 +68,38 @@ que a regra de produto põe ali:
 - A segunda seção da galeria é **"Fotos e vídeos"**, não "Recentes": ela contém
   o que foi tirado com o dedo, nunca momentos de aula.
 
+## O Scanner, nas condições que uma folha real encontra (Fase 7)
+
+Medido em 12/set, `qa-scanner-condicoes`, dez cenas:
+
+| condição | resultado |
+|---|---|
+| folha clara sobre mesa | enquadrou |
+| folha com texto | enquadrou |
+| folha fora do centro | enquadrou |
+| folha pequena no quadro | enquadrou |
+| folha com pouca luz | enquadrou |
+| mesa vazia | recusou |
+| **mesa de madeira com veio marcado** | **recusou** |
+| mesa com objetos (caneca, caneta) | recusou |
+| papel amassado | recusou |
+| folha ocupando o quadro inteiro | recusou, pedindo para afastar |
+
+**Nenhum falso positivo em dez cenas.** Nesta suíte as negativas valem mais que
+as positivas: um scanner que não detecta uma folha difícil frustra; um que
+"detecta" uma mesa entrega um documento torto que a pessoa só descobre depois,
+e queima a confiança em todos os outros. A mesa de madeira é a prova mais dura
+disso — veio é reto e paralelo, exatamente o sinal que um detector de bordas
+persegue.
+
+### A lacuna, dita em vez de escondida
+
+**Folha escura não tem cena.** Das sete condições da lista de verificação em
+aparelho, seis estão cobertas; essa não, porque não existe cena para ela e eu
+não vou afirmar cobertura que não medi. Fica no `checklist-aparelho.md` como
+verificação de dedo — uma folha de sulfite colorida, ou um papel pardo, sobre
+uma mesa clara.
+
 ## Onde a cobertura é fina, dito com precisão
 
 O quadro acima mede o que dá para medir nesta bancada. Três coisas ele **não**
@@ -85,6 +117,45 @@ responde, e vale saber quais antes de confiar nele:
 As três estão no `checklist-aparelho.md`, que é o documento que fecha a
 lacuna — e que diz, na primeira linha de cada seção, o que ele não conseguiu
 provar sozinho.
+
+## A tela do SliD ativo, medida (Fase 4)
+
+A pergunta era se as últimas funcionalidades tinham transformado a tela numa
+cabine de avião. Medi em vez de opinar, a 390 px:
+
+| y | elemento | altura |
+|---|---|---|
+| 70 | `Acompanhando a aula 00:03` | 35 |
+| 113 | `Ouvindo 00:03 ✕` | 40 |
+| 140 | miniatura do momento (trilha, à direita) | 58 |
+| 161 | `See · Listen · Identify 1` | 32 |
+| 201 | `Novo tópico no quadro` (transitório) | 35 |
+
+**70 → 236 px = 28 % da altura da tela.** Com a linha da fala ligada passaria
+de 31 %.
+
+### O que eu **não** mudei, e por quê
+
+O relógio aparece duas vezes — na pílula da sessão e no selo do Listen — e a
+primeira reação é chamar isso de redundância. Não é: o áudio pode começar
+depois da sessão, porque entre entrar no SliD e a pessoa responder à caixa de
+permissão passam segundos. Os dois números diferem, e a diferença é
+informação. Há decisão registrada e teste protegendo (`qa-slid-listen`:
+*"há um relógio para a sessão e outro para o áudio"*).
+
+Também não juntei a pílula da sessão com o selo do Listen numa linha só: as
+duas somam 431 px de largura e a tela tem 390.
+
+### O que mudei
+
+A linha da fala e a linha `SEE · LISTEN · IDENTIFY` passam a **se revezar** em
+vez de empilhar. As duas dizem a mesma coisa por meios diferentes — a primeira
+é a promessa em três bolinhas, a segunda é a promessa acontecendo — e a
+segunda prova muito melhor. No caso comum, em que o navegador não transcreve,
+nada muda: a medição depois da troca continua 28 %.
+
+É a mudança mais conservadora que responde à pergunta, e ela tem teto medido:
+`qa-slid-listen` passou a reprovar se a coluna ultrapassar 30 % da tela.
 
 ## Uma suíte que não é determinística, e o que isso custa
 

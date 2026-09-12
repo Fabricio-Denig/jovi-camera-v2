@@ -276,3 +276,29 @@ deles a API simplesmente não existe):
 
 Anote **qual navegador, qual sistema e o que aconteceu**. A cobertura real
 desta API é o dado que falta, e só aparelho responde.
+
+---
+
+## J — Scanner: a condição que a bancada não cobre (12/set)
+
+Dez condições de folha foram medidas em bancada e nenhuma produziu falso
+positivo — inclusive a mesa de madeira com veio marcado, que é a mais difícil
+de todas porque veio de madeira é reto e paralelo, o mesmo sinal que um
+detector de bordas persegue.
+
+**Uma condição ficou de fora por não existir cena para ela**, e por isso está
+aqui em vez de num número:
+
+- [ ] **folha escura sobre mesa clara** — uma sulfite colorida, um papel pardo,
+      ou a contracapa de um caderno. O detector procura a borda entre a folha e
+      o fundo; com a folha mais escura que a mesa, o contraste inverte.
+- [ ] se ele **enquadrar**: confira que o recorte pegou a folha inteira, e não
+      um pedaço
+- [ ] se ele **não enquadrar**: a tela precisa dizer "aponte para a folha" —
+      o que não se aceita é ela afirmar que enquadrou e entregar um recorte
+      torto
+- [ ] repita com **pouca luz** sobre a folha escura, que é a combinação mais
+      dura das duas
+
+Anote o que aconteceu. Se ele errar aqui, é um limite conhecido e não um
+defeito surpresa — mas é um limite que só o seu papel de verdade revela.
