@@ -491,3 +491,30 @@ responder "o que eu preciso revisar" sem rolagem.
 matéria, quando, quanto durou, quantas capturas, e — pela miniatura — como ela
 era. O app responde às mesmas menos a miniatura, em texto corrido. O cartão é
 melhor, e a miniatura é o que falta.
+
+### Situação em 13/set
+
+Conferido linha por linha no código para a prioridade 1 da lista de
+fechamento ("fidelidade visual final das 7 telas"). **Quase tudo desta seção
+já estava implementado** em ciclos anteriores a este, e a tabela acima
+ficou vencida sem que este arquivo fosse atualizado — o que segue corrige
+isso, sem reescrever a tabela (a regra deste documento continua sendo não
+apagar o registro datado).
+
+| lacuna acima | situação | onde |
+|---|---|---|
+| "Voltar" + cartão da aula, miniatura, lápis | **feito** | `ClassHeaderCard.tsx` |
+| Abas Imagens / Texto / Resumo | **feito** | `ClassTabs.tsx`, `ClassPage.tsx` |
+| Imagem dentro do cartão de texto | **feito**, por momento | `ClassImagesTab.tsx`, `ClassTextTab.tsx` |
+| "Salvar PDF" (`window.print` + folha) | **feito**, some onde `print` não existe | `LessonPrintSheet.tsx`, `QuickActions.tsx` |
+| "Compartilhar" | **feito**, some onde `navigator.share` não existe | `QuickActions.tsx`, `lessonSharing.ts` |
+| "Adicionar" (sem significado no wireframe) | **decisão tomada**: virou "Excluir" | `QuickActions.tsx` |
+| "Copiar texto" | **feito como "Copiar a aula inteira"**, um botão para a aula toda em vez de um por aba — cobre a mesma necessidade sem duplicar em três lugares | `ClassSummaryTab.tsx` |
+| Marcadores interpretados (Δ, listas) | **feito**, com a mesma regra de não inventar conteúdo — só reformata o que o OCR leu | `classText.ts` |
+
+**Não sobrou nenhuma lacuna funcional conhecida no `Resumo v2`.** O que
+falta, se algo faltar, só um teste em Figma lado a lado com captura de tela
+revelaria — e o proxy desta bancada continua recusando `figma.com` (mesmo
+bloqueio de 11/set). Ajustes de pixel fino (2–9 px em paddings) não foram
+perseguidos: o documento já registrava que isso pesa menos que fidelidade
+estrutural, e a estrutura está fechada.
