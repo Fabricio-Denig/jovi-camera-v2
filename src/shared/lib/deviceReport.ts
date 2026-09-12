@@ -7,6 +7,11 @@ import {
   getLessonAudio,
 } from "./mediaStore";
 import { podeCompartilhar, podeImprimir } from "../../slid/lessonSharing";
+import {
+  lerCapacidades,
+  lerConfiguracao,
+  lerRestricoes,
+} from "../../camera/mediaCapabilities";
 
 /**
  * O relatório do aparelho — o que a bancada não consegue responder.
@@ -48,9 +53,21 @@ export interface EstadoVivo {
     videoSize: string;
     appliedFacing: string;
     canSwitchFacing: boolean;
+    /**
+     * O track de vídeo em uso, cru. O relatório lê `getCapabilities` /
+     * `getSettings` / `getConstraints` dele na hora — cada leitura reflete o
+     * hardware naquele instante, e não um resumo escolhido antes.
+     */
+    track: MediaStreamTrack | null;
   };
   zoom: { level: number; native: boolean };
   torch: { available: boolean; on: boolean };
+  foco: {
+    estado: string;
+    modosDeclarados: string[];
+    modoAtual: string | null;
+    tocarSuportado: boolean;
+  };
   listen: {
     status: string;
     mimeType: string | null;
@@ -80,6 +97,26 @@ async function contarCameras(): Promise<string> {
     return `${cameras.length} câmera(s), ${micros.length} microfone(s)`;
   } catch (e) {
     return `falhou: ${e instanceof Error ? e.name : "erro"}`;
+  }
+}
+
+/**
+ * Os nomes das câmeras que o navegador expõe, quando ele os dá.
+ *
+ * Um celular com ultra-wide, principal e teletele pode devolver as três aqui
+ * — e é o primeiro lugar onde "qual lente a câmera pegou" vira algo visível
+ * em vez de suspeita. Abrir cada uma para ler capacidades exigiria pedir
+ * `getUserMedia` de novo por dispositivo, o que interromperia o preview em
+ * uso; por isso esta lista é só o que `enumerateDevices` já dá de graça.
+ */
+async function listarCameras(): Promise<string[]> {
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    return devices
+      .filter((d) => d.kind === "videoinput")
+      .map((d, i) => d.label || `câmera ${i + 1} (sem rótulo)`);
+  } catch {
+    return [];
   }
 }
 
@@ -138,8 +175,9 @@ async function testarIndexedDb(): Promise<string> {
 export async function montarRelatorio(
   vivo: EstadoVivo,
 ): Promise<SecaoDoRelatorio[]> {
-  const [cameras, guardado, idb, espaco] = await Promise.all([
+  const [cameras, listaCameras, guardado, idb, espaco] = await Promise.all([
     contarCameras(),
+    listarCameras(),
     contarGuardado(),
     testarIndexedDb(),
     espacoRestante().catch(() => null),
@@ -147,6 +185,13 @@ export async function montarRelatorio(
 
   const formato = melhorFormato();
   const declarado = reconhecimentoDeclarado();
+
+  // Lido na hora, do track cru — é o que faz "Resolução pedida × entregue" e
+  // o foco responderem ao estado atual do hardware, não a um resumo antigo.
+  const track = vivo.camera.track;
+  const capacidades = lerCapacidades(track);
+  const configuracao = lerConfiguracao(track);
+  const restricoes = lerRestricoes(track);
 
   return [
     {
@@ -197,6 +242,117 @@ export async function montarRelatorio(
           valor: vivo.torch.available
             ? `existe, ${vivo.torch.on ? "acesa" : "apagada"}`
             : "não existe neste aparelho",
+        },
+      ],
+    },
+    {
+      titulo: "Câmeras disponíveis",
+      linhas:
+        listaCameras.length > 0
+          ? listaCameras.map((label, i) => ({
+              rotulo: `#${i + 1}`,
+              valor: label,
+              tom: label.includes("sem rótulo") ? ("neutro" as const) : undefined,
+            }))
+          : [{ rotulo: "—", valor: "nenhuma listada (sem permissão ainda?)" }],
+    },
+    {
+      /*
+       * A seção que este ciclo existe para responder: a câmera pede o que, e
+       * entrega o que. `openVideoStream` (`useCamera.ts`) hoje só pede
+       * `facingMode` — nenhum `width`/`height`/`frameRate` — e é isso que a
+       * linha "Constraints pedidas" prova, sem eu precisar afirmar de
+       * memória. Não mudei esse pedido: decidir uma resolução-alvo pede dado
+       * de aparelho real primeiro, e é exatamente o que esta seção coleta.
+       */
+      titulo: "Câmera — captura",
+      linhas: [
+        {
+          rotulo: "Resolução entregue",
+          valor: vivo.camera.videoSize,
+        },
+        {
+          rotulo: "Resolução pedida",
+          valor:
+            restricoes?.width || restricoes?.height
+              ? `${JSON.stringify(restricoes.width ?? "—")} × ${JSON.stringify(restricoes.height ?? "—")}`
+              : "nenhuma (o navegador escolhe sozinho)",
+          tom: restricoes?.width || restricoes?.height ? undefined : "neutro",
+        },
+        {
+          rotulo: "Frame rate entregue",
+          valor: configuracao?.frameRate != null ? `${configuracao.frameRate} fps` : "—",
+        },
+        {
+          rotulo: "Capacidades de resolução",
+          valor:
+            capacidades?.width && capacidades?.height
+              ? `largura ${capacidades.width.min}–${capacidades.width.max} · altura ${capacidades.height.min}–${capacidades.height.max}`
+              : "não informadas",
+        },
+        {
+          rotulo: "resizeMode",
+          valor: capacidades?.resizeMode?.join(", ") || "não informado",
+        },
+        {
+          rotulo: "Constraints pedidas (getConstraints)",
+          valor: restricoes ? JSON.stringify(restricoes) : "—",
+        },
+      ],
+    },
+    {
+      /*
+       * A seção que resolve o "achado do teste real" de 12/set: a câmera
+       * parecia não focar em projetor/tela. `focusMode` e `focusDistance` só
+       * aparecem aqui quando `getCapabilities()` os lista de verdade — nunca
+       * por suposição —, e "Contínuo confirmado" só é "sim" quando
+       * `getSettings()` prova que o modo mudou, não quando o pedido apenas
+       * foi aceito. Medido nesta bancada: as duas coisas divergem.
+       */
+      titulo: "Câmera — foco",
+      linhas: [
+        {
+          rotulo: "focusMode declarado",
+          valor: capacidades?.focusMode?.join(", ") || "ausente",
+          tom: capacidades?.focusMode?.length ? "bom" : "neutro",
+        },
+        {
+          rotulo: "focusDistance declarado",
+          valor: capacidades?.focusDistance
+            ? `${capacidades.focusDistance.min}–${capacidades.focusDistance.max}${
+                capacidades.focusDistance.step ? ` (passo ${capacidades.focusDistance.step})` : ""
+              }`
+            : "ausente",
+        },
+        {
+          rotulo: "pointsOfInterest declarado",
+          valor: sim(vivo.foco.tocarSuportado),
+          tom: vivo.foco.tocarSuportado ? "bom" : "neutro",
+        },
+        {
+          rotulo: "Contínuo confirmado (getSettings)",
+          valor: vivo.foco.estado === "confirmado" ? "sim" : "não",
+          tom:
+            vivo.foco.estado === "confirmado"
+              ? "bom"
+              : vivo.foco.estado === "pedido"
+                ? "ruim"
+                : "neutro",
+        },
+        { rotulo: "Estado do foco", valor: vivo.foco.estado },
+        { rotulo: "focusMode atual (getSettings)", valor: vivo.foco.modoAtual ?? "—" },
+      ],
+    },
+    {
+      titulo: "Câmera — tudo cru",
+      linhas: [
+        {
+          rotulo: "getCapabilities()",
+          valor: capacidades ? JSON.stringify(capacidades) : "indisponível",
+        },
+        {
+          rotulo: "getSettings()",
+          valor: configuracao ? JSON.stringify(configuracao) : "indisponível",
         },
       ],
     },
