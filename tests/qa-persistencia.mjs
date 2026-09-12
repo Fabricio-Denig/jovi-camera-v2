@@ -346,5 +346,64 @@ console.log("\n== o OCR não pode virar órfão, porque não é um armazém ==")
   await b.close();
 }
 
+console.log("\n== esvaziar a lixeira apaga tudo de vez, áudio incluso ==");
+{
+  /*
+   * Prioridade 9 da lista de fechamento: estado limpo de demonstração. Antes
+   * desta suíte, esvaziar a lixeira exigia apagar cada aula uma por uma — com
+   * meses de teste acumulados, ninguém faz isso antes de uma banca. O botão
+   * "Esvaziar lixeira" precisa levar tudo de vez, e o áudio de cada aula
+   * junto, do mesmo jeito que apagar uma aula por vez já leva.
+   */
+  const { b, p, erros } = await abrir();
+  await semearAula(p, { ...AULA_REACT, id: "aula-vol-1", subject: "Aula 1 para esvaziar" });
+  await semearAudio(p, { sessionId: "aula-vol-1" });
+  await semearAula(p, { ...AULA_REACT, id: "aula-vol-2", subject: "Aula 2 para esvaziar" });
+  await semearAudio(p, { sessionId: "aula-vol-2" });
+  await p.reload({ waitUntil: "networkidle" });
+  await p.waitForTimeout(1800);
+
+  // As duas para a lixeira.
+  for (const nome of [/Aula 1 para esvaziar/i, /Aula 2 para esvaziar/i]) {
+    await irParaGaleria(p);
+    await abaSliD(p);
+    await p.getByRole("button", { name: nome }).first().click();
+    await p.waitForTimeout(1200);
+    await p.getByRole("tab", { name: "Resumo", exact: true }).click();
+    await p.waitForTimeout(600);
+    await p.getByRole("button", { name: /excluir/i }).first().click();
+    await p.waitForTimeout(1500);
+  }
+
+  const antes = await banco(p);
+  check(antes.naLixeira >= 2, `as duas aulas foram para a lixeira (${antes.naLixeira})`);
+  check(
+    antes.audios.includes("aula-vol-1") && antes.audios.includes("aula-vol-2"),
+    "e os dois áudios continuam guardados, para poderem voltar",
+  );
+
+  await p
+    .getByRole("tablist", { name: "Filtrar a galeria" })
+    .getByRole("tab", { name: /Lixeira/i })
+    .click();
+  await p.waitForTimeout(1000);
+  const esvaziar = p.getByRole("button", { name: /Esvaziar lixeira/i });
+  check((await esvaziar.count()) === 1, "existe um botão para esvaziar tudo de uma vez");
+  await esvaziar.click();
+  await p.waitForTimeout(700);
+  await p.getByRole("dialog", { name: "Apagar de vez" }).getByRole("button", { name: /esvaziar|apagar/i }).click();
+  await p.waitForTimeout(2500);
+
+  const depois = await banco(p);
+  check(depois.naLixeira === 0, `a lixeira ficou vazia (${depois.naLixeira} restantes)`);
+  check(
+    !depois.audios.includes("aula-vol-1") && !depois.audios.includes("aula-vol-2"),
+    "e os dois áudios foram junto, não ficaram órfãos",
+  );
+  check(depois.orfaos.length === 0, `nada órfão (${depois.orfaos.join(", ") || "—"})`);
+  check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
+  await b.close();
+}
+
 console.log(fail === 0 ? "\nTUDO CERTO" : `\n${fail} FALHA(S)`);
 process.exit(fail === 0 ? 0 : 1);
