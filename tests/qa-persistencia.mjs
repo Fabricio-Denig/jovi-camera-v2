@@ -231,5 +231,120 @@ console.log("\n== gravação sem aula nenhuma é varrida ==");
   await b.close();
 }
 
+console.log("\n== o OCR não pode virar órfão, porque não é um armazém ==");
+{
+  /*
+   * A pergunta era "mídia excluída deixa OCR órfão?". A resposta é que ela não
+   * pode, e vale entender por quê antes de escrever um teste que fingiria
+   * verificar algo.
+   *
+   * O banco tem **dois** armazéns e só dois: `captures` e `lessonAudio`. O
+   * texto lido de um documento é o campo `text` **dentro** do registro da
+   * mídia; o texto lido de uma aula são as `lines` dentro de `session`, também
+   * no registro da captura. Apagar a mídia apaga o texto junto, porque eles
+   * são a mesma linha do banco — não há como um sobreviver ao outro.
+   *
+   * Isto não é sorte: é o motivo de o áudio ser o único caso que precisou de
+   * varredura. Ele é o único que mora fora, e mora fora por necessidade — um
+   * arquivo de quarenta minutos repetido em cada momento da aula seria o mesmo
+   * áudio guardado uma dúzia de vezes.
+   *
+   * O teste então verifica a invariante, e não a limpeza: depois de apagar,
+   * nenhum dos dois armazéns guarda nada daquela mídia.
+   */
+  const { b, p, erros } = await abrir();
+  const antes = await p.evaluate(async () => {
+    const db = await new Promise((r, x) => {
+      const q = indexedDB.open("jovi-camera-v2");
+      q.onsuccess = () => r(q.result);
+      q.onerror = () => x(q.error);
+    });
+    const nomes = [...db.objectStoreNames];
+    db.close();
+    return nomes;
+  });
+  check(
+    antes.length === 2 && antes.includes("captures") && antes.includes("lessonAudio"),
+    `o banco tem dois armazéns, e só dois (${antes.join(", ")})`,
+  );
+
+  // Uma mídia de scanner com texto extraído dentro dela.
+  await p.evaluate(async () => {
+    const db = await new Promise((r, x) => {
+      const q = indexedDB.open("jovi-camera-v2");
+      q.onsuccess = () => r(q.result);
+      q.onerror = () => x(q.error);
+    });
+    const blob = await new Promise((r) => {
+      const c = document.createElement("canvas");
+      c.width = 200;
+      c.height = 260;
+      const x = c.getContext("2d");
+      x.fillStyle = "#fff";
+      x.fillRect(0, 0, 200, 260);
+      c.toBlob(r, "image/jpeg", 0.9);
+    });
+    const tx = db.transaction("captures", "readwrite");
+    tx.objectStore("captures").put({
+      id: "doc-com-texto",
+      kind: "photo",
+      blob,
+      mimeType: "image/jpeg",
+      createdAt: Date.now(),
+      width: 200,
+      height: 260,
+      source: "scanner",
+      look: "documento",
+      text: "TEXTO EXTRAÍDO DESTE DOCUMENTO",
+    });
+    await new Promise((r) => {
+      tx.oncomplete = r;
+    });
+    db.close();
+  });
+
+  const comTexto = await p.evaluate(async () => {
+    const db = await new Promise((r) => {
+      const q = indexedDB.open("jovi-camera-v2");
+      q.onsuccess = () => r(q.result);
+    });
+    const todas = await new Promise((r) => {
+      const q = db.transaction("captures").objectStore("captures").getAll();
+      q.onsuccess = () => r(q.result);
+    });
+    db.close();
+    return todas.filter((c) => c.text).length;
+  });
+  check(comTexto === 1, `a mídia foi guardada com o texto dentro (${comTexto})`);
+
+  // Apagar a mídia — e o texto some com ela, porque é a mesma linha.
+  const sobrou = await p.evaluate(async () => {
+    const db = await new Promise((r) => {
+      const q = indexedDB.open("jovi-camera-v2");
+      q.onsuccess = () => r(q.result);
+    });
+    await new Promise((r) => {
+      const tx = db.transaction("captures", "readwrite");
+      tx.objectStore("captures").delete("doc-com-texto");
+      tx.oncomplete = r;
+    });
+    const todas = await new Promise((r) => {
+      const q = db.transaction("captures").objectStore("captures").getAll();
+      q.onsuccess = () => r(q.result);
+    });
+    db.close();
+    return {
+      aindaTemTexto: todas.filter((c) => c.text).length,
+      restam: todas.length,
+    };
+  });
+  check(
+    sobrou.aindaTemTexto === 0,
+    `apagar a mídia levou o texto junto (${sobrou.aindaTemTexto} sobraram)`,
+  );
+  check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
+  await b.close();
+}
+
 console.log(fail === 0 ? "\nTUDO CERTO" : `\n${fail} FALHA(S)`);
 process.exit(fail === 0 ? 0 : 1);
