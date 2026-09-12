@@ -1,5 +1,10 @@
 # Testar o SliD num celular de verdade
 
+> **Superado por `docs/checklist-aparelho.md`.** Este roteiro cobre só a
+> detecção do SliD (seções A–B do checklist atual); o documento novo cobre
+> foco, Filtros, Listen, Scanner e todas as seções que vieram depois. Mantido
+> como registro datado, sem reescrever.
+
 Tudo o que está medido no repositório passou pela câmera do navegador com
 cenas gravadas. Isso prova que a decisão é a certa quando os quadros chegam;
 não prova o que a câmera de um celular entrega numa sala com projetor. Este
