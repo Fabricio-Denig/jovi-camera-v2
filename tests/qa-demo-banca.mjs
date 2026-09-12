@@ -309,15 +309,39 @@ console.log(
     "e o selo evolui quando um resultado chega de verdade",
     naSessao.split("\n").slice(0, 5).join(" · "),
   );
-  check(
-    /useState|prestem aten|cai na prova|hoje a gente/i.test(naSessao),
-    "com uma linha do que está sendo dito",
-  );
+  /*
+   * A linha da fala só aparece durante um parcial — e isso é o desenho certo:
+   * ela mostra o que está sendo dito **agora**, e o que acabou de virar
+   * trecho final já não está sendo dito.
+   *
+   * Com reconhecimento de verdade os parciais chegam em fluxo contínuo
+   * enquanto alguém fala, então a linha está quase sempre lá. O dublê emite um
+   * parcial por ciclo, e olhar num instante único pega a janela errada com
+   * frequência. Então o teste observa por alguns segundos em vez de tirar uma
+   * foto — que é o que uma pessoa olhando a tela faria.
+   */
+  let viuFala = false;
+  for (let i = 0; i < 20 && !viuFala; i++) {
+    const agora = await p.locator("body").innerText();
+    if (/useState|prestem aten|cai na prova|hoje a gente|resumindo/i.test(agora)) {
+      viuFala = true;
+      break;
+    }
+    await p.waitForTimeout(400);
+  }
+  check(viuFala, "com uma linha do que está sendo dito");
 
   // Tempo para a fala acumular os trechos que viram destaque.
   await p.waitForTimeout(10000);
 
   await encerrarESalvar(p);
+  /*
+   * `encerrarESalvar` leva até o resumo — quem salva é o toque seguinte, e eu
+   * tinha esquecido dele. O bloco seguia para a galeria com o resumo ainda em
+   * cima da tela e esperava trinta segundos por um botão coberto.
+   */
+  await p.getByRole("button", { name: /salvar|guardar/i }).first().click();
+  await p.waitForTimeout(3500);
 
   await p.getByRole("button", { name: "Galeria", exact: true }).click();
   await p.waitForTimeout(1300);
