@@ -198,6 +198,21 @@ outlier isolado não move mais a mediana do jeito que movia o máximo. Três
 execuções consecutivas, todas verdes, sem tocar em nenhum arquivo do
 detector. Ver `tests/qa-moldura.mjs`.
 
+## Primeira execução / usuário novo (prioridade 8, 13/set)
+
+Verificado sem `--use-fake-device-for-media-stream` (nenhuma câmera falsa,
+nenhuma permissão concedida de antemão — o estado mais frio que esta bancada
+consegue simular): a câmera mostra "Não foi possível acessar a câmera" com
+"Tentar novamente", sem travar; a Galeria vazia mostra "Nada guardado ainda"
+com o que fazer; o catálogo de Modos abre normalmente. Sem erro de runtime
+em nenhum dos três.
+
+**O que esta bancada não consegue simular:** a caixa de permissão real do
+navegador (Chromium sem câmera nenhuma cai direto em `NotFoundError`, nunca
+chega a perguntar). Isso só o aparelho real confirma — mas o caminho de erro
+que a bancada expõe já é honesto e não trava, o que é o que dava para medir
+daqui.
+
 ## Bundle e carregamento (prioridade 11, 13/set)
 
 | | |

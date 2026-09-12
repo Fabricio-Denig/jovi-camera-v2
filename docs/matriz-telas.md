@@ -1,5 +1,10 @@
 # As sete telas, medidas
 
+> **Superado por `docs/auditoria-7-telas.md` (13/set).** Este arquivo é o
+> registro datado da rodada de 11/set — mantido como está, sem reescrever,
+> pela mesma regra que `figma-gaps.md` segue. Para saber o estado atual do
+> produto, leia o outro documento.
+
 Todas as sete telas v2 do Figma estão lidas. Esta é a matriz de onde o app
 está em relação a cada uma, e o que falta.
 
