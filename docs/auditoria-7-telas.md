@@ -29,7 +29,7 @@ todas as linhas:
 |---|---|---|---|---|---|---|
 | **Câmera** | alta | completa | 3 larguras | `qa-filtros` 92 · `qa-virar` · `qa-modos` 51 · `qa-mobile` | — | ✨ do Figma sem função (fora de propósito) |
 | **Detecção** | alta | completa | 390 px | `qa-dica` · `qa-moldura` · `qa-slid-realworld` · `qa-enquadramento` | — | — |
-| **SliD ativo** | alta | completa | 390 px | `qa-slid-listen` 69 · `qa-slid-dinamico` · `qa-microfone` 6 · `qa-fala` 33 | — | hierarquia a revisar (Fase 4) |
+| **SliD ativo** | alta | completa | 390 px | `qa-slid-listen` 69 · `qa-slid-dinamico` · `qa-microfone` 6 · `qa-fala` 33 | — | — (Fase 4: a linha da fala cede lugar às três letras em vez de empilhar; `qa-slid-listen` reprova acima de 30% da tela) |
 | **Modos** | alta | completa | 3 larguras | `qa-modos` 51 · `qa-intervalo` · `qa-noturno` · `qa-mobile` | — | busca do Figma ausente |
 | **Filtros** | alta | completa | 390 px | `qa-filtros` 92 · `perf-filtros` | — | — |
 | **Galeria** | alta | completa | 3 larguras | `qa-galeria` 18 · `qa-persistencia` 14 · `qa-mobile` | — | sino e "..." sem função (fora de propósito) |
