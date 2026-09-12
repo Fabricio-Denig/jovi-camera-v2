@@ -121,6 +121,26 @@ tentativa de escolher uma lente específica.
   "textura" de "foco" com confiança — só então vale considerar um limiar ou um
   aviso na tela.
 
+## Regressão
+
+Toda a suíte `qa-*.mjs` existente foi rodada contra esta branch. Três falhas
+apareceram, e nenhuma é nova:
+
+- `qa-moldura` — tremor de moldura entre execuções; já sabidamente instável
+  (item pendente na lista de fechamento: "estabilizar qa-moldura").
+- `qa-slid-realworld` — a mesa de madeira com veio marcado pede zoom; já
+  documentado em `docs/checklist-aparelho.md`, seção D.
+- `qa-slid-dinamico` — 3 checagens de troca de slide falham. **Confirmado
+  reproduzindo a mesma suíte contra o commit anterior a este ciclo
+  (`f5d1d68`, antes de qualquer mudança de foco/câmera)**: as mesmas 3
+  falhas, nos mesmos cenários. Não é uma regressão desta mudança — é o
+  próprio sintoma que este ciclo existe para investigar, na camada do
+  detector, que não foi tocada.
+
+Nenhuma outra suíte (foco, zoom, torch, virar câmera, scanner, filtros,
+galeria, persistência, robustez, acessibilidade, modos, Listen, Resumo,
+demonstração da banca) apresentou qualquer falha.
+
 ## O que fica registrado
 
 - Nenhuma mudança em `frameAnalysis.ts`, `useSlidSession.ts`, limiares,
