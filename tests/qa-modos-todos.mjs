@@ -116,7 +116,22 @@ console.log("== os dezesseis modos, um por um ==");
      * com `aria-current`, e é assim que a pessoa sabe onde está depois de o
      * catálogo fechar.
      */
-    if (tipo === "real") {
+    if (nome === "SliD") {
+      /*
+       * O SliD é a exceção, e por desenho: durante uma sessão a barra de modos
+       * não está montada — ela vive dentro de `{isReady && !isSlid && …}`,
+       * porque a tela passa a ser o quadro e não o app. Então não há
+       * `aria-current` para conferir, e cobrar um reprovaria um comportamento
+       * correto.
+       *
+       * O que prova que se está no SliD é a sessão acontecendo na tela.
+       */
+      check(
+        /Acompanhando a aula|Procurando o conteúdo/.test(corpo),
+        `${nome}: a sessão está na tela (a barra de modos sai de cena, por desenho)`,
+        corpo.slice(0, 70).replace(/\n/g, " · "),
+      );
+    } else if (tipo === "real") {
       check(
         emUso.toLowerCase().startsWith(nome.toLowerCase().slice(0, 5)),
         `${nome}: a barra anuncia o modo em uso`,
