@@ -68,6 +68,38 @@ que a regra de produto põe ali:
 - A segunda seção da galeria é **"Fotos e vídeos"**, não "Recentes": ela contém
   o que foi tirado com o dedo, nunca momentos de aula.
 
+## O Scanner, nas condições que uma folha real encontra (Fase 7)
+
+Medido em 12/set, `qa-scanner-condicoes`, dez cenas:
+
+| condição | resultado |
+|---|---|
+| folha clara sobre mesa | enquadrou |
+| folha com texto | enquadrou |
+| folha fora do centro | enquadrou |
+| folha pequena no quadro | enquadrou |
+| folha com pouca luz | enquadrou |
+| mesa vazia | recusou |
+| **mesa de madeira com veio marcado** | **recusou** |
+| mesa com objetos (caneca, caneta) | recusou |
+| papel amassado | recusou |
+| folha ocupando o quadro inteiro | recusou, pedindo para afastar |
+
+**Nenhum falso positivo em dez cenas.** Nesta suíte as negativas valem mais que
+as positivas: um scanner que não detecta uma folha difícil frustra; um que
+"detecta" uma mesa entrega um documento torto que a pessoa só descobre depois,
+e queima a confiança em todos os outros. A mesa de madeira é a prova mais dura
+disso — veio é reto e paralelo, exatamente o sinal que um detector de bordas
+persegue.
+
+### A lacuna, dita em vez de escondida
+
+**Folha escura não tem cena.** Das sete condições da lista de verificação em
+aparelho, seis estão cobertas; essa não, porque não existe cena para ela e eu
+não vou afirmar cobertura que não medi. Fica no `checklist-aparelho.md` como
+verificação de dedo — uma folha de sulfite colorida, ou um papel pardo, sobre
+uma mesa clara.
+
 ## Onde a cobertura é fina, dito com precisão
 
 O quadro acima mede o que dá para medir nesta bancada. Três coisas ele **não**

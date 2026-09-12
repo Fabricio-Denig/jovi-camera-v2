@@ -109,7 +109,22 @@ console.log("== os dezesseis modos, um por um ==");
 
     linhas.push({ nome, tipo, temPrevia, falaDele, emUso });
 
-    check(falaDele, `${nome}: a tela fala deste modo`, corpo.slice(0, 70).replace(/\n/g, " · "));
+    /*
+     * Para Foto, Vídeo e SliD a barra de modos mostra os três nomes ao mesmo
+     * tempo — então "a tela fala deste modo" passaria por acaso, sem provar
+     * nada. A verificação que não é vácua é outra: o modo em uso se anuncia
+     * com `aria-current`, e é assim que a pessoa sabe onde está depois de o
+     * catálogo fechar.
+     */
+    if (tipo === "real") {
+      check(
+        emUso.toLowerCase().startsWith(nome.toLowerCase().slice(0, 5)),
+        `${nome}: a barra anuncia o modo em uso`,
+        `aria-current = "${emUso}"`,
+      );
+    } else {
+      check(falaDele, `${nome}: a tela fala deste modo`, corpo.slice(0, 70).replace(/\n/g, " · "));
+    }
     check(
       !/undefined|NaN|\[object/.test(corpo),
       `${nome}: sem texto quebrado`,
