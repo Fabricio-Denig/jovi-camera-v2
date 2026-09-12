@@ -7,6 +7,7 @@
    demonstração roda. */
 import { chromium } from "/opt/node22/lib/node_modules/playwright/index.mjs";
 import { APP, CENAS, CHROMIUM } from "./caminhos.mjs";
+import { AULA_FALADA, instalarFalaDeMentira } from "./fala-de-mentira.mjs";
 
 let fail = 0;
 let passo = 0;
@@ -15,7 +16,7 @@ const check = (ok, l, e = "") => {
   if (!ok) fail++;
 };
 
-async function abrirApp({ cena, microfone = true }) {
+async function abrirApp({ cena, microfone = true, transcreve = false }) {
   const b = await chromium.launch({
     executablePath: CHROMIUM,
     args: [
@@ -49,6 +50,16 @@ async function abrirApp({ cena, microfone = true }) {
         return original(r);
       };
     });
+  }
+
+  if (transcreve) {
+    /*
+     * O reconhecimento de fala não roda nesta bancada — a API existe e morre
+     * em `audio-capture`. A jornada com transcrição usa o dublê do protocolo,
+     * e diz isso em voz alta no cabeçalho do bloco, em vez de deixar quem lê o
+     * relatório achar que se mediu reconhecimento de verdade.
+     */
+    await p.addInitScript(instalarFalaDeMentira(AULA_FALADA), AULA_FALADA);
   }
 
   await p.goto(APP + "/", { waitUntil: "networkidle" });
@@ -264,6 +275,132 @@ console.log("\n═══ JORNADA 3 — Scanner, do modo ao arquivo ═══\n")
     .getByRole("tab", { name: /^SliD/ })
     .innerText();
   check(!/SliD\s*[1-9]/.test(chipSlid), "e não virou aula do SliD", chipSlid.replace(/\n/g, " "));
+
+  check(erros.length === 0, "a jornada inteira sem erro de runtime", erros[0] ?? "");
+  await b.close();
+}
+
+console.log("\n═══ JORNADA 4 — a aula falada, de ponta a ponta ═══\n");
+console.log(
+  "  Aviso honesto: o reconhecimento de fala NÃO roda nesta bancada — a API\n" +
+    "  existe e morre em audio-capture. Este bloco usa um dublê do protocolo\n" +
+    "  (parcial, final, e o navegador encerrando o turno). Ele prova o que o\n" +
+    "  produto faz com a fala, não que o reconhecimento acerta.\n",
+);
+{
+  const { b, p, erros } = await abrirApp({
+    cena: "fp-aula-slide-projetado.y4m",
+    transcreve: true,
+  });
+
+  await p.waitForTimeout(2000);
+  check(
+    /Aula detectada/i.test(await p.locator("body").innerText()),
+    "a câmera reconhece a aula na frente",
+  );
+
+  await p.getByRole("button", { name: "SliD", exact: true }).click();
+  await p.waitForTimeout(4000);
+
+  const naSessao = await p.locator("body").innerText();
+  check(/Ouvindo/i.test(naSessao), "a sessão começa ouvindo");
+  check(
+    /Transcrevendo/i.test(naSessao),
+    "e o selo evolui quando um resultado chega de verdade",
+    naSessao.split("\n").slice(0, 5).join(" · "),
+  );
+  check(
+    /useState|prestem aten|cai na prova|hoje a gente/i.test(naSessao),
+    "com uma linha do que está sendo dito",
+  );
+
+  // Tempo para a fala acumular os trechos que viram destaque.
+  await p.waitForTimeout(10000);
+
+  await encerrarESalvar(p);
+
+  await p.getByRole("button", { name: "Galeria", exact: true }).click();
+  await p.waitForTimeout(1300);
+  await p
+    .getByRole("tablist", { name: "Filtrar a galeria" })
+    .getByRole("tab", { name: /^SliD/ })
+    .click();
+  await p.waitForTimeout(900);
+  await p.locator("article button").first().click();
+  await p.waitForTimeout(1800);
+
+  await p.getByRole("tab", { name: "Texto", exact: true }).click();
+  await p.waitForTimeout(800);
+  const chip = p.getByRole("tab", { name: "Transcrição da aula" });
+  if ((await chip.count()) > 0) {
+    await chip.click();
+    await p.waitForTimeout(700);
+  }
+  const falado = await p.locator("[role=tabpanel]").innerText();
+  check(
+    /useState|cai na prova|prestem aten/i.test(falado),
+    "a aba Texto traz a fala da aula, palavra por palavra",
+    falado.slice(0, 80).replace(/\n/g, " · "),
+  );
+  check(
+    /O professor marcou/i.test(falado),
+    "com os destaques que alguém marcou falando",
+  );
+
+  const horario = p.getByRole("button", { name: /Ouvir a aula a partir de/ }).first();
+  check((await horario.count()) > 0, "e horários que levam o áudio até o trecho");
+  if ((await horario.count()) > 0) {
+    await horario.click();
+    await p.waitForTimeout(900);
+    const t = await p
+      .locator("audio")
+      .evaluate((a) => a.currentTime)
+      .catch(() => -1);
+    check(t >= 0, `tocar o horário move o player (${t.toFixed(1)}s)`);
+  }
+
+  await p.getByRole("tab", { name: "Resumo", exact: true }).click();
+  await p.waitForTimeout(800);
+  const resumo = await p.locator("[role=tabpanel]").innerText();
+  check(
+    /O que foi dito/i.test(resumo),
+    "o Resumo usa o que foi dito, não só o que foi lido",
+    resumo.slice(0, 80).replace(/\n/g, " · "),
+  );
+  check(
+    !/não foi possível identificar|não tem resumo/i.test(resumo),
+    "e nada nele soa como aula fracassada",
+  );
+
+  await p.getByRole("button", { name: /Copiar a aula inteira/i }).click();
+  await p.waitForTimeout(700);
+  const copiado = await p
+    .evaluate(() => navigator.clipboard.readText())
+    .catch(() => "");
+  check(
+    /O QUE FOI DITO/.test(copiado),
+    "copiar a aula leva a parte falada junto",
+    copiado.slice(0, 60).replace(/\n/g, " · "),
+  );
+
+  // Voltar, abrir de novo: o teste de que nada disso mora só na memória.
+  await p.getByRole("button", { name: /Voltar/i }).first().click();
+  await p.waitForTimeout(1300);
+  await p.locator("article button").first().click();
+  await p.waitForTimeout(1800);
+  await p.getByRole("tab", { name: "Texto", exact: true }).click();
+  await p.waitForTimeout(800);
+  const chip2 = p.getByRole("tab", { name: "Transcrição da aula" });
+  if ((await chip2.count()) > 0) {
+    await chip2.click();
+    await p.waitForTimeout(700);
+  }
+  const reaberta = await p.locator("[role=tabpanel]").innerText();
+  check(
+    /useState|cai na prova|prestem aten/i.test(reaberta),
+    "reabrir a aula devolve a transcrição inteira",
+    reaberta.slice(0, 80).replace(/\n/g, " · "),
+  );
 
   check(erros.length === 0, "a jornada inteira sem erro de runtime", erros[0] ?? "");
   await b.close();
