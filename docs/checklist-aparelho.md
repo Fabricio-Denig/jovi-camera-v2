@@ -302,3 +302,44 @@ aqui em vez de num número:
 
 Anote o que aconteceu. Se ele errar aqui, é um limite conhecido e não um
 defeito surpresa — mas é um limite que só o seu papel de verdade revela.
+
+---
+
+## K — Foco (ciclo de 12/set)
+
+O gatilho desta seção: slides passando na frente da câmera sem virar momento,
+com a imagem parecendo desfocada. Esta seção não julga o detector — julga se o
+navegador entrega uma imagem em foco antes de o detector ver qualquer coisa.
+
+Abra **`?debug=device`** (não `?debug=slid`) e deixe a câmera traseira abrir.
+Na seção **"Câmera — foco"**, copie e cole aqui:
+
+- Câmera usada (rótulo/`deviceId` se aparecer): ______
+- `focusMode` declarado (a lista inteira, ex. `["fixed"]` ou
+  `["fixed","continuous"]`): ______
+- Contínuo foi pedido? Ele aparece confirmado por `getSettings()`, ou fica em
+  "pedido"? ______
+- `focusDistance` existe? Se existir, min/max/step: ______
+- `pointsOfInterest` está disponível (sim/não)? ______
+- Resolução real entregue (a que a seção "Câmera — captura" mostra, não a
+  pedida): ______
+
+Depois, na seção **Nitidez**, aponte para um slide ou quadro real, focado, e
+toque em "Medir nitidez agora" — anote o número. Sem tocar na câmera, afaste o
+foco (se der para simular) ou aponte para algo borrado e meça de novo. Os dois
+números importam mais que qualquer um sozinho: a diferença entre eles é o
+sinal de que a medida está enxergando foco, e não só textura de superfície (uma
+parede pontua alto sem estar "focada" — ver `docs/spike-foco-camera.md`).
+
+Responda ao final, com o que o aparelho realmente disse:
+
+- Meu aparelho pode controlar foco? (sim/não/parcial): ______
+- `continuous` foi aceito e **confirmado** por `getSettings()`? (sim/não): ______
+- Toque-para-focar é possível neste aparelho (capacidade `pointsOfInterest`
+  presente)? (sim/não): ______
+- Qual a resolução real entregue? (LxA): ______
+
+Se a resposta a "controla foco" for não ou parcial: **anote como o app se
+comportou** — ele não deve prometer nada que o aparelho não confirmou, e não
+deve mostrar nenhum anel ou instrução de toque-para-focar se a capacidade não
+existir.

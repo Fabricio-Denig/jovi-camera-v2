@@ -22,6 +22,7 @@ import {
 import { useTorch } from "./useTorch";
 import { useCamera } from "./useCamera";
 import { useZoom } from "./useZoom";
+import { useFocus } from "./useFocus";
 import { ZoomControl } from "./ZoomControl";
 import { FlipButton } from "./FlipButton";
 import { useDocumentScan } from "../scanner/useDocumentScan";
@@ -113,6 +114,7 @@ export function CameraShell({
   const recorder = useVideoRecorder(stream);
   const zoom = useZoom(stream);
   const torch = useTorch(stream);
+  const foco = useFocus(stream);
   const [timer, setTimer] = useState<TimerSeconds>(0);
   const [aspect, setAspect] = useState<AspectRatio>("4:3");
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -797,6 +799,7 @@ export function CameraShell({
       {deviceDebug && relatorioAberto && (
         <DeviceReport
           onFechar={() => setRelatorioAberto(false)}
+          videoRef={videoRef}
           vivo={{
             camera: {
               status,
@@ -806,9 +809,20 @@ export function CameraShell({
               videoSize: diagnostics.videoSize,
               appliedFacing: diagnostics.appliedFacing,
               canSwitchFacing,
+              // O track cru, e não campos escolhidos a dedo: o relatório lê
+              // `getCapabilities`/`getSettings`/`getConstraints` na hora de
+              // montar, e a leitura tem de ser do estado atual do hardware,
+              // não de um resumo decidido aqui em cima.
+              track: stream?.getVideoTracks()[0] ?? null,
             },
             zoom: { level: zoom.level, native: zoom.native },
             torch: { available: torch.available, on: torch.on },
+            foco: {
+              estado: foco.estado,
+              modosDeclarados: foco.modosDeclarados,
+              modoAtual: foco.modoAtual,
+              tocarSuportado: foco.tocarSuportado,
+            },
             listen: {
               status: listen.status,
               mimeType: listen.mimeType,

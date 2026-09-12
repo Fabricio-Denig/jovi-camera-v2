@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { aplicarAvancadas } from "./advancedConstraints";
+import { lerCapacidades } from "./mediaCapabilities";
 
 export type ZoomLevel = 1 | 2 | 3;
 export const ZOOM_LEVELS: ZoomLevel[] = [1, 2, 3];
@@ -48,9 +50,7 @@ export function useZoom(stream: MediaStream | null): CameraZoom {
       }
       // getCapabilities is missing on some browsers, and zoom is missing from
       // it on most. Both mean the same thing here: crop instead.
-      const caps = (
-        track.getCapabilities as undefined | (() => MediaTrackCapabilities)
-      )?.call(track) as (MediaTrackCapabilities & { zoom?: { min: number; max: number } }) | undefined;
+      const caps = lerCapacidades(track);
       const range = caps?.zoom;
       if (!range || typeof range.max !== "number" || range.max <= 1) {
         setNative(false);
@@ -58,20 +58,20 @@ export function useZoom(stream: MediaStream | null): CameraZoom {
       }
 
       const value = Math.min(range.max, Math.max(range.min ?? 1, target));
-      void track
-        .applyConstraints({
-          advanced: [{ zoom: value } as MediaTrackConstraintSet],
-        })
-        .then(() => {
+      // Passa por `aplicarAvancadas`, e não por `track.applyConstraints`
+      // direto: o mesmo track recebe pedidos de lanterna e de foco pelo
+      // mesmo `advanced`, e pedir só `{ zoom }` apagaria os outros dois.
+      void aplicarAvancadas(track, { zoom: value }).then((aceito) => {
+        if (aceito) {
           appliedRef.current = value;
           setNative(true);
-        })
-        .catch(() => {
-          // Asked for and refused: fall back rather than leave the preview at
-          // one zoom and the analysis at another.
+        } else {
+          // Pedido e recusado: volta ao que era, em vez de deixar o preview
+          // num zoom e a análise em outro.
           appliedRef.current = 1;
           setNative(false);
-        });
+        }
+      });
     },
     [],
   );

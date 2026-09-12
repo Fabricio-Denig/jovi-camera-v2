@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import { aplicarAvancadas } from "./advancedConstraints";
+import { lerCapacidades } from "./mediaCapabilities";
 
 export interface CameraTorch {
   /** O aparelho tem lanterna nesta câmera e o navegador deixa mexer nela. */
@@ -30,9 +32,7 @@ export function useTorch(stream: MediaStream | null): CameraTorch {
       setOn(false);
       return;
     }
-    const caps = (
-      track.getCapabilities as undefined | (() => MediaTrackCapabilities)
-    )?.call(track) as (MediaTrackCapabilities & { torch?: boolean }) | undefined;
+    const caps = lerCapacidades(track);
     setAvailable(Boolean(caps?.torch));
     // Uma câmera nova começa apagada, e a frontal normalmente nem tem lanterna.
     setOn(false);
@@ -43,13 +43,15 @@ export function useTorch(stream: MediaStream | null): CameraTorch {
     if (!track) return;
     const next = !on;
     setOn(next);
-    void track
-      .applyConstraints({ advanced: [{ torch: next } as MediaTrackConstraintSet] })
-      .catch(() => {
+    // Por `aplicarAvancadas`, para o mesmo `advanced` não apagar o zoom ou o
+    // foco que já tinham sido pedidos com sucesso neste track.
+    void aplicarAvancadas(track, { torch: next }).then((aceito) => {
+      if (!aceito) {
         // Pedimos e o aparelho recusou: o botão volta ao que a lanterna está.
         setOn(!next);
         setAvailable(false);
-      });
+      }
+    });
   }, [stream, on]);
 
   return { available, on, toggle };

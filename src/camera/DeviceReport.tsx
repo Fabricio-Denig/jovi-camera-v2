@@ -6,6 +6,7 @@ import {
   type EstadoVivo,
   type SecaoDoRelatorio,
 } from "../shared/lib/deviceReport";
+import { medirNitidezDoVideo } from "../shared/lib/sharpness";
 
 /**
  * O relatório de aparelho, em tela cheia, atrás de `?debug=device`.
@@ -19,13 +20,24 @@ import {
  */
 export function DeviceReport({
   vivo,
+  videoRef,
   onFechar,
 }: {
   vivo: EstadoVivo;
+  /** O `<video>` do visor — só para medir nitidez sob pedido. Nunca lido sozinho. */
+  videoRef?: React.RefObject<HTMLVideoElement | null>;
   onFechar: () => void;
 }) {
   const [secoes, setSecoes] = useState<SecaoDoRelatorio[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  /*
+   * Um valor só, medido quando alguém pede — nunca um loop.
+   *
+   * Fica fora de `montarRelatorio` de propósito: aquela função é releitura de
+   * estado, isto é uma AÇÃO (um novo `drawImage` a cada toque), e misturar as
+   * duas faria "Reler" também medir nitidez sem ninguém ter pedido.
+   */
+  const [nitidez, setNitidez] = useState<string | null>(null);
   /* Recolher força um recálculo; o estado do aparelho muda entre um teste e
      outro, e um relatório congelado descreveria o momento errado. */
   const [rodada, setRodada] = useState(0);
@@ -45,8 +57,20 @@ export function DeviceReport({
     return () => {
       ativo = false;
     };
+    /*
+     * `vivo.camera.status` entra na lista de dependências de propósito, e
+     * não só `rodada`.
+     *
+     * `?debug=device` abre o relatório no mesmo instante em que a página
+     * carrega — antes de a câmera ter sido pedida. Sem isto, a primeira
+     * leitura via sempre `status: "idle"`, `track: null`, e a seção de foco
+     * inteira em branco, até a pessoa lembrar de tocar em "Reler". A câmera
+     * ficar pronta é o tipo de mudança que vale reler sozinho; o resto —
+     * espaço em disco, aulas guardadas — continua atrás do botão manual, que
+     * é o que já existia.
+     */
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rodada]);
+  }, [rodada, vivo.camera.status, vivo.foco.estado]);
 
   return (
     <div className="fixed inset-0 z-[90] flex flex-col bg-canvas">
@@ -80,6 +104,48 @@ export function DeviceReport({
           <p className="pt-8 text-center text-sm text-ink-muted">
             Lendo o aparelho…
           </p>
+        )}
+
+        {/*
+          Fora da lista de `secoes` de propósito: as outras são releitura de
+          estado; esta é uma ação (mede o quadro no instante do toque). Só
+          existe quando há um `<video>` para medir — nada aparece antes da
+          câmera abrir.
+        */}
+        {videoRef && (
+          <section className="mb-4">
+            <h2 className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
+              Nitidez (manual, uma medida por toque)
+            </h2>
+            <div className="rounded-xl border border-line px-3 py-2">
+              <p className="mb-2 text-[11px] leading-snug text-ink-muted">
+                Energia de borda numa janela central do quadro atual. Não é o
+                detector do SliD, e sozinho não decide nada — serve para
+                comparar "aqui" com "ali": aponte para algo nítido, meça;
+                aponte para o mesmo alvo desfocado, meça de novo.
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const video = videoRef.current;
+                    const medida = video ? medirNitidezDoVideo(video) : null;
+                    setNitidez(
+                      medida
+                        ? `${medida.pontuacao.toFixed(1)} (amostra ${medida.amostraW}×${medida.amostraH})`
+                        : "sem quadro para medir ainda",
+                    );
+                  }}
+                  className="min-h-9 shrink-0 rounded-full bg-surface-2 px-3 text-[12.5px] font-medium text-ink active:opacity-70"
+                >
+                  Medir nitidez agora
+                </button>
+                <span className="min-w-0 flex-1 break-words font-mono text-[12px] text-ink">
+                  {nitidez ?? "—"}
+                </span>
+              </div>
+            </div>
+          </section>
         )}
 
         {secoes?.map((secao) => (
