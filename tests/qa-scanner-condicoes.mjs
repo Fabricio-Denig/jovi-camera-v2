@@ -71,6 +71,20 @@ const DIFICEIS = [
   ["fp-papel-amassado.y4m", "papel amassado"],
 ];
 
+/**
+ * Checklist J: folha ESCURA sobre mesa CLARA — o contraste se inverte.
+ *
+ * O detector de bordas procura a transição folha/fundo; nas cenas de cima a
+ * folha é sempre a região clara. Aqui é o oposto — sulfite colorida, papel
+ * pardo, a contracapa de um caderno. Mesma regra das difíceis: acertar é
+ * bônus, o que não se aceita é afirmar enquadramento e entregar um recorte
+ * que não é a folha inteira, nem ficar mudo.
+ */
+const FOLHA_ESCURA = [
+  ["doc-folha-escura.y4m", "folha escura sobre mesa clara"],
+  ["doc-folha-escura-pouca-luz.y4m", "folha escura, pouca luz"],
+];
+
 async function abrir(cena) {
   const b = await chromium.launch({
     executablePath: CHROMIUM,
@@ -187,6 +201,31 @@ console.log("\n== condições difíceis: acertar é bônus, mentir é falha ==")
   }
   console.log(
     "\n  Registro, não veredito — o que estas duas cenas fizeram nesta execução:",
+  );
+  for (const r of resultados) {
+    console.log(`    ${r.nome}: ${r.enquadrou ? "enquadrou" : "pediu a folha"}`);
+  }
+}
+
+console.log("\n== folha escura sobre mesa clara: contraste invertido ==");
+{
+  const resultados = [];
+  for (const [cena, nome] of FOLHA_ESCURA) {
+    const { b, p, erros } = await abrir(cena);
+    const e = await estado(p);
+    resultados.push({ nome, ...e, erros: erros.length });
+    await b.close();
+  }
+  for (const r of resultados) {
+    check(
+      r.enquadrou || r.pedeFolha,
+      `${r.nome}: a tela diz em que pé está (${r.enquadrou ? "enquadrou" : "pediu a folha"})`,
+      r.linha,
+    );
+    check(r.erros === 0, `${r.nome}: sem erro de runtime`);
+  }
+  console.log(
+    "\n  Registro, não veredito — o que o contraste invertido fez nesta execução:",
   );
   for (const r of resultados) {
     console.log(`    ${r.nome}: ${r.enquadrou ? "enquadrou" : "pediu a folha"}`);

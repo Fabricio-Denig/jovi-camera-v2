@@ -565,7 +565,10 @@ function TrashView({
   onChanged: () => void;
 }) {
   const [confirming, setConfirming] = useState<
-    { kind: "class"; id: string; name: string } | { kind: "media"; id: string } | null
+    | { kind: "class"; id: string; name: string }
+    | { kind: "media"; id: string }
+    | { kind: "all"; count: number }
+    | null
   >(null);
 
   if (classes.length === 0 && media.length === 0) {
@@ -582,8 +585,23 @@ function TrashView({
     );
   }
 
+  const total = classes.length + media.length;
+
   return (
     <div className="flex flex-col gap-4 pb-6">
+      {/* Esvaziar tudo de uma vez, e não item por item — a diferença que
+          importa antes de uma demonstração, quando meses de teste deixam a
+          lixeira cheia e ninguém vai apagar trinta itens um a um. */}
+      <div className="px-4">
+        <button
+          type="button"
+          onClick={() => setConfirming({ kind: "all", count: total })}
+          className="min-h-10 w-full rounded-xl bg-surface-2 text-[13px] font-medium text-danger transition-transform duration-150 active:scale-[0.98] active:opacity-70"
+        >
+          Esvaziar lixeira ({total})
+        </button>
+      </div>
+
       {classes.length > 0 && (
         <ul className="flex flex-col gap-2 px-4">
           {classes.map((record) => (
@@ -655,11 +673,19 @@ function TrashView({
       {confirming && (
         <ConfirmDelete
           name={confirming.kind === "class" ? confirming.name : null}
+          count={confirming.kind === "all" ? confirming.count : null}
           onCancel={() => setConfirming(null)}
           onConfirm={async () => {
-            if (confirming.kind === "class")
+            if (confirming.kind === "class") {
               await deleteClassForever(confirming.id);
-            else await deleteCapturesForever((m) => m.id === confirming.id);
+            } else if (confirming.kind === "media") {
+              await deleteCapturesForever((m) => m.id === confirming.id);
+            } else {
+              // Cada aula pelo mesmo caminho de "apagar de vez" — ele também
+              // leva o áudio dela, e uma varredura por fora não saberia disso.
+              for (const c of classes) await deleteClassForever(c.id);
+              await deleteCapturesForever((m) => Boolean(m.deletedAt) && !m.session);
+            }
             /*
              * Depois de apagar de vez, varrer as gravações sem aula.
              *
@@ -681,10 +707,13 @@ function TrashView({
 
 function ConfirmDelete({
   name,
+  count,
   onCancel,
   onConfirm,
 }: {
   name: string | null;
+  /** Presente só para "esvaziar tudo" — o total de itens que vão junto. */
+  count: number | null;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
@@ -697,12 +726,18 @@ function ConfirmDelete({
     >
       <div className="w-full max-w-sm animate-[slid-rise_220ms_ease-out] rounded-2xl bg-canvas p-5">
         <h2 className="text-[16px] font-semibold text-ink">
-          {name ? `Apagar "${name}" de vez?` : "Apagar de vez?"}
+          {count != null
+            ? `Esvaziar a lixeira?`
+            : name
+              ? `Apagar "${name}" de vez?`
+              : "Apagar de vez?"}
         </h2>
         <p className="mt-1 text-[13px] leading-snug text-ink-muted">
-          {name
-            ? "Todos os momentos desta aula serão perdidos."
-            : "Esta captura será perdida."}{" "}
+          {count != null
+            ? `${count} ${count === 1 ? "item" : "itens"} serão perdidos.`
+            : name
+              ? "Todos os momentos desta aula serão perdidos."
+              : "Esta captura será perdida."}{" "}
           Não dá para desfazer.
         </p>
         <div className="mt-4 flex gap-2.5">

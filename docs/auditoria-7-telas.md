@@ -29,7 +29,7 @@ todas as linhas:
 |---|---|---|---|---|---|---|
 | **Câmera** | alta | completa | 3 larguras | `qa-filtros` 92 · `qa-virar` · `qa-modos` 51 · `qa-mobile` | — | ✨ do Figma sem função (fora de propósito) |
 | **Detecção** | alta | completa | 390 px | `qa-dica` · `qa-moldura` · `qa-slid-realworld` · `qa-enquadramento` | — | — |
-| **SliD ativo** | alta | completa | 390 px | `qa-slid-listen` 69 · `qa-slid-dinamico` · `qa-microfone` 6 · `qa-fala` 33 | — | hierarquia a revisar (Fase 4) |
+| **SliD ativo** | alta | completa | 390 px | `qa-slid-listen` 69 · `qa-slid-dinamico` · `qa-microfone` 6 · `qa-fala` 33 | — | — (Fase 4: a linha da fala cede lugar às três letras em vez de empilhar; `qa-slid-listen` reprova acima de 30% da tela) |
 | **Modos** | alta | completa | 3 larguras | `qa-modos` 51 · `qa-intervalo` · `qa-noturno` · `qa-mobile` | — | busca do Figma ausente |
 | **Filtros** | alta | completa | 390 px | `qa-filtros` 92 · `perf-filtros` | — | — |
 | **Galeria** | alta | completa | 3 larguras | `qa-galeria` 18 · `qa-persistencia` 14 · `qa-mobile` | — | sino e "..." sem função (fora de propósito) |
@@ -190,3 +190,25 @@ Fica registrado como o que é — **cobertura de tendência, não de valor** —
 como a próxima dívida de teste a pagar: ou a suíte amostra várias vezes e
 compara a mediana, ou ela afirma menos do que afirma hoje. Enquanto isso, a
 regressão manual do SliD continua sendo o projetor real em 2x.
+
+**Dívida paga em 13/set** (prioridade 7 da lista de fechamento): o tremor
+passou de "distância da última amostra até a mais longe, em 4 amostras" para
+"mediana das diferenças entre quadros consecutivos, em 8 amostras" — um
+outlier isolado não move mais a mediana do jeito que movia o máximo. Três
+execuções consecutivas, todas verdes, sem tocar em nenhum arquivo do
+detector. Ver `tests/qa-moldura.mjs`.
+
+## Bundle e carregamento (prioridade 11, 13/set)
+
+| | |
+|---|---|
+| JS principal | 408 KB cru · **124 KB gzip** |
+| CSS | 60 KB cru · 11 KB gzip |
+| Tesseract (OCR) | 4,16 MB, **sob demanda** — `import()` dinâmico, só quando alguém pede extrair texto |
+| Transformers.js (fala offline) | não incluído — decisão registrada em `spike-transcricao-offline.md` |
+
+Nada pesado carrega no primeiro acesso: o bundle principal é só React + o
+código do produto, sem nenhuma dependência grande importada estaticamente.
+124 KB gzip é da ordem de uma página com poucas imagens — carrega rápido
+mesmo em rede de sala de aula. Nenhuma ação necessária aqui; registrado para
+fechar o item, não porque havia problema a resolver.

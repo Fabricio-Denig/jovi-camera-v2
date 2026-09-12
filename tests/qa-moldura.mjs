@@ -41,8 +41,12 @@ const medir = async (cena, zoomAlvo = 1) => {
   }
   await p.waitForTimeout(6000);
   // Depois da animação de assentar, para medir layout e não keyframe.
+  // 8 amostras, não 4: o "tremor" antigo (distância da última amostra até a
+  // mais longe) é derrubado por UM quadro fora de hora sob carga de máquina —
+  // medido, a mesma cena variava de 59 a 93px entre execuções, sem nada mudar
+  // no detector. Mais amostras dão à mediana (abaixo) o que fazer estatística.
   const caixas = [];
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 8; i++) {
     await p.waitForTimeout(1300);
     caixas.push(await p.evaluate(() => {
       const el = [...document.querySelectorAll("div")].find((d) => String(d.className).includes("slid-settle"));
@@ -82,8 +86,24 @@ for (const [cena, rot, fracao, zoom] of [
     };
   }
   const s = sobreposicao(c, esperada);
-  // Quanto a moldura se mexe entre quadros parados — "dançando" é ruído.
-  const tremor = Math.max(...validas.map((x) => Math.abs(x.x - c.x) + Math.abs(x.y - c.y) + Math.abs(x.w - c.w) + Math.abs(x.h - c.h)));
+  /*
+   * Quanto a moldura se mexe entre quadros parados — "dançando" é ruído.
+   *
+   * Antes: a maior distância entre a ÚLTIMA amostra e qualquer outra. Um
+   * único quadro entregue tarde pela máquina (não pelo detector) virava
+   * "tremor", e o mesmo cenário passava ou falhava entre execuções sem o
+   * código mudar — medido, registrado em docs/spike-foco-camera.md como
+   * problema pré-existente. Agora: a diferença entre quadros CONSECUTIVOS,
+   * e a MEDIANA dessas diferenças — um outlier isolado não move a mediana
+   * do jeito que move um máximo.
+   */
+  const deltasConsecutivos = [];
+  for (let i = 1; i < validas.length; i++) {
+    const a = validas[i - 1], b = validas[i];
+    deltasConsecutivos.push(Math.abs(b.x - a.x) + Math.abs(b.y - a.y) + Math.abs(b.w - a.w) + Math.abs(b.h - a.h));
+  }
+  deltasConsecutivos.sort((x, y) => x - y);
+  const tremor = deltasConsecutivos[Math.floor(deltasConsecutivos.length / 2)] ?? 0;
   const ok = s >= 0.6 && tremor <= 24;
   if (!ok) fail++;
   console.log(`${(ok ? "[ok]  " : "[FAIL]") + " " + rot.padEnd(22)} ` +

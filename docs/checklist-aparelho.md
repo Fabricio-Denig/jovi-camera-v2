@@ -303,6 +303,17 @@ aqui em vez de num número:
 Anote o que aconteceu. Se ele errar aqui, é um limite conhecido e não um
 defeito surpresa — mas é um limite que só o seu papel de verdade revela.
 
+**Medido em bancada (13/set), com cena sintética:** o Scanner **não**
+enquadra a folha escura sobre mesa clara — e o importante é que ele erra
+honestamente: diz "Aponte para a folha" em vez de inventar um recorte
+torto. Nenhuma mudança foi feita no detector por causa disso (recusar é a
+resposta certa, do jeito que a mesa de madeira também é recusada). Cenas em
+`tests/render-documento.mjs` (`doc-folha-escura*`), teste em
+`qa-scanner-condicoes.mjs`. **O que falta é o seu papel de verdade**: uma
+cena sintética não tem a textura, a sombra e o brilho de um papel real —
+pode ser que num papel real a borda continue visível o bastante para
+enquadrar mesmo com o contraste invertido, e só o teste com a mão confirma.
+
 ---
 
 ## K — Foco (ciclo de 12/set)
