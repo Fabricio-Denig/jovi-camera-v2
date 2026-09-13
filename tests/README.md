@@ -22,6 +22,7 @@ node tests/qa-moldura.mjs
 node tests/qa-dica.mjs
 node tests/qa-enquadramento.mjs
 node tests/qa-scanner.mjs
+node tests/qa-scanner-condicoes.mjs    # o que enquadra, o que recusa — e a folha escura, contraste invertido
 node tests/qa-filtros.mjs
 node tests/qa-resumo.mjs
 node tests/qa-slid-listen.mjs
@@ -29,8 +30,17 @@ node tests/qa-demo-banca.mjs           # a jornada inteira, na ordem da apresent
 node tests/qa-robustez.mjs             # os caminhos ruins: permissão, banco, clipboard, tela
 node tests/qa-intervalo.mjs            # o time-lapse, que deixou de ser prévia
 node tests/qa-noturno.mjs              # o modo Noite, e a medida que o autoriza
-node tests/qa-acessibilidade.mjs       # nome, alvo e cabeçalho, nas sete telas
+node tests/qa-acessibilidade.mjs       # nome, alvo e cabeçalho, em dez telas
 node tests/qa-galeria.mjs              # onde cada coisa guardada tem de estar
+node tests/qa-persistencia.mjs         # o que sobra no banco depois de apagar
+node tests/qa-cenarios.mjs             # quadro bom/ruim × fala boa/ruim — quatro combinações, nunca inventa
+node tests/qa-mobile.mjs               # nove telas em 375/390/430 px — sem rolagem lateral, nada atrás da navegação
+node tests/qa-modos-todos.mjs          # os dezesseis modos, um por um — nenhum cartão é botão morto
+node tests/qa-virar.mjs                # trocar de câmera, com um segundo dispositivo forjado
+node tests/qa-foco.mjs                 # foco: declarado ≠ confirmado, e o merge de constraints por track
+node tests/qa-foco-matematica.mjs      # a matemática do toque-para-focar, pura, sem navegador
+node tests/qa-ciclo-vida.mjs           # reload em sessão, segundo plano e volta, girar o aparelho
+node tests/qa-volume.mjs               # 30 e 150 aulas na Galeria, aula de 25 momentos no Resumo
 node tests/perf-filtros.mjs             # relatório, não teste com veredito
 node tests/perf-app.mjs                 # o custo do app inteiro, também relatório
 ```
@@ -65,9 +75,18 @@ semente (`ruido()` em `caminhos.mjs`). `SLID_CENAS`, `SLID_APP` e
 | `qa-robustez` | os caminhos ruins, um a um: câmera negada, IndexedDB recusado, área de transferência bloqueada, uma câmera só, deitado, e 320 px. A pergunta de todos: **a tela diz o que aconteceu, ou só não funciona?** |
 | `qa-intervalo` | o modo Intervalo grava um quadro por intervalo e monta um vídeo que o navegador abre? Trocar de modo no meio guarda o que já foi capturado? E poucos quadros dizem por quê, em vez de salvar um arquivo que não toca? |
 | `qa-noturno` | **a medida que autoriza o modo Noite a existir**: a média de N quadros corta o ruído por √N? Medido contra o teórico, com margem de 15 % — mais folga que isso deixaria passar uma implementação que lê o mesmo quadro N vezes e não melhora nada. E a tela diz o que o modo não faz? |
-| `qa-acessibilidade` | percorre as sete telas e pergunta de cada controle visível: tem nome que um leitor de tela anuncie? tem 32 px de alvo? toda imagem declara `alt`? os cabeçalhos sobem sem pular nível? Não é auditoria completa — contraste percebido e ordem de leitura pedem olho humano — mas cobre o que mais quebra na prática. |
+| `qa-acessibilidade` | percorre nove telas (Câmera, Filtros, Modos, SliD ativo, Galeria, as três abas da aula, Scanner) e pergunta de cada controle visível: tem nome que um leitor de tela anuncie? tem 32 px de alvo? toda imagem declara `alt`? os cabeçalhos sobem sem pular nível? Não é auditoria completa — contraste percebido e ordem de leitura pedem olho humano (medido à parte em `docs/auditoria-7-telas.md`) — mas cobre o que mais quebra na prática. |
 | `qa-galeria` | onde cada coisa guardada tem de estar — e onde **não** pode estar. Um momento do SliD também é um JPEG, mas o estudante não tirou aquela foto: misturar as duas coisas faria "Fotos" virar um depósito. Cobre também o filtro por matéria, a lixeira que devolve inteiro, e a galeria vazia dizendo o que fazer. |
 | `qa-virar` | o botão de virar câmera está na fileira do obturador, à direita, como no Figma? Forja um segundo dispositivo de vídeo, porque a câmera falsa do Chromium expõe só um e o app — corretamente — esconde o botão. |
+| `qa-scanner-condicoes` | em que condições o Scanner acerta, em que erra, e — o que mais importa — **ele sabe quando não sabe?** Folha clara, folha sem fundo à vista, mesa vazia, mesa de madeira, papel amassado, pouca luz, e folha escura sobre mesa clara (contraste invertido). As cenas negativas valem mais que as positivas: um recorte inventado é pior que "aponte para a folha". |
+| `qa-persistencia` | o que sobra no banco depois de apagar. Áudio órfão (sessão apagada, gravação esquecida), OCR nunca vira um terceiro armazém — e esvaziar a lixeira inteira de uma vez leva tudo, áudio incluso, sem deixar nada para trás. |
+| `qa-cenarios` | as quatro combinações de quadro e fala (bom/bom, ruim/bom, bom/sem fala, ruim/ruim) — e a regra que atravessa todas: o resumo nunca soa como fracasso quando há material, e nunca soa como sucesso quando não há nenhum. |
+| `qa-mobile` | nove telas — câmera, modos, galeria, e as quatro vistas de uma aula — em três larguras (375/390/430 px). Sem rolagem lateral, alvo de toque adequado, nada atrás da barra de navegação. |
+| `qa-modos-todos` | os dezesseis modos do catálogo, um por um: cada cartão fala do modo certo, nenhum é um botão morto, os simulados assumem que são prévia em vez de fingir que funcionam. |
+| `qa-foco` | o achado central: `focusMode` declara `continuous`, o pedido é aceito sem erro, e `getSettings()` prova que o modo nunca muda — a promise não é prova. Cobre também o merge de `advanced` por track (zoom não apaga foco), a recomputação ao trocar de câmera, e a recuperação depois de a câmera morrer e voltar. |
+| `qa-foco-matematica` | a conversão de um toque na tela para o ponto do quadro real da câmera — `object-cover`, zoom digital, espelho da frontal — testada pura, sem abrir navegador (`node --experimental-strip-types` direto no `.ts` de produção). |
+| `qa-ciclo-vida` | três coisas que um celular faz sem avisar: recarregar a página no meio de uma sessão (a aula salva antes continua lá), trocar de app e voltar (a tela não fica presa), e girar o aparelho (sem rolagem lateral em quatro telas). |
+| `qa-volume` | a Galeria com 30 e depois 150 aulas (+ fotos soltas), e o Resumo com uma aula de 25 momentos — tempo de abertura, PDF completo, sem travar. |
 
 ## Os geradores
 

@@ -57,6 +57,7 @@ protótipo em que não se pode confiar.
 | **Efeitos** | Raio de sol e Tremor, separados dos filtros porque não são a mesma coisa |
 | **Leitura do conteúdo** | OCR local (Tesseract WASM), servido do próprio domínio |
 | **Listen** | grava o áudio da aula com `MediaRecorder`, no aparelho, com indicador na tela |
+| **Transcrição da fala** | quando o navegador reconhece (Web Speech API), a aula ganha o que foi dito, com horário, destaques ("isso cai na prova") e um resumo do que foi falado — ver limite abaixo |
 | **Áudio na aula guardada** | player, e "ouvir deste ponto" em cada momento |
 | **Resumo da aula** | três abas — Imagens, Texto, Resumo — montadas só do que foi capturado e lido |
 | **Scanner / Documento** | detecta a folha, recorta, trata e extrai o texto sob demanda |
@@ -64,7 +65,7 @@ protótipo em que não se pode confiar.
 | **Noite** | média de N quadros — corta o ruído por √N, medido |
 | **Copiar, compartilhar, PDF** | cada um só aparece onde o navegador realmente oferece |
 | **Status e matéria** | escolhidos ao salvar, trocáveis depois, filtráveis |
-| **Galeria** | fotos, vídeos, favoritos, aulas, lixeira com restaurar |
+| **Galeria** | fotos, vídeos, favoritos, aulas, lixeira com restaurar e esvaziar tudo de uma vez |
 | **Persistência** | IndexedDB, sobrevive a fechar o navegador |
 
 ### Parcial — funciona, com limite conhecido
@@ -78,13 +79,16 @@ protótipo em que não se pode confiar.
   do dia ainda pode não ser detectado em 1x. O zoom resolve.
 - **OCR** — falha com frequência em letra cursiva e em foto tremida. Quando
   falha, o resumo diz que falhou em vez de inventar.
+- **Transcrição da fala** — depende inteiramente de o navegador implementar a
+  Web Speech API e ela funcionar de verdade. Chrome desktop: sim, embora o
+  áudio saia para um serviço do Google (o app diz isso, não finge que é
+  local). Firefox: a API não existe. Cobertura real varia por navegador e
+  sistema, e só um celular confirma a de cada um — quando ela falha ou não
+  existe, a aula continua: grava o áudio, marca os momentos, salva igual, e a
+  tela nunca promete "Transcrevendo" sem um resultado de verdade ter chegado.
 
 ### Futuro — desenhado, não implementado
 
-- **Transcrição da fala.** O Listen grava o áudio; transformá-lo em texto é
-  outra coisa. A Web Speech API envia áudio para servidores do navegador e é
-  instável no Safari — e o produto não vai dizer "processamento local" sobre
-  algo que sai do aparelho. Fica de fora até dar para fazer honestamente.
 - **Instalar como aplicativo** (PWA) e uso offline.
 - **Oito modos do catálogo** — Retrato, Microfilme, Câmera lenta, Panorâmica,
   Profissional, Alta resolução, Superlua e Visualização dupla — são maquetes
@@ -188,12 +192,24 @@ prova que elas se encaixam.
 
 - [`docs/auditoria-slid.md`](docs/auditoria-slid.md) — por que o SliD falhava em
   projetor real, com números, e o que mudou.
-- [`docs/figma-gaps.md`](docs/figma-gaps.md) — o app contra o Figma, tela a tela.
-- [`docs/matriz-telas.md`](docs/matriz-telas.md) — as sete telas v2 com
-  fidelidade, funcionalidade, mobile e QA, e os gaps classificados P0/P1/P2.
+- [`docs/auditoria-7-telas.md`](docs/auditoria-7-telas.md) — o estado **atual**
+  das sete telas: fidelidade, funcionalidade, mobile, QA, contraste e bundle.
+  Substitui `docs/matriz-telas.md` (mantido como registro datado de 11/set).
+- [`docs/figma-gaps.md`](docs/figma-gaps.md) — o app contra o Figma, tela a
+  tela, com o registro datado de cada lacuna fechada.
+- [`docs/spike-foco-camera.md`](docs/spike-foco-camera.md) — por que a câmera
+  parece não focar em projetor/slide: o que o navegador declara vs. o que
+  confirma de verdade, e o diagnóstico em `?debug=device`.
+- [`docs/fala-e-entendimento.md`](docs/fala-e-entendimento.md) — o que o Listen
+  faz com a fala transcrita, e o limite de cobertura por navegador.
+- [`docs/spike-transcricao-offline.md`](docs/spike-transcricao-offline.md) —
+  por que um modelo de fala embutido no aparelho não entrou neste ciclo.
 - [`docs/modos-viabilidade.md`](docs/modos-viabilidade.md) — que modos podem
   virar reais, quais já viraram, e quais **não podem** no navegador.
 - [`docs/checklist-aparelho.md`](docs/checklist-aparelho.md) — o que só um
-  celular de verdade pode responder.
-- [`tests/README.md`](tests/README.md) — a bateria de confiabilidade: onze
-  suítes que rodam **pela câmera do navegador**, com cenas de vídeo geradas.
+  celular de verdade pode responder, seção por funcionalidade.
+- [`docs/roteiro-banca.md`](docs/roteiro-banca.md) — o roteiro da
+  demonstração, ato por ato, com plano B para cada coisa que pode falhar.
+- [`tests/README.md`](tests/README.md) — a bateria de confiabilidade: quase
+  trinta suítes que rodam **pela câmera do navegador**, com cenas de vídeo
+  geradas.
