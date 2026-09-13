@@ -63,16 +63,3 @@ export function StatusPicker({
     </div>
   );
 }
-
-/** A pastilha, onde só cabe dizer qual é. */
-export function StatusChip({ status }: { status: ClassStatus }) {
-  const style = STATUS_STYLES[status];
-  return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11.5px] font-medium ${style.chip}`}
-    >
-      <span aria-hidden="true" className={`size-1.5 rounded-full ${style.dot}`} />
-      {style.label}
-    </span>
-  );
-}
