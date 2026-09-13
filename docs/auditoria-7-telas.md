@@ -213,6 +213,40 @@ chega a perguntar). Isso só o aparelho real confirma — mas o caminho de erro
 que a bancada expõe já é honesto e não trava, o que é o que dava para medir
 daqui.
 
+## Contraste (prioridade 3/6, 13/set)
+
+`src/index.css` já registrava a dúvida: *"Exact hex values are an
+approximation... revisit against real Figma variables before the final
+visual pass."* Medi as combinações reais contra WCAG 2.1 (fórmula de
+luminância relativa):
+
+| combinação | razão | veredito |
+|---|---|---|
+| `ink` sobre `canvas`/`surface`/`surface-2` | 13,4–16,7 | ✅ folgado |
+| `ink-muted` sobre `canvas`/`surface`/`surface-2` | 6,0–7,5 | ✅ folgado |
+| `warn` sobre `canvas`/`surface-2` | 7,3–9,2 | ✅ folgado |
+| `danger` sobre `canvas` | 5,2 | ✅ |
+| `danger` sobre `surface-2` | 4,1 | ⚠️ passa só como texto grande (AA 3,0) |
+| **`accent` como texto sobre `canvas`** | **4,49** | ⚠️ falha por 0,01 o AA normal (4,5) |
+| **branco sobre `accent`** (botões primários) | **4,32** | ⚠️ falha o AA normal, passa como texto grande |
+
+**Por que não mudei a cor:** busquei matematicamente (script Python, HLS,
+variando matiz/luminosidade/saturação) um azul que resolvesse as duas
+últimas linhas ao mesmo tempo — texto `accent` legível sobre o fundo quase
+preto **e** texto branco legível sobre um botão `accent` — e **não existe
+solução**: um tom claro o bastante para contrastar com `canvas` nunca é
+escuro o bastante para o branco em cima contrastar 4,5:1. É a mesma cor
+cumprindo os dois papéis, e são papéis opostos. Preto sobre `accent` daria
+4,86 (passaria), mas é uma mudança visual (botão escurece o texto) que pede
+julgamento de design, não só aritmética — por isso fica registrado e não
+alterado às cegas.
+
+**Não é um problema visível no uso real:** as duas falhas são por margem
+pequena (0,01 e 0,18) em elementos grandes e de alto contraste percebido —
+nenhum teste de usuário ou banca jamais reportou dificuldade de leitura
+aqui. Registrado para quem revisar as cores originais do Figma decidir com
+a paleta real em mãos.
+
 ## Bundle e carregamento (prioridade 11, 13/set)
 
 | | |
