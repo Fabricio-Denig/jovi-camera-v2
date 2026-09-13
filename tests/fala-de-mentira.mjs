@@ -21,7 +21,7 @@
  * um religamento controlado (o navegador encerrou, o app volta) de um
  * religamento indevido (a pessoa desligou, e volta mesmo assim).
  */
-export function instalarFalaDeMentira(frases) {
+export function instalarFalaDeMentira() {
   return (lista) => {
     window.__iniciadas = 0;
     const resultado = (texto, final) => ({

@@ -659,7 +659,6 @@ for (const largura of [375, 390, 430]) {
   await p.locator("button[aria-label='Filtro P&B']").click();
   await p.waitForTimeout(250);
   await abrirPainel(p);
-  const painel = p.getByRole("dialog", { name: "Filtros" });
 
   const g = await p.evaluate(() => {
     const s = document.querySelector('[role=dialog] input[type=range][aria-label^="Intensidade"]');

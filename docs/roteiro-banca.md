@@ -11,7 +11,9 @@ importa, o que fazer se não acontecer.
 - [ ] abra o endereço no celular e conceda câmera **e microfone** uma vez, antes
       da apresentação — uma caixa de permissão no meio da demonstração rouba
       trinta segundos e o fio da conversa
-- [ ] apague as aulas de teste (Galeria → SliD → abrir → Excluir)
+- [ ] apague as aulas de teste (Galeria → SliD → abrir → Excluir) e depois
+      **Galeria → Lixeira → Esvaziar lixeira** para levar tudo de vez — mais
+      rápido que apagar item por item quando há meses de teste acumulado
 - [ ] deixe o celular carregado e o brilho no máximo
 - [ ] tenha **um slide projetado** ou uma lousa escrita à disposição
 - [ ] tenha **uma folha escrita** sobre uma mesa, para o Scanner

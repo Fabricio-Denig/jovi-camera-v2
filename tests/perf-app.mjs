@@ -6,7 +6,6 @@
    ao longo desta semana? */
 import { chromium } from "/opt/node22/lib/node_modules/playwright/index.mjs";
 import { APP, CENAS, CHROMIUM } from "./caminhos.mjs";
-import { abrirAula, semearAula } from "./semear-aula.mjs";
 
 const b = await chromium.launch({
   executablePath: CHROMIUM,

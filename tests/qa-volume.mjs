@@ -278,5 +278,56 @@ console.log("\n== Resumo com uma aula de 25 momentos ==");
   await b.close();
 }
 
+console.log("\n== estresse: 150 aulas + 150 fotos (5x o volume acima) ==");
+{
+  /*
+   * Prioridade 4 do ciclo de fechamento seguinte: quanto além do cenário de
+   * demonstração normal o app aguenta antes de degradar? 300 itens é bem
+   * mais do que qualquer banca ou semestre de testes acumularia — o ponto
+   * aqui não é "isso é realista", é "onde está a margem".
+   */
+  const { b, p, erros } = await abrir();
+  const t0 = Date.now();
+  await semearVolume(p, { aulas: 150, fotos: 150 });
+  const tempoSemear = Date.now() - t0;
+  await p.reload({ waitUntil: "networkidle" });
+
+  const t1 = Date.now();
+  await p.getByRole("button", { name: "Galeria", exact: true }).click();
+  await p.waitForTimeout(1200);
+  const tempoAbrir = Date.now() - t1;
+  check(tempoAbrir < 6000, `a galeria abre com 300 itens no banco (${tempoAbrir}ms)`, `${tempoAbrir}ms`);
+
+  const t2 = Date.now();
+  await p
+    .getByRole("tablist", { name: "Filtrar a galeria" })
+    .getByRole("tab", { name: /^Todas/ })
+    .click();
+  await p.waitForTimeout(1500);
+  const tempoTodas = Date.now() - t2;
+  check(tempoTodas < 6000, `trocar para "Todas" com 300 itens (${tempoTodas}ms)`, `${tempoTodas}ms`);
+
+  const cards = await p.locator("img").count();
+  check(cards >= 250, `renderiza o volume inteiro, não uma amostra (${cards} imagens)`, String(cards));
+
+  await p.mouse.wheel(0, 5000);
+  await p.waitForTimeout(400);
+  await p.mouse.wheel(0, 5000);
+  await p.waitForTimeout(400);
+
+  const t3 = Date.now();
+  await p
+    .getByRole("tablist", { name: "Filtrar a galeria" })
+    .getByRole("tab", { name: /^SliD/ })
+    .click();
+  await p.waitForTimeout(1500);
+  const tempoSliD = Date.now() - t3;
+  check(tempoSliD < 6000, `trocar para "SliD" com 150 aulas (${tempoSliD}ms)`, `${tempoSliD}ms`);
+
+  check(erros.length === 0, "sem erro de runtime em 300 itens", erros[0] ?? "");
+  console.log(`  (semear 300 itens: ${tempoSemear}ms — fora do orçamento de UI, é escrita direta no banco)`);
+  await b.close();
+}
+
 console.log(fail === 0 ? "\nTUDO CERTO" : `\n${fail} FALHA(S)`);
 process.exit(fail === 0 ? 0 : 1);

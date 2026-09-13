@@ -4,7 +4,6 @@ const W = 640, H = 480;
 let seed = 12345;
 function rnd() { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }
 function make(fill) { const g = new Float64Array(W * H); fill(g); return g; }
-function px(g, x, y) { return g[y * W + x]; }
 function set(g, x, y, v) { if (x >= 0 && x < W && y >= 0 && y < H) g[y * W + x] = v; }
 
 /** Desfoque de caixa — a lente nunca entrega bordas perfeitas. */

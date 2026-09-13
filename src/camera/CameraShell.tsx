@@ -748,6 +748,18 @@ export function CameraShell({
 
   return (
     <div className="relative size-full overflow-hidden bg-black">
+      {/* Só para leitor de tela: a Câmera é a tela raiz do app (Foto, Vídeo,
+          SliD e Scanner vivem todos aqui, sem desmontar), e nenhuma delas
+          tinha h1 — os cabeçalhos de painel (Modos, Filtros) começavam
+          direto em h2/h3 sem nada acima. Mudanças de estado (sessão, áudio)
+          já são anunciadas à parte por `aria-live`, então este título fica
+          estático — não precisa mudar por modo.
+          Ausente quando `ScannerReview` ou `PermissionGate` estão abertos:
+          as duas já têm h1 próprio ("Documento", e o texto de erro/pedido de
+          permissão) — duas ao mesmo tempo seria o próprio erro que isto
+          existe para evitar. */}
+      {!scanned && isReady && <h1 className="sr-only">SliD — câmera</h1>}
+
       {/* Mounted unconditionally: the stream is attached to this element from an
           effect, so unmounting it on a status change would silently drop the
           preview and leave a black screen. */}

@@ -4,7 +4,6 @@ import { chromium } from "/opt/node22/lib/node_modules/playwright/index.mjs";
 import { APP, CENAS, CHROMIUM } from "./caminhos.mjs";
 const D = CENAS;
 let fail = 0;
-const check = (ok, l, e = "") => { console.log(`${ok ? "[ok]  " : "[FAIL]"} ${l}${e ? " — " + e : ""}`); if (!ok) fail++; };
 
 const olhar = async (cena, segundos = 8) => {
   const b = await chromium.launch({ executablePath: CHROMIUM,

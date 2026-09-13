@@ -97,6 +97,14 @@ const auditar = (p) =>
       .filter(visivel)
       .map((h) => Number(h.tagName[1]));
     let salto = null;
+    /*
+     * A tela começar em h3 (sem h1 nem h2 nenhum) escapava daqui: o laço só
+     * compara CONSECUTIVOS, e "nada antes do primeiro" nunca é comparado com
+     * nada. Foi assim que a Câmera ficou sem h1 sem este teste acusar —
+     * achado revisando o código, não por este teste. Agora o próprio começo
+     * conta como salto quando existe pelo menos um cabeçalho.
+     */
+    if (niveis.length > 0 && niveis[0] !== 1) salto = `(início) → h${niveis[0]}`;
     for (let i = 1; i < niveis.length; i++) {
       if (niveis[i] - niveis[i - 1] > 1) salto = `h${niveis[i - 1]} → h${niveis[i]}`;
     }
@@ -184,10 +192,29 @@ async function tela(nome, p) {
 
   await p
     .getByRole("tablist", { name: "Conteúdo da aula" })
+    .getByRole("tab", { name: "Texto" })
+    .click();
+  await p.waitForTimeout(600);
+  await tela("Aula — Texto", p);
+
+  await p
+    .getByRole("tablist", { name: "Conteúdo da aula" })
     .getByRole("tab", { name: "Resumo" })
     .click();
   await p.waitForTimeout(600);
   await tela("Aula — Resumo", p);
+
+  check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
+  await b.close();
+}
+
+{
+  const { b, p, erros } = await abrir("doc-folha-na-mesa.y4m");
+  await p.getByRole("button", { name: "Modos", exact: true }).click();
+  await p.waitForTimeout(700);
+  await p.getByRole("dialog").getByRole("button", { name: /^Scanner/ }).first().click();
+  await p.waitForTimeout(3000);
+  await tela("Scanner", p);
 
   check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
   await b.close();
