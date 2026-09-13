@@ -94,9 +94,19 @@ const microfones = (p) =>
       .length,
   }));
 
+/*
+ * Entrar no SliD agora passa por um cartão antes da caixa do sistema: "O
+ * SliD pode registrar a explicação da aula..." com "Permitir áudio" e
+ * "Continuar sem áudio". Esta suíte audita o microfone, então o caminho de
+ * teste é sempre o de permitir — tocar "Permitir áudio" é o que substitui o
+ * `listen.start()` automático que existia antes.
+ */
 const entrarNoSlid = async (p) => {
   await p.getByRole("button", { name: "SliD", exact: true }).click();
-  await p.waitForTimeout(2500);
+  await p.waitForTimeout(500);
+  const permitir = p.getByRole("button", { name: "Permitir áudio" });
+  if ((await permitir.count()) > 0) await permitir.click();
+  await p.waitForTimeout(2000);
 };
 
 /**

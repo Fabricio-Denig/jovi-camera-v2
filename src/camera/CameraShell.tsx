@@ -53,6 +53,7 @@ import {
   type NivelNoturno,
 } from "../night/stackFrames";
 import { ListenBadge, SeeListenIdentify } from "../listen/ListenBadge";
+import { MicPermissionPrompt } from "../listen/MicPermissionPrompt";
 import {
   SemEspacoError,
   getLatestCapture,
@@ -270,8 +271,23 @@ export function CameraShell({
    * — o que fazia o efeito rodar de novo e encontrar o Listen "parado", como
    * se ninguém tivesse dito nada. Religar uma gravação que a pessoa desligou é
    * exatamente o que este recurso não pode fazer.
+   *
+   * É estado e não `ref` por um segundo motivo: o selo do Listen precisa
+   * saber que a dispensa aconteceu para oferecer "Ativar" de volta. Sem
+   * isso, "Desligar" e "Continuar sem áudio" levavam a um estado sem
+   * volta — `status` volta a "parado" nos dois casos, que é o mesmo
+   * "parado" de antes de qualquer pedido, e o selo não distinguia os dois.
    */
-  const audioDispensadoRef = useRef(false);
+  const [audioDispensado, setAudioDispensado] = useState(false);
+  /*
+   * O cartão que explica o microfone antes de o navegador perguntar.
+   *
+   * Antes o efeito abaixo chamava `listen.start()` direto: a primeira coisa
+   * que a pessoa via, ao entrar no SliD, era a caixa de permissão do sistema
+   * — sem nenhuma palavra do app sobre por quê. Agora o efeito só abre este
+   * cartão; `listen.start()` só roda depois de "Permitir áudio".
+   */
+  const [pedirAudio, setPedirAudio] = useState(false);
 
   const slid = useSlidSession({
     videoRef,
@@ -382,26 +398,39 @@ export function CameraShell({
       status === "ready" &&
       listen.status === "parado" &&
       !gravacao &&
-      !audioDispensadoRef.current
+      !audioDispensado
     ) {
-      const naSessao = slid.elapsedMs;
-      void listen.start().then((deu) => {
-        if (!deu) return;
-        audioComecouEmRef.current = naSessao;
-        /*
-         * A transcrição começa junto com a gravação e nunca antes: sem
-         * microfone concedido não há o que reconhecer, e pedir reconhecimento
-         * com o microfone negado só produziria um `not-allowed` para tratar.
-         *
-         * Ela é uma segunda camada sobre o mesmo som, não uma alternativa à
-         * primeira. Se falhar, o arquivo da aula continua sendo gravado — que
-         * é a garantia que o estudante realmente precisa.
-         */
-        transcript.start();
-      });
+      setPedirAudio(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSlid, status]);
+
+  /** "Permitir áudio" no cartão, ou "Ativar" no selo: os dois pedem o mesmo. */
+  const comecarAudio = () => {
+    setPedirAudio(false);
+    setAudioDispensado(false);
+    const naSessao = slid.elapsedMs;
+    void listen.start().then((deu) => {
+      if (!deu) return;
+      audioComecouEmRef.current = naSessao;
+      /*
+       * A transcrição começa junto com a gravação e nunca antes: sem
+       * microfone concedido não há o que reconhecer, e pedir reconhecimento
+       * com o microfone negado só produziria um `not-allowed` para tratar.
+       *
+       * Ela é uma segunda camada sobre o mesmo som, não uma alternativa à
+       * primeira. Se falhar, o arquivo da aula continua sendo gravado — que
+       * é a garantia que o estudante realmente precisa.
+       */
+      transcript.start();
+    });
+  };
+
+  /** "Continuar sem áudio": a mesma dispensa de quem desliga pelo selo. */
+  const dispensarAudio = () => {
+    setPedirAudio(false);
+    setAudioDispensado(true);
+  };
 
   useEffect(() => {
     if (isSlid && slid.status === "idle") {
@@ -497,7 +526,8 @@ export function CameraShell({
      */
     if (!isSlid) transcript.reset();
     // Sair do SliD fecha a sessão; a próxima começa com a pergunta em aberto.
-    if (!isSlid) audioDispensadoRef.current = false;
+    if (!isSlid) setAudioDispensado(false);
+    if (!isSlid) setPedirAudio(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSlid]);
 
@@ -955,6 +985,11 @@ export function CameraShell({
         <ModePreviewCard mode={mode} onBack={() => onSelectMode("photo")} />
       )}
 
+      {/* O porquê, antes da caixa do sistema — nunca depois. */}
+      {isReady && isSlid && pedirAudio && (
+        <MicPermissionPrompt onAllow={comecarAudio} onSkip={dispensarAudio} />
+      )}
+
       {/* Sempre à mão durante a sessão, ao contrário dos outros controles:
           enquadrar o slide é a única coisa que o estudante realmente precisa
           fazer com as mãos, e é a primeira, antes de apoiar o celular. */}
@@ -987,8 +1022,9 @@ export function CameraShell({
               status={listen.status}
               elapsedMs={listen.elapsedMs}
               level={listen.level}
+              dispensado={audioDispensado}
               onDesligar={() => {
-                audioDispensadoRef.current = true;
+                setAudioDispensado(true);
                 listen.disable();
                 /*
                  * Desligar o áudio desliga a transcrição, e `disable` é o
@@ -999,13 +1035,9 @@ export function CameraShell({
                  */
                 transcript.disable();
               }}
-              // Tocar em "Ativar" é mudar de ideia, e desfaz a dispensa.
-              onTentarDeNovo={() => {
-                audioDispensadoRef.current = false;
-                void listen.start().then((deu) => {
-                  if (deu) transcript.start();
-                });
-              }}
+              // Tocar em "Ativar" é mudar de ideia, e desfaz a dispensa — o
+              // mesmo caminho de "Permitir áudio" no cartão.
+              onTentarDeNovo={comecarAudio}
               transcrevendo={transcript.transcrevendo}
               falaRecente={transcript.parcial}
             />
@@ -1232,7 +1264,7 @@ export function CameraShell({
                   aria-expanded={filtersOpen}
                   className="min-h-10 rounded-full bg-black/40 px-4 text-[11.5px] font-medium text-white/85 transition-transform active:scale-95"
                 >
-                  Filtros {filtersOpen ? "⌄" : "⌃"}
+                  Filtros {filtersOpen ? "⌃" : "⌄"}
                 </button>
                 {filtersOpen && (
                   <div className="w-full animate-[slid-enter_220ms_ease-out]">

@@ -21,6 +21,7 @@ export function ListenBadge({
   status,
   elapsedMs,
   level,
+  dispensado = false,
   onDesligar,
   onTentarDeNovo,
   compacto = false,
@@ -31,6 +32,13 @@ export function ListenBadge({
   elapsedMs: number;
   /** 0–1, do próprio microfone. */
   level: number;
+  /**
+   * A pessoa disse "não" — pelo cartão inicial ou pelo ✕ — e isso é
+   * diferente de "negado". `status` volta para "parado" nos dois casos, o
+   * mesmo "parado" de antes de qualquer pedido; sem esta marca o selo não
+   * tinha como saber que havia uma escolha para desfazer.
+   */
+  dispensado?: boolean;
   onDesligar?: () => void;
   onTentarDeNovo?: () => void;
   /** Sem o botão, para caber ao lado de outras coisas. */
@@ -118,8 +126,13 @@ export function ListenBadge({
         )}
 
         {/* Negado é reversível: a pessoa pode liberar nas permissões do site e
-          voltar. Indisponível não é, e por isso não ganha botão. */}
-        {!compacto && status === "negado" && onTentarDeNovo && (
+          voltar. Dispensado é reversível na hora — foi a própria pessoa que
+          escolheu, pelo cartão ou pelo ✕, e pode mudar de ideia a qualquer
+          momento da aula. Indisponível não é nenhum dos dois, e por isso não
+          ganha botão. */}
+        {!compacto &&
+          (status === "negado" || (status === "parado" && dispensado)) &&
+          onTentarDeNovo && (
           <button
             type="button"
             onClick={onTentarDeNovo}
