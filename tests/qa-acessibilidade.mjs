@@ -184,10 +184,29 @@ async function tela(nome, p) {
 
   await p
     .getByRole("tablist", { name: "Conteúdo da aula" })
+    .getByRole("tab", { name: "Texto" })
+    .click();
+  await p.waitForTimeout(600);
+  await tela("Aula — Texto", p);
+
+  await p
+    .getByRole("tablist", { name: "Conteúdo da aula" })
     .getByRole("tab", { name: "Resumo" })
     .click();
   await p.waitForTimeout(600);
   await tela("Aula — Resumo", p);
+
+  check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
+  await b.close();
+}
+
+{
+  const { b, p, erros } = await abrir("doc-folha-na-mesa.y4m");
+  await p.getByRole("button", { name: "Modos", exact: true }).click();
+  await p.waitForTimeout(700);
+  await p.getByRole("dialog").getByRole("button", { name: /^Scanner/ }).first().click();
+  await p.waitForTimeout(3000);
+  await tela("Scanner", p);
 
   check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
   await b.close();

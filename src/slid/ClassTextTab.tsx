@@ -213,9 +213,12 @@ function BlocoDeMomento({
 
       <div className="mt-1 flex gap-3">
         <div className="min-w-0 flex-1">
-          <h3 className="text-[15px] font-semibold leading-snug text-ink">
+          {/* h2, não h3: nada nesta aba fica entre o h1 do cabeçalho da aula e
+              o título do momento — o mesmo nível que a aba Resumo usa para
+              suas seções ("NESTA AULA" etc). h3 aqui pulava um nível. */}
+          <h2 className="text-[15px] font-semibold leading-snug text-ink">
             {momento.label}
-          </h3>
+          </h2>
           <ul className="mt-1.5 flex flex-col gap-1">
             {linhas.map((linha, i) => (
               <li
