@@ -67,6 +67,19 @@ async function abrirApp({ cena, microfone = true, transcreve = false }) {
   return { b, p, erros };
 }
 
+/*
+ * Entrar no SliD passa por um cartão antes da caixa do sistema: "O SliD pode
+ * registrar a explicação da aula..." com "Permitir áudio" e "Continuar sem
+ * áudio". Esta jornada testa o produto real, então segue o caminho real —
+ * tocar "Permitir áudio" é o que uma pessoa faria para ouvir a aula.
+ */
+async function entrarNoSlid(p) {
+  await p.getByRole("button", { name: "SliD", exact: true }).click();
+  await p.waitForTimeout(600);
+  const permitir = p.getByRole("button", { name: "Permitir áudio" });
+  if ((await permitir.count()) > 0) await permitir.click();
+}
+
 async function encerrarESalvar(p) {
   const mostrar = p.getByRole("button", { name: "Mostrar controles" });
   if ((await mostrar.count()) > 0) await mostrar.click();
@@ -110,7 +123,7 @@ console.log("═══ JORNADA 1 — SliD completo, com áudio ═══\n");
     "e oferece ativar o SliD",
   );
 
-  await p.getByRole("button", { name: "SliD", exact: true }).click();
+  await entrarNoSlid(p);
   await p.waitForTimeout(3000);
 
   const corpoSessao = await p.locator("body").innerText();
@@ -193,7 +206,7 @@ console.log("\n═══ JORNADA 2 — sem microfone: a aula acontece igual ═�
     microfone: false,
   });
 
-  await p.getByRole("button", { name: "SliD", exact: true }).click();
+  await entrarNoSlid(p);
   await p.waitForTimeout(3000);
 
   const corpo = await p.locator("body").innerText();
@@ -299,7 +312,7 @@ console.log(
     "a câmera reconhece a aula na frente",
   );
 
-  await p.getByRole("button", { name: "SliD", exact: true }).click();
+  await entrarNoSlid(p);
   await p.waitForTimeout(4000);
 
   const naSessao = await p.locator("body").innerText();

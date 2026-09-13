@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { CAMERA_FILTERS, DEFAULT_INTENSITY, applyFilter } from "./filters";
 
 /**
@@ -28,6 +29,29 @@ export function FilterStrip({
   onOpenPanel: () => void;
   mirrored: boolean;
 }) {
+  const trilhoRef = useRef<HTMLDivElement>(null);
+  /*
+   * Com sete filtros, nem todos cabem numa tela de 390px — "Quente" já nasce
+   * cortado. Sem nenhuma pista, a fileira parece terminar ali: o mesmo
+   * problema que os chips da Galeria tinham. O degradê aparece só quando há
+   * mais filtro para o lado, e some quando o toque chega ao fim.
+   */
+  const [temMaisADireita, setTemMaisADireita] = useState(false);
+
+  useEffect(() => {
+    const el = trilhoRef.current;
+    if (!el) return;
+    const medir = () => setTemMaisADireita(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+    medir();
+    el.addEventListener("scroll", medir, { passive: true });
+    const ro = new ResizeObserver(medir);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener("scroll", medir);
+      ro.disconnect();
+    };
+  }, []);
+
   return (
     /*
      * A lista rola; a porta para o painel não.
@@ -37,7 +61,11 @@ export function FilterStrip({
      * só aparece depois de arrastar não é uma porta.
      */
     <div className="pointer-events-auto flex w-full items-start gap-2 pr-3">
-      <div className="flex min-w-0 flex-1 items-start gap-2 overflow-x-auto py-0.5 pl-4 pr-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="relative min-w-0 flex-1">
+        <div
+          ref={trilhoRef}
+          className="flex items-start gap-2 overflow-x-auto py-0.5 pl-4 pr-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
         {CAMERA_FILTERS.map((filtro) => {
           const selecionado = filtro.id === active;
           return (
@@ -82,7 +110,15 @@ export function FilterStrip({
             </button>
           );
         })}
+        </div>
 
+        {/* Puramente visual — nunca intercepta o toque num filtro por baixo. */}
+        {temMaisADireita && (
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-black/70 to-transparent"
+          />
+        )}
       </div>
 
       {/*
