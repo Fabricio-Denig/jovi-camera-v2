@@ -836,6 +836,15 @@ function GalleryThumb({
           SliD
         </span>
       )}
+      {/* Scanner e SliD nunca coincidem — um documento avulso não é aula —,
+          então o mesmo canto serve aos dois sem disputa. Sem o selo, um
+          documento recortado só se distinguia de uma foto comum depois de
+          aberto. */}
+      {media.source === "scanner" && (
+        <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1 text-[9.5px] font-medium text-white">
+          Documento
+        </span>
+      )}
       {media.kind === "video" && (
         <span className="absolute bottom-1 right-1 rounded bg-black/60 px-1 text-[10px] text-white">
           vídeo
