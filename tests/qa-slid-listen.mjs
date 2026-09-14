@@ -207,9 +207,20 @@ async function abrirAulaNaGaleria(p) {
   await p.waitForTimeout(1500);
 }
 
+/*
+ * Entrar no SliD passa por um cartão antes da caixa do sistema: "O SliD pode
+ * registrar a explicação da aula..." com "Permitir áudio" e "Continuar sem
+ * áudio". Esta suíte testa exatamente o Listen, então o caminho de teste é
+ * sempre tocar "Permitir áudio" — a permissão do BROWSER (concedida ou
+ * negada pelo contexto de cada bloco) é o que decide se o resultado vira
+ * "Ouvindo" ou "negado" a partir daí.
+ */
 const entrarNoSlid = async (p) => {
   await p.getByRole("button", { name: "SliD", exact: true }).click();
-  await p.waitForTimeout(2500);
+  await p.waitForTimeout(500);
+  const permitir = p.getByRole("button", { name: "Permitir áudio" });
+  if ((await permitir.count()) > 0) await permitir.click();
+  await p.waitForTimeout(2000);
 };
 
 /** Encerra a aula pelos controles e confirma no diálogo. */
@@ -356,16 +367,31 @@ console.log("\n== encerrar a aula fecha o arquivo e o guarda ==");
       q.onsuccess = () => r(q.result);
     });
     db.close();
-    return tudo.map((a) => ({
-      sessionId: a.sessionId,
-      bytes: a.blob.size,
-      tipo: a.mimeType,
-      duracao: a.durationMs,
-      comecouEm: a.startedAtMs,
-    }));
+    /*
+     * A aula agora pode ter vários trechos (`segments`), não um `blob` só —
+     * ver `shared/lib/mediaStore.segmentosDe`. Esta aula não desligou o
+     * áudio, então é sempre um trecho; somar os bytes/duração dos trechos
+     * funciona igual para um ou para vários, sem duplicar a lógica de
+     * normalização aqui.
+     */
+    return tudo.map((a) => {
+      const trechos = a.segments && a.segments.length > 0
+        ? a.segments
+        : a.blob
+          ? [{ blob: a.blob, mimeType: a.mimeType, durationMs: a.durationMs }]
+          : [];
+      return {
+        sessionId: a.sessionId,
+        trechos: trechos.length,
+        bytes: trechos.reduce((soma, t) => soma + t.blob.size, 0),
+        tipo: trechos[0]?.mimeType ?? null,
+        duracao: trechos.reduce((soma, t) => soma + t.durationMs, 0),
+      };
+    });
   });
   console.log("        " + JSON.stringify(guardado));
   check(Array.isArray(guardado) && guardado.length === 1, "um áudio guardado, para esta aula");
+  check(guardado[0]?.trechos === 1, "num trecho só — o áudio nunca foi desligado nesta aula", `${guardado[0]?.trechos}`);
   check(guardado[0]?.bytes > 1000, "com bytes de verdade dentro", `${guardado[0]?.bytes} bytes`);
   check(/audio\//.test(guardado[0]?.tipo ?? ""), "e um formato que o navegador escolheu", guardado[0]?.tipo);
   check(guardado[0]?.duracao > 3000, "com a duração medida pelo relógio da sessão", `${guardado[0]?.duracao} ms`);
@@ -700,18 +726,29 @@ console.log("\n== reconhecimento funcionando: o selo e a fala na tela ==");
 {
   const { b, p, erros } = await abrir({ fala: "funciona" });
   await entrarNoSlid(p);
-  await p.waitForTimeout(1200);
 
-  const corpo = await p.locator("body").innerText();
+  /*
+   * O dublê alterna entre parcial e final, e a linha da fala só existe
+   * enquanto há um parcial em curso (ver o comentário abaixo, "se revezam").
+   * Um `waitForTimeout` fixo podia cair bem no instante em que o resultado
+   * anterior já tinha virado final e o próximo parcial ainda não tinha
+   * chegado — o mesmo ponto cego que a Jornada 4 do qa-demo-banca já
+   * resolve olhando por alguns ciclos em vez de uma foto num instante só.
+   */
+  let corpo = "";
+  let viu = false;
+  for (let i = 0; i < 15 && !viu; i++) {
+    corpo = await p.locator("body").innerText();
+    if (/prestem atenção nessa parte/i.test(corpo)) viu = true;
+    else await p.waitForTimeout(400);
+  }
+
   check(
     /Ouvindo · Transcrevendo/i.test(corpo),
     "o selo evolui quando um resultado chega de verdade",
     corpo.split("\n").slice(0, 4).join(" · "),
   );
-  check(
-    /prestem atenção nessa parte/i.test(corpo),
-    "e uma linha do que está sendo dito aparece",
-  );
+  check(viu, "e uma linha do que está sendo dito aparece");
 
   /*
    * A linha da fala e a promessa se revezam, não empilham.

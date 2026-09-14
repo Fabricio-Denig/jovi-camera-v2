@@ -147,6 +147,25 @@ export function LessonAudioPlayer({
   if (segmentos.length === 0 || !url) return null;
 
   const duracaoTotal = Math.max(1, fimDaAulaMs / 1000);
+  /*
+   * O mapa de lacunas, só quando há mais de um trecho.
+   *
+   * Numa aula com um trecho só — o caso comum, sem nenhum desligar no meio —
+   * este mapa seria uma barra cheia do começo ao fim, informação nenhuma a
+   * mais. Ele só ganha desenho quando há de fato um "sem áudio aqui" para
+   * avisar, e é isso que os `%` do gradiente marcam: onde a aula tem som e
+   * onde não tem, antes de a pessoa arrastar e descobrir sozinha.
+   */
+  const mapaDeLacunas =
+    segmentos.length > 1
+      ? segmentos
+          .map((s) => {
+            const de = (s.startMs / 1000 / duracaoTotal) * 100;
+            const ate = ((s.startMs + s.durationMs) / 1000 / duracaoTotal) * 100;
+            return `transparent ${de.toFixed(2)}%, var(--color-accent) ${de.toFixed(2)}%, var(--color-accent) ${ate.toFixed(2)}%, transparent ${ate.toFixed(2)}%`;
+          })
+          .join(", ")
+      : null;
 
   return (
     <section className="rounded-2xl border border-line bg-surface-2 p-3.5">
@@ -166,6 +185,11 @@ export function LessonAudioPlayer({
         onTimeUpdate={(e) => {
           if (!segmentoAtual) return;
           setPosicaoMs(segmentoAtual.startMs + e.currentTarget.currentTime * 1000);
+          // Tocando de verdade é a prova de que não há lacuna aqui — sem
+          // isto, o aviso de uma busca anterior ("estava desligado") ficava
+          // preso na tela mesmo depois de a audição já ter avançado para um
+          // trecho com som de verdade.
+          if (foraDoTrecho) setForaDoTrecho(false);
         }}
         onEnded={() => {
           // O fim de um trecho não é o fim da aula: se há um próximo, a
@@ -210,6 +234,15 @@ export function LessonAudioPlayer({
           </button>
 
           <div className="min-w-0 flex-1">
+            {/* O mapa de onde há som e onde há silêncio — antes de a pessoa
+                arrastar e cair numa lacuna sem aviso nenhum. */}
+            {mapaDeLacunas && (
+              <div
+                aria-hidden="true"
+                className="mb-1 h-1 w-full overflow-hidden rounded-full bg-ink-muted/20"
+                style={{ backgroundImage: `linear-gradient(to right, ${mapaDeLacunas})` }}
+              />
+            )}
             <input
               type="range"
               min={0}

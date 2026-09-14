@@ -101,7 +101,12 @@ const linha = async (nome) => {
 await linha("Foto, com detecção do SliD rodando");
 
 await p.getByRole("button", { name: "SliD", exact: true }).click();
-await p.waitForTimeout(3500);
+await p.waitForTimeout(500);
+// O cartão do microfone vem antes da gravação em si — sem tocar "Permitir
+// áudio", "Listen gravando" abaixo seria mentira: o áudio nunca teria começado.
+const permitirAudio = p.getByRole("button", { name: "Permitir áudio" });
+if ((await permitirAudio.count()) > 0) await permitirAudio.click();
+await p.waitForTimeout(3000);
 await linha("SliD ativo, com Listen gravando");
 
 const memoria = await p.evaluate(() =>

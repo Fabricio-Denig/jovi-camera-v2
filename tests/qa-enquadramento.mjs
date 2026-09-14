@@ -22,8 +22,13 @@ async function medir(cena, { zoom = 1 } = {}) {
     return { fw: v.videoWidth, fh: v.videoHeight, vw: v.clientWidth, vh: v.clientHeight };
   });
   await p.getByRole("button", { name: "SliD", exact: true }).click();
+  await p.waitForTimeout(500);
+  // O cartão do microfone fica por cima de tudo até alguém escolher — sem
+  // isto, o zoom logo abaixo nunca recebe o toque.
+  const semAudio = p.getByRole("button", { name: "Continuar sem áudio" });
+  if ((await semAudio.count()) > 0) await semAudio.click();
   if (zoom > 1) {
-    await p.waitForTimeout(1200);
+    await p.waitForTimeout(700);
     await p.getByRole("button", { name: `Aproximar ${zoom} vezes` }).click();
   }
   await p.waitForTimeout(20000);

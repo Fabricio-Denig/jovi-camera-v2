@@ -136,7 +136,12 @@ console.log("\n== fechar a aba no meio de uma aula pergunta antes ==");
   check(!(await cancelado()), "a câmera parada sai sem perguntar nada");
 
   await p.getByRole("button", { name: "SliD", exact: true }).click();
-  await p.waitForTimeout(4000);
+  await p.waitForTimeout(600);
+  // O cartão do microfone abre antes de qualquer outra coisa na tela — sem
+  // dispensá-lo, ele fica por cima de tudo e intercepta o toque seguinte.
+  const semAudio = p.getByRole("button", { name: "Continuar sem áudio" });
+  if ((await semAudio.count()) > 0) await semAudio.click();
+  await p.waitForTimeout(3400);
   check(await cancelado(), "mas uma aula correndo pergunta antes de sair");
 
   // Encerrar a aula devolve a saída livre: não há mais o que perder.
