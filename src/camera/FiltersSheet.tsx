@@ -88,6 +88,62 @@ export function FiltersSheet({
         Aplique ao vivo no visor
       </p>
 
+      {/*
+       * Intensidade e comparação vêm ANTES da grade, não depois dela.
+       *
+       * Com onze filtros agrupados em quatro famílias, a grade sozinha já
+       * passa da altura da tela — quem escolhia um filtro (na tira, antes de
+       * abrir o painel) tinha de rolar por cima de duas ou três famílias
+       * inteiras só para achar o controle que ajusta o que acabou de
+       * escolher. Uma câmera de verdade não esconde o dial de intensidade
+       * atrás do catálogo.
+       */}
+      {temIntensidade && (
+        <div className="mb-6">
+          <label className="block">
+            <span className="mb-2 flex items-center justify-between">
+              <span className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
+                Intensidade
+              </span>
+              <span className="font-mono text-[13px] tabular-nums text-ink">
+                {Math.round(intensity)}%
+              </span>
+            </span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={intensity}
+              onChange={(e) => onIntensity(Number(e.target.value))}
+              aria-label={`Intensidade do filtro ${findFilter(filterId).label}`}
+              className="h-11 w-full accent-[var(--color-accent)]"
+            />
+          </label>
+        </div>
+      )}
+
+      {/*
+       * `PREVIEW AO VIVO` do wireframe: as duas versões ao mesmo tempo.
+       *
+       * Ele só aparece quando há filtro escolhido **e** amostra: comparar
+       * "Nenhum" com "Nenhum" é uma tela que não responde nada, e sem amostra
+       * seriam dois retângulos cinza. Sempre visível quando os dois existem —
+       * nunca um gesto escondido (segurar, arrastar de canto) que ninguém
+       * descobre sem alguém apontar.
+       */}
+      {temIntensidade && amostra && (
+        <div className="mb-6">
+          <h3 className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
+            Antes e depois
+          </h3>
+          <CompareSlider
+            amostra={amostra}
+            filtroCss={applyFilter(filterId, intensity)}
+            mirrored={mirrored}
+          />
+        </div>
+      )}
+
       {/* Cards de 84×134 em 4 colunas, agrupados por família — como no
           `333:169`, mas com a seção que o wireframe não precisava desenhar
           porque tinha sete filtros, não onze. */}
@@ -193,55 +249,6 @@ export function FiltersSheet({
           </ul>
         </div>
       ))}
-
-      {/*
-       * A intensidade, que é o que faltava para o filtro significar alguma
-       * coisa. Ela some com "Nenhum" escolhido — intensidade de nada é zero
-       * por definição, e um controle morto na tela é pior que nenhum.
-       */}
-      {temIntensidade && (
-        <div className="mb-6">
-          <label className="block">
-            <span className="mb-2 flex items-center justify-between">
-              <span className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
-                Intensidade
-              </span>
-              <span className="font-mono text-[13px] tabular-nums text-ink">
-                {Math.round(intensity)}%
-              </span>
-            </span>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={intensity}
-              onChange={(e) => onIntensity(Number(e.target.value))}
-              aria-label={`Intensidade do filtro ${findFilter(filterId).label}`}
-              className="h-11 w-full accent-[var(--color-accent)]"
-            />
-          </label>
-        </div>
-      )}
-
-      {/*
-       * `PREVIEW AO VIVO` do wireframe: as duas versões ao mesmo tempo.
-       *
-       * Ele só aparece quando há filtro escolhido **e** amostra: comparar
-       * "Nenhum" com "Nenhum" é uma tela que não responde nada, e sem amostra
-       * seriam dois retângulos cinza.
-       */}
-      {temIntensidade && amostra && (
-        <div className="mb-6">
-          <h3 className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
-            Antes e depois
-          </h3>
-          <CompareSlider
-            amostra={amostra}
-            filtroCss={applyFilter(filterId, intensity)}
-            mirrored={mirrored}
-          />
-        </div>
-      )}
 
       {/*
        * Efeitos numa seção própria, e não misturados com os filtros.

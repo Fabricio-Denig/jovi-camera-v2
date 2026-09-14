@@ -64,8 +64,8 @@ console.log("== a tira e o painel escolhem o mesmo filtro ==");
   );
   check(
     nomes.join(" · ") ===
-      "Nenhum · Vivid · Suave · Quente · Frio · Cinema · Dramático · Desbotado · P&B · Noir · Leitura",
-    "na ordem do catálogo (sem favoritos ainda, Nenhum fixo primeiro)",
+      "Nenhum · Leitura · Vivid · Suave · Quente · Frio · Cinema · Dramático · Desbotado · P&B · Noir",
+    "na ordem certa (Nenhum fixo, Leitura furando a fila, resto no catálogo)",
     nomes.join(" · "),
   );
 
@@ -100,7 +100,9 @@ console.log("== a tira e o painel escolhem o mesmo filtro ==");
   await painel.getByRole("button", { name: "Fechar painel" }).click();
   await p.waitForTimeout(400);
   check((await cssDoVisor(p)) === comVivid, "fechar o painel mantém o filtro");
-  const naTira = await tira.nth(1).getAttribute("aria-pressed");
+  const naTira = await p
+    .locator("button[aria-label='Filtro Vivid']")
+    .getAttribute("aria-pressed");
   check(naTira === "true", "e a tira mostra a mesma escolha que o painel fez");
 
   await abrirPainel(p);

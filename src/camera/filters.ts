@@ -80,7 +80,10 @@ export const CAMERA_FILTERS: CameraFilter[] = [
   {
     id: "suave",
     label: "Suave",
-    hint: "Tom quente",
+    // Era "Tom quente" — herdado de antes de existir o Quente de verdade
+    // (sepia + saturação), e a receita daqui nunca teve sepia nenhum. O que
+    // este filtro faz é abrandar: menos contraste, mais luz, cor mais leve.
+    hint: "Menos contraste",
     family: "natural",
     steps: [
       { fn: "saturate", from: 1, to: 0.88 },
@@ -107,10 +110,17 @@ export const CAMERA_FILTERS: CameraFilter[] = [
     label: "Frio",
     hint: "Tom azulado",
     family: "natural",
+    /*
+     * -9° de início era fraco demais para bater o olho numa miniatura de
+     * 56 px — ao lado de Quente (que soma sepia, saturação e brilho, três
+     * funções empurrando na mesma direção), Frio com uma função só e um
+     * ângulo pequeno perdia o duelo antes de começar. -24° é o ponto em que
+     * o azul fica óbvio sem virar filtro de Instagram de 2012.
+     */
     steps: [
-      { fn: "hue-rotate", from: 0, to: -9, unit: "deg" },
-      { fn: "saturate", from: 1, to: 1.1 },
-      { fn: "brightness", from: 1, to: 1.03 },
+      { fn: "hue-rotate", from: 0, to: -24, unit: "deg" },
+      { fn: "saturate", from: 1, to: 1.16 },
+      { fn: "contrast", from: 1, to: 1.05 },
     ],
   },
   {
@@ -146,10 +156,10 @@ export const CAMERA_FILTERS: CameraFilter[] = [
     hint: "Preto levantado",
     family: "cinema",
     steps: [
-      { fn: "contrast", from: 1, to: 0.8 },
-      { fn: "saturate", from: 1, to: 0.68 },
-      { fn: "brightness", from: 1, to: 1.1 },
-      { fn: "sepia", from: 0, to: 0.1 },
+      { fn: "contrast", from: 1, to: 0.72 },
+      { fn: "saturate", from: 1, to: 0.62 },
+      { fn: "brightness", from: 1, to: 1.14 },
+      { fn: "sepia", from: 0, to: 0.12 },
     ],
   },
   {
