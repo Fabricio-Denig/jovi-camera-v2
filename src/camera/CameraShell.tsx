@@ -12,7 +12,7 @@ import { FrameGuides } from "./FrameGuides";
 import { FilterStrip } from "./FilterStrip";
 import { FiltersSheet } from "./FiltersSheet";
 import { EffectLayer } from "./EffectLayer";
-import { FOOD_LOOK, applyFilter, DEFAULT_INTENSITY } from "./filters";
+import { FOOD_LOOK, applyFilter, findFilter, DEFAULT_INTENSITY } from "./filters";
 import { useFrameSample } from "./useFrameSample";
 import {
   SettingsSheet,
@@ -1261,9 +1261,20 @@ export function CameraShell({
                   type="button"
                   onClick={() => setFiltersOpen((aberto) => !aberto)}
                   aria-expanded={filtersOpen}
-                  className="min-h-10 rounded-full bg-black/40 px-4 text-[11.5px] font-medium text-white/85 transition-transform active:scale-95"
+                  className={`min-h-10 rounded-full px-4 text-[11.5px] font-medium transition-transform active:scale-95 ${
+                    filterId !== "nenhum"
+                      ? "bg-accent/90 text-accent-ink"
+                      : "bg-black/40 text-white/85"
+                  }`}
                 >
-                  Filtros {filtersOpen ? "⌃" : "⌄"}
+                  {/*
+                   * "Filtros" sozinho não dizia qual estava ligado — quem
+                   * fechasse a tira só descobria abrindo de novo. Com um
+                   * filtro ativo, o botão passa a dizer QUAL ele é, na cor de
+                   * destaque: o mesmo lugar vira o indicador de estado.
+                   */}
+                  {filterId !== "nenhum" ? findFilter(filterId).label : "Filtros"}{" "}
+                  {filtersOpen ? "⌃" : "⌄"}
                 </button>
                 {filtersOpen && (
                   <div className="w-full animate-[slid-enter_220ms_ease-out]">
