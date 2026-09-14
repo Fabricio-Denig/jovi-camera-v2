@@ -243,10 +243,35 @@ export interface LessonAudio {
    */
   transcript?: TranscriptSegment[];
   /**
-   * Como a transcrição terminou, para a aula reaberta poder dizer a verdade
-   * em vez de fingir que ninguém tentou.
+   * Como a transcrição AO VIVO terminou (a do microfone, durante a aula), para
+   * a aula reaberta poder dizer a verdade em vez de fingir que ninguém tentou.
+   *
+   * Fica separado de `transcriptJobStatus` de propósito — são duas fontes
+   * diferentes do mesmo campo `transcript`. Esta descreve o reconhecimento do
+   * navegador enquanto a aula acontecia (rápido, mas medido como pouco
+   * confiável num celular real); a outra descreve o motor local que reprocessa
+   * o áudio inteiro depois, e é quem normalmente decide o texto final.
    */
   transcriptStatus?: "ok" | "indisponivel" | "desligada";
+  /**
+   * O motor local (Whisper) reprocessando o áudio depois da aula salva.
+   *
+   * `transcript` já existe assim que a aula é salva — vem do reconhecimento ao
+   * vivo do navegador, quando funcionou. Mas ele é conhecidamente pouco
+   * confiável (ver `listen/useTranscript`), e é comum a aula terminar com
+   * pouco ou nada reconhecido apesar de minutos de fala gravados. Este campo
+   * acompanha o reprocessamento que corrige isso: ele lê o áudio já salvo,
+   * inteiro, com um motor que não depende do navegador estar ouvindo em tempo
+   * real, e substitui `transcript` pelo resultado quando termina.
+   *
+   * `undefined` cobre dois casos de propósito: aulas sem áudio (nunca há o que
+   * reprocessar) e aulas salvas antes deste campo existir — nenhum dos dois
+   * deve mostrar "organizando" para sempre.
+   */
+  transcriptJobStatus?: "processando" | "pronto" | "falhou";
+  /** Quando o reprocessamento começou — só para detectar um job abandonado
+      (aba fechada no meio) depois de um teto de tempo generoso. */
+  transcriptJobStartedAt?: number;
 }
 
 /**
