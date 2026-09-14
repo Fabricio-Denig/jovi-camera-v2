@@ -262,7 +262,7 @@ export function SlidSummary({
             {/* Os números por trás dela. */}
             <p className="text-[13.5px] leading-relaxed text-ink-muted">
               {stats.skippedDuplicates > 0
-                ? `A câmera olhou ${stats.skippedDuplicates} vezes em que nada tinha mudado e deixou passar.`
+                ? `A câmera notou ${stats.skippedDuplicates} ${stats.skippedDuplicates === 1 ? "vez" : "vezes"} em que nada tinha mudado e deixou passar.`
                 : minutes < 1
                   ? "Menos de um minuto acompanhado."
                   : `${minutes} ${minutes === 1 ? "minuto" : "minutos"} acompanhados.`}
