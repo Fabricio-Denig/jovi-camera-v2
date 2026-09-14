@@ -85,6 +85,37 @@ export function listenSuportado(): boolean {
 }
 
 /**
+ * Um trecho em gravação, com tudo que só pertence A ELE.
+ *
+ * Existir como objeto — e não como campos soltos no gancho, era assim antes
+ * — resolve uma classe de corrida real: "Desligar" seguido rápido de
+ * "Ativar" tinha os pedaços do trecho ANTIGO e do trecho NOVO disputando o
+ * mesmo array compartilhado. Se o `start()` novo zerasse esse array antes do
+ * `onstop` do trecho antigo terminar de ler, o trecho fechado saía vazio —
+ * ou com pedaços do trecho errado. Cada gravação carrega os próprios
+ * pedaços; um `start()` novo não tem como pisar num fechamento ainda em voo.
+ *
+ * `fechamento` memoiza o fechar deste trecho específico: se `disable` e
+ * `stop` chegarem quase juntos (Desligar seguido rápido de Encerrar a aula),
+ * os dois pedem para fechar o MESMO trecho, e só o primeiro pedido de fato
+ * chama `recorder.stop()` — o segundo espera a mesma promessa, em vez de
+ * fechar um `MediaRecorder` já fechado e arriscar guardar o trecho duas
+ * vezes.
+ */
+interface GravacaoEmCurso {
+  recorder: MediaRecorder;
+  stream: MediaStream;
+  pedacos: Blob[];
+  /** Quando esta gravação começou, no relógio de parede (`Date.now()`). */
+  inicioParede: number;
+  /** Quanto já tinha sido gravado antes da pausa atual, dentro deste trecho. */
+  acumulado: number;
+  /** Onde, no relógio da SESSÃO, este trecho começa. */
+  inicioDoTrechoMs: number;
+  fechamento: Promise<void> | null;
+}
+
+/**
  * O **Listen** do SliD: a aula gravada enquanto a câmera a enxerga.
  *
  * Regras que moldam tudo aqui.
@@ -107,6 +138,13 @@ export function listenSuportado(): boolean {
  * lista de trechos, na ordem em que aconteceram — nunca um único arquivo que
  * a última religada sobrescreve.
  *
+ * **Cada chamada só mexe no que é dela.** `disable` e `stop` fecham um objeto
+ * de gravação específico — capturado no início da chamada — e só limpam o
+ * estado compartilhado (`atualRef`, o medidor) se ele ainda apontar para esse
+ * mesmo objeto. Um "Ativar" que já trocou de gravação enquanto um "Desligar"
+ * antigo ainda estava fechando o trecho anterior não tem como ser apagado
+ * por ele.
+ *
  * O áudio fica no aparelho. Este gancho usa só `getUserMedia` e
  * `MediaRecorder`: nada sai do navegador, e nenhum serviço externo é chamado.
  */
@@ -117,15 +155,8 @@ export function useListen() {
   const [level, setLevel] = useState(0);
   const [mimeType, setMimeType] = useState<string | null>(null);
 
-  const recorderRef = useRef<MediaRecorder | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const pedacosRef = useRef<Blob[]>([]);
-  const inicioRef = useRef<number>(0);
-  /** Quanto já foi gravado antes da pausa atual, dentro do trecho em curso. */
-  const acumuladoRef = useRef<number>(0);
+  const atualRef = useRef<GravacaoEmCurso | null>(null);
   const analiseRef = useRef<{ ctx: AudioContext; raf: number } | null>(null);
-  /** Onde, no relógio da sessão, o trecho em curso começou. */
-  const inicioDoTrechoRef = useRef<number>(0);
   /** Os trechos já fechados desta sessão — ver `ListenSegment`. */
   const trechosRef = useRef<ListenSegment[]>([]);
   /*
@@ -134,84 +165,109 @@ export function useListen() {
    * Existe por causa de uma janela que só aparece no aparelho: entre pedir o
    * microfone e a pessoa responder passam segundos — às vezes minutos. Nesse
    * intervalo ela pode sair do SliD, ou desligar o áudio, e sem esta marca o
-   * `await` continuava correndo: quando a permissão enfim chegava, `streamRef`
-   * era preenchido e o `MediaRecorder` começava a gravar **fora** da sessão,
-   * sem nenhum indicador na tela.
+   * `await` continuava correndo: quando a permissão enfim chegava, o
+   * `MediaRecorder` começava a gravar **fora** da sessão, sem nenhum
+   * indicador na tela.
    *
-   * Eram dois defeitos num só — microfone preso aceso, e gravação sem aviso,
-   * que é exatamente o que este recurso não pode fazer. Qualquer coisa que
-   * solte o microfone incrementa isto, e a tentativa antiga descobre, ao
-   * voltar, que já não é a atual.
+   * O incremento é sempre SÍNCRONO, nunca depois de um `await`: é o que
+   * garante que um "Desligar" interrompe um "Ativar" pendente na mesma hora,
+   * mesmo que o fechamento do trecho anterior ainda esteja em andamento.
    */
   const geracaoRef = useRef(0);
 
-  const soltarTudo = useCallback(() => {
-    geracaoRef.current += 1;
-    if (analiseRef.current) {
-      cancelAnimationFrame(analiseRef.current.raf);
-      void analiseRef.current.ctx.close().catch(() => {});
-      analiseRef.current = null;
+  /**
+   * Solta o hardware de UMA gravação específica — nunca "o que estiver
+   * atual agora". Chamar `.stop()` numa track já parada não faz nada, então é
+   * seguro chamar isto mais de uma vez para o mesmo objeto.
+   *
+   * Só limpa `atualRef` e o medidor quando ainda são desta gravação: se um
+   * `start()` novo já assumiu o posto enquanto esta gravação terminava de
+   * fechar, apagar `atualRef` aqui apagaria a gravação NOVA por engano.
+   */
+  const soltarGravacao = useCallback((atual: GravacaoEmCurso) => {
+    atual.stream.getTracks().forEach((t) => t.stop());
+    if (atualRef.current === atual) {
+      atualRef.current = null;
+      if (analiseRef.current) {
+        cancelAnimationFrame(analiseRef.current.raf);
+        void analiseRef.current.ctx.close().catch(() => {});
+        analiseRef.current = null;
+      }
+      setLevel(0);
     }
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    streamRef.current = null;
-    recorderRef.current = null;
-    setLevel(0);
   }, []);
 
   // O microfone é hardware: uma aba que sai sem soltá-lo deixa o indicador
   // vermelho do sistema aceso, o que é exatamente a impressão que este
-  // recurso não pode dar.
-  useEffect(() => soltarTudo, [soltarTudo]);
+  // recurso não pode dar. No desmonte, solta o que houver, seja de quem for.
+  useEffect(() => {
+    return () => {
+      const atual = atualRef.current;
+      atual?.stream.getTracks().forEach((t) => t.stop());
+      if (analiseRef.current) cancelAnimationFrame(analiseRef.current.raf);
+    };
+  }, []);
 
   /** O relógio do indicador. Conta pelo tempo de parede, não por evento. */
   useEffect(() => {
     if (status !== "ouvindo") return;
     const id = setInterval(() => {
-      setElapsedMs(acumuladoRef.current + (Date.now() - inicioRef.current));
+      const atual = atualRef.current;
+      if (!atual) return;
+      setElapsedMs(atual.acumulado + (Date.now() - atual.inicioParede));
     }, 250);
     return () => clearInterval(id);
   }, [status]);
 
   /**
-   * Fecha o trecho em curso num `ListenSegment`, se houver um gravando.
+   * Fecha um trecho específico num `ListenSegment`, se ele ainda estiver
+   * gravando. Idempotente por objeto: chamadas repetidas para a MESMA
+   * gravação devolvem a mesma promessa, em vez de fechar o `MediaRecorder`
+   * mais de uma vez ou guardar o trecho duas vezes.
    *
    * É o coração do conserto: antes, desligar (`disable`) chamava
    * `recorder.stop()` sem nunca ouvir o `onstop` — os bytes já gravados eram
    * jogados fora ali mesmo. Agora tanto `disable` quanto `stop` passam por
    * aqui, e o trecho vira parte da lista antes do microfone soltar.
    */
-  const fecharTrechoAtual = useCallback(async (): Promise<void> => {
-    const recorder = recorderRef.current;
-    if (!recorder || recorder.state === "inactive") return;
+  const fecharTrecho = useCallback(
+    (atual: GravacaoEmCurso): Promise<void> => {
+      if (atual.fechamento) return atual.fechamento;
+      if (atual.recorder.state === "inactive") return Promise.resolve();
 
-    const duracao =
-      acumuladoRef.current +
-      (recorder.state === "recording" ? Date.now() - inicioRef.current : 0);
-    const tipo = recorder.mimeType || mimeType || "audio/webm";
-    const inicioDoTrecho = inicioDoTrechoRef.current;
+      atual.fechamento = (async () => {
+        const duracao =
+          atual.acumulado +
+          (atual.recorder.state === "recording"
+            ? Date.now() - atual.inicioParede
+            : 0);
+        const tipo = atual.recorder.mimeType || mimeType || "audio/webm";
 
-    const blob = await new Promise<Blob>((resolve) => {
-      recorder.onstop = () => {
-        resolve(new Blob(pedacosRef.current, { type: tipo }));
-      };
-      try {
-        recorder.stop();
-      } catch {
-        // Já parado por conta própria: o que foi recebido ainda serve.
-        resolve(new Blob(pedacosRef.current, { type: tipo }));
-      }
-    });
+        const blob = await new Promise<Blob>((resolve) => {
+          atual.recorder.onstop = () => {
+            resolve(new Blob(atual.pedacos, { type: tipo }));
+          };
+          try {
+            atual.recorder.stop();
+          } catch {
+            // Já parado por conta própria: o que foi recebido ainda serve.
+            resolve(new Blob(atual.pedacos, { type: tipo }));
+          }
+        });
 
-    pedacosRef.current = [];
-    // Um trecho de tamanho zero (religou e desligou na mesma fração de
-    // segundo, sem nenhum pedaço chegar) não vira um segmento vazio na lista.
-    if (blob.size > 0) {
-      trechosRef.current = [
-        ...trechosRef.current,
-        { startMs: inicioDoTrecho, durationMs: duracao, blob, mimeType: tipo },
-      ];
-    }
-  }, [mimeType]);
+        // Um trecho de tamanho zero (religou e desligou na mesma fração de
+        // segundo, sem nenhum pedaço chegar) não vira um segmento vazio.
+        if (blob.size > 0) {
+          trechosRef.current = [
+            ...trechosRef.current,
+            { startMs: atual.inicioDoTrechoMs, durationMs: duracao, blob, mimeType: tipo },
+          ];
+        }
+      })();
+      return atual.fechamento;
+    },
+    [mimeType],
+  );
 
   /**
    * Começa a ouvir um trecho novo. Devolve se conseguiu.
@@ -279,25 +335,29 @@ export function useListen() {
         stream,
         formato ? { mimeType: formato } : undefined,
       );
-      pedacosRef.current = [];
+      const gravacao: GravacaoEmCurso = {
+        recorder,
+        stream,
+        pedacos: [],
+        inicioParede: Date.now(),
+        acumulado: 0,
+        inicioDoTrechoMs: inicioMs,
+        fechamento: null,
+      };
       recorder.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) pedacosRef.current.push(e.data);
+        if (e.data && e.data.size > 0) gravacao.pedacos.push(e.data);
       };
       recorder.onerror = () => {
         // A gravação morreu. Os pedaços já recebidos ficam pendentes de
         // fechar; a sessão segue sem áudio novo até religar.
         setStatus("falhou");
-        soltarTudo();
+        soltarGravacao(gravacao);
       };
       // Um pedaço por segundo, e não um só no fim: assim uma aba fechada no
       // meio da aula perde um segundo de áudio em vez de perder tudo.
       recorder.start(1000);
 
-      recorderRef.current = recorder;
-      streamRef.current = stream;
-      inicioRef.current = Date.now();
-      acumuladoRef.current = 0;
-      inicioDoTrechoRef.current = inicioMs;
+      atualRef.current = gravacao;
       setElapsedMs(0);
       setMimeType(recorder.mimeType || formato || "audio/webm");
       setStatus("ouvindo");
@@ -308,7 +368,7 @@ export function useListen() {
       setStatus("falhou");
       return false;
     }
-  }, [soltarTudo]);
+  }, [soltarGravacao]);
 
   /**
    * Encerra a sessão inteira e devolve todos os trechos gravados — os que já
@@ -319,8 +379,14 @@ export function useListen() {
    * os trechos de antes, e eles não podem ficar presos aqui dentro.
    */
   const stop = useCallback(async (): Promise<ListenResult | null> => {
-    await fecharTrechoAtual();
-    soltarTudo();
+    // Síncrono, antes de qualquer `await`: mata na hora um `start()` que
+    // ainda esteja esperando a caixa de permissão responder.
+    geracaoRef.current += 1;
+    const atual = atualRef.current;
+    if (atual) {
+      await fecharTrecho(atual);
+      soltarGravacao(atual);
+    }
     setStatus((s) => (s === "ouvindo" || s === "pausado" ? "parado" : s));
     setElapsedMs(0);
 
@@ -328,7 +394,7 @@ export function useListen() {
     trechosRef.current = [];
     if (trechos.length === 0) return null;
     return { segments: trechos };
-  }, [fecharTrechoAtual, soltarTudo]);
+  }, [fecharTrecho, soltarGravacao]);
 
   /**
    * Silenciar sem encerrar: o áudio para, a aula continua — mesmo trecho.
@@ -339,11 +405,11 @@ export function useListen() {
    * é `disable`, que solta o hardware de verdade.
    */
   const pause = useCallback(() => {
-    const recorder = recorderRef.current;
-    if (!recorder || recorder.state !== "recording") return;
-    acumuladoRef.current += Date.now() - inicioRef.current;
+    const atual = atualRef.current;
+    if (!atual || atual.recorder.state !== "recording") return;
+    atual.acumulado += Date.now() - atual.inicioParede;
     try {
-      recorder.pause();
+      atual.recorder.pause();
       setStatus("pausado");
       setLevel(0);
     } catch {
@@ -353,11 +419,11 @@ export function useListen() {
   }, []);
 
   const resume = useCallback(() => {
-    const recorder = recorderRef.current;
-    if (!recorder || recorder.state !== "paused") return;
+    const atual = atualRef.current;
+    if (!atual || atual.recorder.state !== "paused") return;
     try {
-      recorder.resume();
-      inicioRef.current = Date.now();
+      atual.recorder.resume();
+      atual.inicioParede = Date.now();
       setStatus("ouvindo");
     } catch {
       /* mesmo caso do pause */
@@ -370,8 +436,8 @@ export function useListen() {
    *
    * Chamável a qualquer momento, inclusive durante o "pedindo": é justamente
    * aí que ele mais importa, porque é a janela em que o microfone podia ficar
-   * preso. `soltarTudo` incrementa a geração e a tentativa pendente morre
-   * sozinha quando voltar.
+   * preso. O incremento da geração mata a tentativa pendente na hora, mesmo
+   * antes de qualquer `await` aqui dentro.
    *
    * Assíncrono de propósito: fechar o trecho espera o `MediaRecorder` entregar
    * o que já gravou antes de soltar o stream. Quem chama não precisa esperar
@@ -379,12 +445,15 @@ export function useListen() {
    * instante depois.
    */
   const disable = useCallback(async () => {
-    await fecharTrechoAtual();
-    pedacosRef.current = [];
-    soltarTudo();
+    geracaoRef.current += 1;
+    const atual = atualRef.current;
+    if (atual) {
+      await fecharTrecho(atual);
+      soltarGravacao(atual);
+    }
     setStatus("parado");
     setElapsedMs(0);
-  }, [fecharTrechoAtual, soltarTudo]);
+  }, [fecharTrecho, soltarGravacao]);
 
   /**
    * O estado real das tracks de microfone, perguntado ao hardware.
@@ -399,7 +468,7 @@ export function useListen() {
     vivas: number;
     detalhe: string;
   } => {
-    const tracks = streamRef.current?.getAudioTracks() ?? [];
+    const tracks = atualRef.current?.stream.getAudioTracks() ?? [];
     return {
       tracks: tracks.length,
       vivas: tracks.filter((t) => t.readyState === "live").length,
