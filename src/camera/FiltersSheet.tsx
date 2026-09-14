@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import {
   CAMERA_EFFECTS,
   CAMERA_FILTERS,
+  FILTER_FAMILIES,
   applyFilter,
   findFilter,
 } from "./filters";
@@ -67,6 +68,19 @@ export function FiltersSheet({
       })),
     [filterId, intensity],
   );
+  /*
+   * Onze filtros numa grade só é uma parede; agrupados por família (a mesma
+   * separação de qualquer câmera de verdade — Natural, Cinema, P&B, Estudo)
+   * viram um catálogo que dá para varrer com os olhos.
+   */
+  const porFamilia = useMemo(
+    () =>
+      FILTER_FAMILIES.map((familia) => ({
+        familia,
+        cards: cards.filter((c) => c.filtro.family === familia.id),
+      })).filter((grupo) => grupo.cards.length > 0),
+    [cards],
+  );
 
   return (
     <BottomSheet open={open} title="Filtros" size="tall" onClose={onClose}>
@@ -74,9 +88,16 @@ export function FiltersSheet({
         Aplique ao vivo no visor
       </p>
 
-      {/* Cards de 84×134 em 4 colunas, como no `333:169`. */}
-      <ul className="mb-6 grid grid-cols-4 gap-2">
-        {cards.map(({ filtro, css }) => {
+      {/* Cards de 84×134 em 4 colunas, agrupados por família — como no
+          `333:169`, mas com a seção que o wireframe não precisava desenhar
+          porque tinha sete filtros, não onze. */}
+      {porFamilia.map(({ familia, cards: cardsDaFamilia }) => (
+        <div key={familia.id} className="mb-6">
+          <h3 className="mb-2.5 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
+            {familia.label}
+          </h3>
+          <ul className="grid grid-cols-4 gap-2">
+            {cardsDaFamilia.map(({ filtro, css }) => {
           const escolhido = filtro.id === filterId;
           return (
             <li key={filtro.id} className="relative">
@@ -168,8 +189,10 @@ export function FiltersSheet({
               )}
             </li>
           );
-        })}
-      </ul>
+            })}
+          </ul>
+        </div>
+      ))}
 
       {/*
        * A intensidade, que é o que faltava para o filtro significar alguma

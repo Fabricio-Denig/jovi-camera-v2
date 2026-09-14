@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CAMERA_FILTERS, DEFAULT_INTENSITY, applyFilter } from "./filters";
+import { useFilterFavorites } from "./useFilterFavorites";
 
 /**
  * A tira de filtros do rodapé: acesso rápido, sem sair do enquadramento.
@@ -9,10 +10,13 @@ import { CAMERA_FILTERS, DEFAULT_INTENSITY, applyFilter } from "./filters";
  * captura, com a cena na frente e o dedo já perto do disparador. O painel é
  * para ajustar: intensidade, favoritos, efeitos.
  *
+ * Favoritos vêm primeiro na tira — depois de "Nenhum", que fica fixo por ser
+ * o ponto de partida. Com onze filtros no catálogo, "os rápidos" só continuam
+ * rápidos se o que a pessoa mais usa não estiver atrás de sete outros.
+ *
  * As miniaturas são uma amostra só, redesenhada com filtros de CSS diferentes,
- * e a amostra vem de fora — é a mesma que o painel usa. Sete <video> ao vivo
- * seriam sete decodificações disputando a linha principal com a análise da
- * aula.
+ * e a amostra vem de fora — é a mesma que o painel usa. Catálogo inteiro em
+ * <video> ao vivo disputaria a linha principal com a análise da aula.
  */
 export function FilterStrip({
   amostra,
@@ -31,12 +35,21 @@ export function FilterStrip({
 }) {
   const trilhoRef = useRef<HTMLDivElement>(null);
   /*
-   * Com sete filtros, nem todos cabem numa tela de 390px — "Quente" já nasce
-   * cortado. Sem nenhuma pista, a fileira parece terminar ali: o mesmo
-   * problema que os chips da Galeria tinham. O degradê aparece só quando há
-   * mais filtro para o lado, e some quando o toque chega ao fim.
+   * Com sete filtros já nem todos cabiam numa tela de 390px — "Quente" nascia
+   * cortado. Com onze, a fileira crua seria pior ainda. Sem nenhuma pista, ela
+   * parece terminar ali: o mesmo problema que os chips da Galeria tinham. O
+   * degradê aparece só quando há mais filtro para o lado, e some quando o
+   * toque chega ao fim.
    */
   const [temMaisADireita, setTemMaisADireita] = useState(false);
+
+  const { favoritos } = useFilterFavorites();
+  const filtrosOrdenados = useMemo(() => {
+    const [nenhum, ...resto] = CAMERA_FILTERS;
+    const favoritados = resto.filter((f) => favoritos.includes(f.id));
+    const outros = resto.filter((f) => !favoritos.includes(f.id));
+    return [nenhum, ...favoritados, ...outros];
+  }, [favoritos]);
 
   useEffect(() => {
     const el = trilhoRef.current;
@@ -66,7 +79,7 @@ export function FilterStrip({
           ref={trilhoRef}
           className="flex items-start gap-2 overflow-x-auto py-0.5 pl-4 pr-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
-        {CAMERA_FILTERS.map((filtro) => {
+        {filtrosOrdenados.map((filtro) => {
           const selecionado = filtro.id === active;
           return (
             <button
