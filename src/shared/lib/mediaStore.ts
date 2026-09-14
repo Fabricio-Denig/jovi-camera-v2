@@ -189,22 +189,50 @@ export async function deleteCapturesForever(
 }
 
 /**
- * A gravação de uma aula: um arquivo só, com marcadores.
+ * Um trecho contínuo da gravação, do início ao fim de um `MediaRecorder`.
+ *
+ * Desligar o áudio e religar no meio da aula fecha um trecho e abre outro —
+ * são dois arquivos de um `MediaRecorder` independentes, e colar os bytes de
+ * dois containers webm/ogg num Blob só não é garantia de nada tocável depois.
+ * `startMs` é o relógio da SESSÃO (o mesmo eixo de `capture.atMs`), não o do
+ * arquivo: é o que deixa a timeline da aula saber onde cada trecho entra.
+ */
+export interface LessonAudioSegment {
+  startMs: number;
+  durationMs: number;
+  blob: Blob;
+  mimeType: string;
+}
+
+/**
+ * A gravação de uma aula: um ou mais trechos, com marcadores.
  *
  * Cortar o áudio em trinta pedaços — um por momento — exigiria trinta
  * `MediaRecorder` ou uma remontagem que o navegador não faz sem biblioteca de
- * áudio. Um arquivo com marcadores de tempo dá a mesma experiência ("ouvir
- * deste ponto") sendo muito mais robusto: se a gravação falhar no meio, o que
- * já foi gravado continua inteiro.
+ * áudio. Trechos com marcadores de tempo dão a mesma experiência ("ouvir
+ * deste ponto") sendo muito mais robustos: se a gravação for desligada e
+ * religada, ou falhar no meio, o que já foi gravado continua inteiro em cada
+ * trecho — nenhum é sobrescrito pelo próximo.
  */
 export interface LessonAudio {
   sessionId: string;
-  blob: Blob;
-  mimeType: string;
-  /** Quanto tempo de áudio existe, em ms, medido pelo relógio da sessão. */
-  durationMs: number;
-  /** Quando a gravação começou, em ms desde o início da sessão. */
-  startedAtMs: number;
+  /**
+   * O formato atual: zero ou mais trechos, na ordem em que a aula os gravou.
+   * Ausente ou vazio numa aula salva no formato antigo (ver `blob` abaixo) —
+   * `segmentosDe` normaliza os dois formatos para quem só quer os trechos.
+   */
+  segments?: LessonAudioSegment[];
+  /**
+   * O formato antigo, de antes de existirem trechos: um arquivo só. Aulas
+   * salvas antes desta mudança continuam com só estes campos — nunca
+   * migradas de verdade, só lidas como um trecho único por `segmentosDe`.
+   */
+  blob?: Blob;
+  mimeType?: string;
+  /** Formato antigo: quanto tempo de áudio existe, em ms. */
+  durationMs?: number;
+  /** Formato antigo: quando a gravação começou, em ms desde o início da sessão. */
+  startedAtMs?: number;
   createdAt: number;
   /**
    * O que foi dito, em trechos ancorados no relógio da sessão.
@@ -219,6 +247,27 @@ export interface LessonAudio {
    * em vez de fingir que ninguém tentou.
    */
   transcriptStatus?: "ok" | "indisponivel" | "desligada";
+}
+
+/**
+ * Os trechos desta gravação, em qualquer formato que ela tenha sido salva.
+ *
+ * O único lugar que precisa saber que existem dois formatos — todo o resto do
+ * app (o player, a aba Texto, o Resumo) só pede os trechos.
+ */
+export function segmentosDe(audio: LessonAudio): LessonAudioSegment[] {
+  if (audio.segments && audio.segments.length > 0) return audio.segments;
+  if (audio.blob) {
+    return [
+      {
+        startMs: audio.startedAtMs ?? 0,
+        durationMs: audio.durationMs ?? 0,
+        blob: audio.blob,
+        mimeType: audio.mimeType || audio.blob.type || "audio/webm",
+      },
+    ];
+  }
+  return [];
 }
 
 /**

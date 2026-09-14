@@ -15,6 +15,16 @@ export async function renderDocument(
   origem: Blob,
   crop: ContentBounds,
   filtroCss: string,
+  /**
+   * O maior lado, em pixels, quando quem chama não precisa da resolução
+   * cheia — a leitura de texto, não o arquivo salvo. Uma foto de 12 MP
+   * recortada ainda tem milhões de pixels, e o Tesseract não lê melhor com
+   * eles: a letra de uma folha já está nítida bem abaixo disso, e cada pixel
+   * a mais é só mais tempo de reconhecimento no processador do celular.
+   * Omitido, a imagem sai na resolução do recorte — o que `ScannerReview`
+   * precisa para salvar o documento sem perder qualidade.
+   */
+  opcoes?: { maxLado?: number },
 ): Promise<Blob> {
   const bitmap = await createImageBitmap(origem);
   const sx = Math.round(crop.x * bitmap.width);
@@ -22,16 +32,22 @@ export async function renderDocument(
   const sw = Math.max(1, Math.round(crop.width * bitmap.width));
   const sh = Math.max(1, Math.round(crop.height * bitmap.height));
 
+  const maxLado = opcoes?.maxLado;
+  const maiorLado = Math.max(sw, sh);
+  const escala = maxLado && maiorLado > maxLado ? maxLado / maiorLado : 1;
+  const dw = Math.max(1, Math.round(sw * escala));
+  const dh = Math.max(1, Math.round(sh * escala));
+
   const canvas = document.createElement("canvas");
-  canvas.width = sw;
-  canvas.height = sh;
+  canvas.width = dw;
+  canvas.height = dh;
   const ctx = canvas.getContext("2d");
   if (!ctx) {
     bitmap.close();
     return origem;
   }
   if (filtroCss !== "none" && canvasSupportsFilter()) ctx.filter = filtroCss;
-  ctx.drawImage(bitmap, sx, sy, sw, sh, 0, 0, sw, sh);
+  ctx.drawImage(bitmap, sx, sy, sw, sh, 0, 0, dw, dh);
   ctx.filter = "none";
   bitmap.close();
 

@@ -225,7 +225,10 @@ export const MODES: CameraMode[] = [
   },
   {
     id: "dual-view",
-    label: "Visualização dupla",
+    // "Visualização dupla" não cabia no card do catálogo (line-clamp-1 de
+    // 105px) e truncava para "Visualização…" — perdendo a palavra que
+    // explica o modo. "Dupla câmera" diz a mesma coisa em menos espaço.
+    label: "Dupla câmera",
     summary: "Grava as câmeras frontal e traseira ao mesmo tempo.",
     whenToUse: "Registrar a cena e a sua reação a ela na mesma gravação.",
     kind: "video",

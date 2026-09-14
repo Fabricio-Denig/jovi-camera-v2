@@ -44,7 +44,11 @@ export function ExtractText({
     setEstado("lendo");
     setProgresso(0);
     try {
-      const tratada = await renderDocument(foto, crop, lookCss);
+      // 1600px no maior lado: bem mais do que o Tesseract precisa para ler
+      // letra impressa ou à mão com nitidez, e uma fração do tempo de
+      // reconhecimento de uma foto de 12 MP inteira — que era o que ia para
+      // o motor antes desta mudança.
+      const tratada = await renderDocument(foto, crop, lookCss, { maxLado: 1600 });
       const { text, confidence } = await lerImagem(tratada, setProgresso);
       // A mesma peneira do SliD: o que não lê como língua nem como fórmula não
       // vira texto na tela. "ao do 20 grau LÁ" não ajuda ninguém a estudar.

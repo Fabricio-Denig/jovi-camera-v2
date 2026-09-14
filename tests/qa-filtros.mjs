@@ -57,20 +57,21 @@ console.log("== a tira e o painel escolhem o mesmo filtro ==");
   const { b, p, erros } = await abrir("cor-mesa-de-estudo.y4m");
 
   const tira = p.locator("button[aria-label^='Filtro ']");
-  check((await tira.count()) === 7, "a tira traz os sete filtros", `${await tira.count()}`);
+  check((await tira.count()) === 11, "a tira traz o catálogo inteiro (onze filtros)", `${await tira.count()}`);
 
   const nomes = await tira.evaluateAll((bs) =>
     bs.map((x) => x.getAttribute("aria-label").replace("Filtro ", "")),
   );
   check(
-    nomes.join(" · ") === "Nenhum · Vivid · Cinema · Leitura · Suave · P&B · Quente",
-    "na ordem do wireframe, com Leitura incluído",
+    nomes.join(" · ") ===
+      "Nenhum · Vivid · Suave · Quente · Frio · Cinema · Dramático · Desbotado · P&B · Noir · Leitura",
+    "na ordem do catálogo (sem favoritos ainda, Nenhum fixo primeiro)",
     nomes.join(" · "),
   );
 
   check((await cssDoVisor(p)) === "none", "e o visor começa sem filtro nenhum");
 
-  await tira.nth(5).click(); // P&B
+  await p.locator("button[aria-label='Filtro P&B']").click();
   await p.waitForTimeout(350);
   const comPb = await cssDoVisor(p);
   check(/grayscale/.test(comPb), "escolher na tira muda o visor", comPb);
@@ -571,7 +572,7 @@ console.log("\n== as miniaturas mostram o filtro, não só o nome ==");
     return saida;
   });
 
-  check(assinaturas.length === 7, "sete miniaturas desenhadas", String(assinaturas.length));
+  check(assinaturas.length === 11, "onze miniaturas desenhadas", String(assinaturas.length));
   for (const a of assinaturas)
     console.log(`        ${a.nome.padEnd(8)} rgb ${a.r.toFixed(0)} ${a.g.toFixed(0)} ${a.b.toFixed(0)}`);
 
@@ -662,6 +663,10 @@ for (const largura of [375, 390, 430]) {
 
   const g = await p.evaluate(() => {
     const s = document.querySelector('[role=dialog] input[type=range][aria-label^="Intensidade"]');
+    // Com onze filtros agrupados em famílias, o painel ficou mais alto que os
+    // sete de antes — a intensidade só entra na tela depois de rolar, e é
+    // isso que uma pessoa de verdade faria antes de tocar nela.
+    s.scrollIntoView({ block: "center" });
     const r = s.getBoundingClientRect();
     // Quem está por cima no meio do controle? Se não for o próprio controle,
     // arrastar a intensidade vai acionar outra coisa.

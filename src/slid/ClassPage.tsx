@@ -297,11 +297,9 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
           <ClassImagesTab
             momentos={record.moments}
             onAbrir={setReviewing}
-            onOuvir={
-              audio
-                ? (atMs) => setSeekTo(Math.max(0, atMs - audio.startedAtMs))
-                : undefined
-            }
+            // O player recebe o ms da sessão direto — o mesmo eixo de
+            // `capture.atMs` — e resolve sozinho em qual trecho isso cai.
+            onOuvir={audio ? (atMs) => setSeekTo(atMs) : undefined}
           />
         )}
         {tab === "texto" && (
@@ -309,11 +307,9 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
             record={record}
             transcript={transcript}
             transcriptStatus={audio?.transcriptStatus}
-            onOuvir={
-              audio
-                ? (atMs) => setSeekTo(Math.max(0, atMs - audio.startedAtMs))
-                : undefined
-            }
+            // O player recebe o ms da sessão direto — o mesmo eixo de
+            // `capture.atMs` — e resolve sozinho em qual trecho isso cai.
+            onOuvir={audio ? (atMs) => setSeekTo(atMs) : undefined}
           />
         )}
         {tab === "resumo" && (
@@ -323,11 +319,9 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
             transcript={transcript}
             transcriptStatus={audio?.transcriptStatus}
             onExcluir={excluir}
-            onOuvir={
-              audio
-                ? (atMs) => setSeekTo(Math.max(0, atMs - audio.startedAtMs))
-                : undefined
-            }
+            // O player recebe o ms da sessão direto — o mesmo eixo de
+            // `capture.atMs` — e resolve sozinho em qual trecho isso cai.
+            onOuvir={audio ? (atMs) => setSeekTo(atMs) : undefined}
           />
         )}
       </div>

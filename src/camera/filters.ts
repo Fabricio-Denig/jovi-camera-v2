@@ -39,34 +39,139 @@ interface FilterStep {
   unit?: "deg";
 }
 
+/**
+ * A família do filtro — como o catálogo se organiza no painel completo.
+ *
+ * Onze filtros numa grade só, sem seção nenhuma, é uma lista que ninguém
+ * varre inteira. Agrupar por família é a diferença entre "um catálogo" e
+ * "uma parede de cards parecidos" — a mesma razão por trás de qualquer
+ * câmera de verdade separar Retrato de P&B de Cinema.
+ */
+export type CameraFilterFamily = "natural" | "cinema" | "pb" | "estudo";
+
+export const FILTER_FAMILIES: { id: CameraFilterFamily; label: string }[] = [
+  { id: "natural", label: "Natural" },
+  { id: "cinema", label: "Cinema" },
+  { id: "pb", label: "P&B" },
+  { id: "estudo", label: "Estudo" },
+];
+
 export interface CameraFilter {
   id: string;
   label: string;
   /** A sublegenda do card, como no `Filtros v2`. */
   hint: string;
+  family: CameraFilterFamily;
   steps: FilterStep[];
 }
 
 export const CAMERA_FILTERS: CameraFilter[] = [
-  { id: "nenhum", label: "Nenhum", hint: "Original", steps: [] },
+  { id: "nenhum", label: "Nenhum", hint: "Original", family: "natural", steps: [] },
   {
     id: "vivid",
     label: "Vivid",
     hint: "Cores vivas",
+    family: "natural",
     steps: [
       { fn: "saturate", from: 1, to: 1.55 },
       { fn: "contrast", from: 1, to: 1.12 },
     ],
   },
   {
+    id: "suave",
+    label: "Suave",
+    hint: "Tom quente",
+    family: "natural",
+    steps: [
+      { fn: "saturate", from: 1, to: 0.88 },
+      { fn: "brightness", from: 1, to: 1.09 },
+      { fn: "contrast", from: 1, to: 0.93 },
+    ],
+  },
+  {
+    id: "quente",
+    label: "Quente",
+    hint: "Luz dourada",
+    family: "natural",
+    steps: [
+      { fn: "sepia", from: 0, to: 0.34 },
+      { fn: "saturate", from: 1, to: 1.25 },
+      { fn: "brightness", from: 1, to: 1.04 },
+    ],
+  },
+  {
+    // O oposto do Quente, na mesma família: onde um esquenta a luz ambiente,
+    // o outro esfria — um `hue-rotate` pequeno em vez de um `sepia` negativo,
+    // que não existe.
+    id: "frio",
+    label: "Frio",
+    hint: "Tom azulado",
+    family: "natural",
+    steps: [
+      { fn: "hue-rotate", from: 0, to: -9, unit: "deg" },
+      { fn: "saturate", from: 1, to: 1.1 },
+      { fn: "brightness", from: 1, to: 1.03 },
+    ],
+  },
+  {
     id: "cinema",
     label: "Cinema",
     hint: "Cores fortes",
+    family: "cinema",
     steps: [
       { fn: "contrast", from: 1, to: 1.22 },
       { fn: "saturate", from: 1, to: 0.82 },
       { fn: "sepia", from: 0, to: 0.16 },
       { fn: "brightness", from: 1, to: 0.95 },
+    ],
+  },
+  {
+    // Mais pesado que o Cinema: contraste alto e cor puxada para baixo, a
+    // cara de trailer — não é o Cinema "mais forte", é outra decisão.
+    id: "dramatico",
+    label: "Dramático",
+    hint: "Contraste alto",
+    family: "cinema",
+    steps: [
+      { fn: "contrast", from: 1, to: 1.48 },
+      { fn: "saturate", from: 1, to: 0.72 },
+      { fn: "brightness", from: 1, to: 0.9 },
+    ],
+  },
+  {
+    // O contrário do Dramático: preto levantado, cor lavada — o visual de
+    // filme vencido que "Fade" costuma significar em qualquer câmera.
+    id: "desbotado",
+    label: "Desbotado",
+    hint: "Preto levantado",
+    family: "cinema",
+    steps: [
+      { fn: "contrast", from: 1, to: 0.8 },
+      { fn: "saturate", from: 1, to: 0.68 },
+      { fn: "brightness", from: 1, to: 1.1 },
+      { fn: "sepia", from: 0, to: 0.1 },
+    ],
+  },
+  {
+    id: "pb",
+    label: "P&B",
+    hint: "Sem cores",
+    family: "pb",
+    steps: [
+      { fn: "grayscale", from: 0, to: 1 },
+      { fn: "contrast", from: 1, to: 1.12 },
+    ],
+  },
+  {
+    // P&B com mais peso — sombra funda, o contrário do P&B plano de cima.
+    id: "noir",
+    label: "Noir",
+    hint: "P&B dramático",
+    family: "pb",
+    steps: [
+      { fn: "grayscale", from: 0, to: 1 },
+      { fn: "contrast", from: 1, to: 1.6 },
+      { fn: "brightness", from: 1, to: 0.9 },
     ],
   },
   {
@@ -86,39 +191,19 @@ export const CAMERA_FILTERS: CameraFilter[] = [
     id: "leitura",
     label: "Leitura",
     hint: "Clareza para texto",
+    family: "estudo",
+    /*
+     * Ajustado depois de revisar contra slide, quadro, caderno e folha: o
+     * contraste e o brilho de antes (1.42 / 1.12) estouravam qualquer fundo
+     * já claro — um slide ou uma folha de papel já reflete perto do branco, e
+     * empurrar os dois juntos apagava informação que ainda estava lá (uma
+     * cor pastel de fundo, uma foto dentro do slide). Contraste mais contido
+     * continua separando texto de fundo sem achatar tudo num branco só.
+     */
     steps: [
       { fn: "saturate", from: 1, to: 0.55 },
-      { fn: "contrast", from: 1, to: 1.42 },
-      { fn: "brightness", from: 1, to: 1.12 },
-    ],
-  },
-  {
-    id: "suave",
-    label: "Suave",
-    hint: "Tom quente",
-    steps: [
-      { fn: "saturate", from: 1, to: 0.88 },
-      { fn: "brightness", from: 1, to: 1.09 },
-      { fn: "contrast", from: 1, to: 0.93 },
-    ],
-  },
-  {
-    id: "pb",
-    label: "P&B",
-    hint: "Sem cores",
-    steps: [
-      { fn: "grayscale", from: 0, to: 1 },
-      { fn: "contrast", from: 1, to: 1.12 },
-    ],
-  },
-  {
-    id: "quente",
-    label: "Quente",
-    hint: "Luz dourada",
-    steps: [
-      { fn: "sepia", from: 0, to: 0.34 },
-      { fn: "saturate", from: 1, to: 1.25 },
-      { fn: "brightness", from: 1, to: 1.04 },
+      { fn: "contrast", from: 1, to: 1.28 },
+      { fn: "brightness", from: 1, to: 1.05 },
     ],
   },
 ];
@@ -141,6 +226,9 @@ export const FOOD_LOOK: CameraFilter = {
   id: "comida",
   label: "Comida",
   hint: "Cor e textura do prato",
+  // Nunca aparece na grade de filtros — a família aqui é só para o tipo
+  // fechar; nada lê este campo fora da lista que o exclui de propósito.
+  family: "natural",
   steps: [
     { fn: "saturate", from: 1, to: 1.42 },
     { fn: "contrast", from: 1, to: 1.14 },

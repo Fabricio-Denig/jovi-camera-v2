@@ -30,7 +30,7 @@ export function ZoomControl({
             type="button"
             onClick={() => onSelect(value)}
             aria-pressed={active}
-            aria-label={`Aproximar ${value} vezes`}
+            aria-label={`Aproximar ${value} ${value === 1 ? "vez" : "vezes"}`}
             className={`flex size-10 items-center justify-center rounded-full text-[12.5px] font-semibold transition-all duration-200 active:scale-90 ${
               active
                 ? "bg-white text-black"
