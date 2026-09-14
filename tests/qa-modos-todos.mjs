@@ -25,7 +25,7 @@ const check = (ok, l, e = "") => {
 /**
  * Os dezesseis, com a palavra que a tela precisa dizer sobre cada um.
  *
- * A palavra não é o rótulo inteiro de propósito: "Visualização dupla" pode
+ * A palavra não é o rótulo inteiro de propósito: "Dupla câmera" pode
  * aparecer quebrado em duas linhas, e "Alta Resolução" com maiúscula diferente.
  * O que se cobra é que a tela fale **daquele** modo, não de outro.
  */
@@ -43,7 +43,7 @@ const MODOS = [
   ["Profissional", /profissional|pro\b/i, "simulado"],
   ["Alta Resolução", /alta resolu/i, "simulado"],
   ["Superlua", /superlua|lua/i, "simulado"],
-  ["Visualização dupla", /dupla/i, "simulado"],
+  ["Dupla câmera", /dupla/i, "simulado"],
   ["Instantâneo", /instant/i, "real"],
   ["Scanner", /scanner|documento|folha/i, "real"],
 ];
