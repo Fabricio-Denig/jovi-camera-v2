@@ -41,7 +41,7 @@ import { SlidDebugPanel } from "../slid/SlidDebugPanel";
 import { SlidSummary } from "../slid/SlidSummary";
 import { useSlidSession } from "../slid/useSlidSession";
 import { DeviceReport } from "./DeviceReport";
-import { useListen } from "../listen/useListen";
+import { useListen, type ListenSegment } from "../listen/useListen";
 import { useTranscript } from "../listen/useTranscript";
 import type { TranscriptSegment } from "../listen/useTranscript";
 import { useTimelapse } from "../timelapse/useTimelapse";
@@ -237,31 +237,21 @@ export function CameraShell({
    */
   const listen = useListen();
   const timelapse = useTimelapse(videoRef);
-  /** O que foi gravado da aula, esperando a hora de ser guardado com ela. */
+  /**
+   * O que foi gravado da aula, esperando a hora de ser guardado com ela.
+   *
+   * `segments`, no plural, é o conserto do bug em que desligar e religar o
+   * áudio no meio da aula perdia o trecho de antes: cada ciclo liga/desliga
+   * fecha um `ListenSegment` só dele, e nenhum novo `start()` sobrescreve o
+   * anterior. `startMs` de cada trecho já vem ancorado no relógio da sessão,
+   * como `capture.atMs` — é o que deixa um trecho de fala e um momento
+   * guardado serem comparados direto, sem ninguém somar atraso nenhum.
+   */
   const [gravacao, setGravacao] = useState<{
-    blob: Blob;
-    mimeType: string;
-    durationMs: number;
-    /*
-     * Ancorados no relógio da sessão, como `capture.atMs` — e não no relógio
-     * da gravação. É o que deixa um trecho de fala e um momento guardado
-     * serem comparados direto, sem ninguém lembrar de somar o atraso da caixa
-     * de permissão. A conversão para o tempo do arquivo acontece num lugar só,
-     * no tocador, do mesmo jeito que já acontece com os momentos.
-     */
+    segments: ListenSegment[];
     transcript: TranscriptSegment[];
     transcriptStatus: "ok" | "indisponivel" | "desligada";
   } | null>(null);
-  /*
-   * Quantos milissegundos de aula já tinham passado quando o áudio começou.
-   *
-   * Não é zero, e tratá-lo como zero é o defeito que faria "ouvir deste
-   * ponto" cair sempre no lugar errado: entre entrar no SliD e o microfone
-   * abrir existe a caixa de permissão, que a pessoa pode demorar segundos —
-   * ou minutos — para responder. Guardado aqui e subtraído lá, cada momento
-   * aponta para o instante certo da gravação.
-   */
-  const audioComecouEmRef = useRef(0);
   /*
    * O estudante desligou o áudio à mão, e isso vale para o resto da sessão.
    *
@@ -409,10 +399,10 @@ export function CameraShell({
   const comecarAudio = () => {
     setPedirAudio(false);
     setAudioDispensado(false);
-    const naSessao = slid.elapsedMs;
-    void listen.start().then((deu) => {
+    // Onde, no relógio da sessão, este trecho começa — religar no minuto 20
+    // abre um trecho que começa em 20, não em zero.
+    void listen.start(slid.elapsedMs).then((deu) => {
       if (!deu) return;
-      audioComecouEmRef.current = naSessao;
       /*
        * A transcrição começa junto com a gravação e nunca antes: sem
        * microfone concedido não há o que reconhecer, e pedir reconhecimento
@@ -455,7 +445,7 @@ export function CameraShell({
    * aberto enquanto o estudante escolhe a matéria.
    */
   useEffect(() => {
-    if (slid.status !== "finished" || !listen.gravando) return;
+    if (slid.status !== "finished") return;
     // A transcrição para primeiro e devolve o que entendeu: parar depois
     // deixaria o `setGravacao` guardar uma lista que ainda ia crescer.
     const falado = transcript.stop();
@@ -465,10 +455,21 @@ export function CameraShell({
         : transcript.status === "indisponivel" || transcript.status === "falhou"
           ? ("indisponivel" as const)
           : ("desligada" as const);
+    /*
+     * Sem o antigo `if (!listen.gravando) return` daqui para cima.
+     *
+     * `gravando` só é verdadeiro enquanto o trecho ATUAL está correndo — uma
+     * aula em que a pessoa desligou o áudio e nunca religou antes de encerrar
+     * tem `gravando === false` neste instante, mas pode ter trechos inteiros
+     * já fechados esperando dentro do gancho. `listen.stop()` sempre devolve
+     * todos eles, gravando ou não agora; pular a chamada era o outro jeito de
+     * perder áudio já gravado, complementar ao bug do `disable` que jogava o
+     * trecho fora — e não custa nada chamar quando não há nada: devolve null.
+     */
     void listen.stop().then((resultado) => {
       if (resultado)
         setGravacao({
-          ...resultado,
+          segments: resultado.segments,
           transcript: falado,
           transcriptStatus: estado,
         });
@@ -515,7 +516,7 @@ export function CameraShell({
      * pendente. Chamar sempre é mais simples e mais seguro que acertar a
      * condição.
      */
-    if (!isSlid) listen.disable();
+    if (!isSlid) void listen.disable();
     /*
      * O reconhecimento sai junto — e a fala da aula anterior sai com ele.
      *
@@ -1025,7 +1026,7 @@ export function CameraShell({
               dispensado={audioDispensado}
               onDesligar={() => {
                 setAudioDispensado(true);
-                listen.disable();
+                void listen.disable();
                 /*
                  * Desligar o áudio desliga a transcrição, e `disable` é o
                  * caminho que zera a intenção dentro do gancho: o
@@ -1075,7 +1076,9 @@ export function CameraShell({
           captures={slid.captures}
           stats={slid.stats}
           elapsedMs={slid.elapsedMs}
-          audioMs={gravacao?.durationMs ?? 0}
+          audioMs={
+            gravacao?.segments.reduce((soma, s) => soma + s.durationMs, 0) ?? 0
+          }
           /* Direto do gancho, e não de `gravacao`: `stop()` já devolveu os
              trechos, mas `gravacao` só existe depois de o `MediaRecorder`
              fechar o arquivo — e o resumo abre antes disso. O estado do
@@ -1136,10 +1139,7 @@ export function CameraShell({
               try {
                 await saveLessonAudio({
                   sessionId,
-                  blob: gravacao.blob,
-                  mimeType: gravacao.mimeType,
-                  durationMs: gravacao.durationMs,
-                  startedAtMs: audioComecouEmRef.current,
+                  segments: gravacao.segments,
                   createdAt: savedAt,
                   transcript: gravacao.transcript,
                   transcriptStatus: gravacao.transcriptStatus,
@@ -1155,7 +1155,6 @@ export function CameraShell({
                 }
               }
               setGravacao(null);
-              audioComecouEmRef.current = 0;
             }
             onCaptureSaved();
             slid.reset();

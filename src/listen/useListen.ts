@@ -18,10 +18,30 @@ export type ListenStatus =
   | "indisponivel"
   | "falhou";
 
-export interface ListenResult {
+/**
+ * Um trecho gravado: o que um `MediaRecorder` produziu entre um `start` e o
+ * fim dele — por `stop` (aula encerrada) ou por `disable` (a pessoa desligou).
+ *
+ * `startMs` é o relógio da SESSÃO, não do arquivo: o mesmo eixo de
+ * `capture.atMs`, o que deixa comparar um momento e um trecho de áudio direto,
+ * sem ninguém lembrar de somar atrasos. Existem vários porque desligar o áudio
+ * e religar depois é exatamente o mesmo MediaRecorder come TODO o já gravado
+ * — a `disable` de antes descartava esses bytes ao chamar `recorder.stop()`
+ * sem nunca montar o blob. Um trecho por ciclo liga/desliga é o jeito de não
+ * perder nada, sem colar containers de gravações diferentes num arquivo só
+ * (o que webm/ogg não garantem tocar depois).
+ */
+export interface ListenSegment {
+  /** Onde este trecho começa na aula, em ms desde o início da sessão. */
+  startMs: number;
+  /** Quanto dura, em ms — medido pelo relógio da sessão, não do arquivo. */
+  durationMs: number;
   blob: Blob;
   mimeType: string;
-  durationMs: number;
+}
+
+export interface ListenResult {
+  segments: ListenSegment[];
 }
 
 /**
@@ -67,7 +87,7 @@ export function listenSuportado(): boolean {
 /**
  * O **Listen** do SliD: a aula gravada enquanto a câmera a enxerga.
  *
- * Três regras moldam tudo aqui.
+ * Regras que moldam tudo aqui.
  *
  * **Nunca grava escondido.** A gravação só começa depois de o microfone ser
  * concedido, e enquanto ela corre a tela diz que está correndo. Não há caminho
@@ -78,10 +98,14 @@ export function listenSuportado(): boolean {
  * tela diz "Áudio desativado" em vez de falhar. Uma aula perdida porque o
  * microfone não abriu seria o pior defeito que este recurso poderia ter.
  *
- * **O áudio é um arquivo só, com marcadores.** Cortar em trinta pedaços
- * exigiria trinta gravadores ou uma remontagem que o navegador não faz. Um
- * arquivo e uma lista de tempos dá a mesma experiência sendo muito mais
- * robusto: se a gravação morrer no meio, o que já foi gravado continua bom.
+ * **Desligar libera o hardware de verdade.** `disable` para as tracks — não
+ * existe meio-termo em que o microfone continua "vivo" escondido só para
+ * facilitar religar depois. Religar pede um stream novo, do zero.
+ *
+ * **Nada que já foi gravado desaparece.** Desligar fecha o trecho atual num
+ * `ListenSegment` e o guarda; religar abre um trecho novo. A aula inteira é a
+ * lista de trechos, na ordem em que aconteceram — nunca um único arquivo que
+ * a última religada sobrescreve.
  *
  * O áudio fica no aparelho. Este gancho usa só `getUserMedia` e
  * `MediaRecorder`: nada sai do navegador, e nenhum serviço externo é chamado.
@@ -97,18 +121,22 @@ export function useListen() {
   const streamRef = useRef<MediaStream | null>(null);
   const pedacosRef = useRef<Blob[]>([]);
   const inicioRef = useRef<number>(0);
-  /** Quanto já foi gravado antes da pausa atual. */
+  /** Quanto já foi gravado antes da pausa atual, dentro do trecho em curso. */
   const acumuladoRef = useRef<number>(0);
   const analiseRef = useRef<{ ctx: AudioContext; raf: number } | null>(null);
+  /** Onde, no relógio da sessão, o trecho em curso começou. */
+  const inicioDoTrechoRef = useRef<number>(0);
+  /** Os trechos já fechados desta sessão — ver `ListenSegment`. */
+  const trechosRef = useRef<ListenSegment[]>([]);
   /*
    * A geração da tentativa em curso.
    *
    * Existe por causa de uma janela que só aparece no aparelho: entre pedir o
-   * microfone e a pessoa responder à caixa de permissão passam segundos — às
-   * vezes minutos. Nesse intervalo ela pode sair do SliD, ou desligar o áudio,
-   * e sem esta marca o `await` continuava correndo: quando a permissão enfim
-   * chegava, `streamRef` era preenchido e o `MediaRecorder` começava a gravar
-   * **fora** da sessão, sem nenhum indicador na tela.
+   * microfone e a pessoa responder passam segundos — às vezes minutos. Nesse
+   * intervalo ela pode sair do SliD, ou desligar o áudio, e sem esta marca o
+   * `await` continuava correndo: quando a permissão enfim chegava, `streamRef`
+   * era preenchido e o `MediaRecorder` começava a gravar **fora** da sessão,
+   * sem nenhum indicador na tela.
    *
    * Eram dois defeitos num só — microfone preso aceso, e gravação sem aviso,
    * que é exatamente o que este recurso não pode fazer. Qualquer coisa que
@@ -145,12 +173,58 @@ export function useListen() {
   }, [status]);
 
   /**
-   * Começa a ouvir. Devolve se conseguiu.
+   * Fecha o trecho em curso num `ListenSegment`, se houver um gravando.
+   *
+   * É o coração do conserto: antes, desligar (`disable`) chamava
+   * `recorder.stop()` sem nunca ouvir o `onstop` — os bytes já gravados eram
+   * jogados fora ali mesmo. Agora tanto `disable` quanto `stop` passam por
+   * aqui, e o trecho vira parte da lista antes do microfone soltar.
+   */
+  const fecharTrechoAtual = useCallback(async (): Promise<void> => {
+    const recorder = recorderRef.current;
+    if (!recorder || recorder.state === "inactive") return;
+
+    const duracao =
+      acumuladoRef.current +
+      (recorder.state === "recording" ? Date.now() - inicioRef.current : 0);
+    const tipo = recorder.mimeType || mimeType || "audio/webm";
+    const inicioDoTrecho = inicioDoTrechoRef.current;
+
+    const blob = await new Promise<Blob>((resolve) => {
+      recorder.onstop = () => {
+        resolve(new Blob(pedacosRef.current, { type: tipo }));
+      };
+      try {
+        recorder.stop();
+      } catch {
+        // Já parado por conta própria: o que foi recebido ainda serve.
+        resolve(new Blob(pedacosRef.current, { type: tipo }));
+      }
+    });
+
+    pedacosRef.current = [];
+    // Um trecho de tamanho zero (religou e desligou na mesma fração de
+    // segundo, sem nenhum pedaço chegar) não vira um segmento vazio na lista.
+    if (blob.size > 0) {
+      trechosRef.current = [
+        ...trechosRef.current,
+        { startMs: inicioDoTrecho, durationMs: duracao, blob, mimeType: tipo },
+      ];
+    }
+  }, [mimeType]);
+
+  /**
+   * Começa a ouvir um trecho novo. Devolve se conseguiu.
+   *
+   * `inicioMs` é o relógio da SESSÃO no instante em que este trecho começa —
+   * quem chama (a câmera) é quem sabe converter isso, porque é ela que sabe o
+   * relógio do SliD. Sem isso, um trecho religado no meio da aula não saberia
+   * dizer onde entra na timeline.
    *
    * Quem chama não precisa tratar erro: o estado já conta o que aconteceu, e
    * a sessão continua de pé em qualquer um dos caminhos ruins.
    */
-  const start = useCallback(async (): Promise<boolean> => {
+  const start = useCallback(async (inicioMs: number): Promise<boolean> => {
     if (!listenSuportado()) {
       setStatus("indisponivel");
       return false;
@@ -210,8 +284,8 @@ export function useListen() {
         if (e.data && e.data.size > 0) pedacosRef.current.push(e.data);
       };
       recorder.onerror = () => {
-        // A gravação morreu. Os pedaços já recebidos continuam válidos, então
-        // o que existe é guardado e a sessão segue sem áudio novo.
+        // A gravação morreu. Os pedaços já recebidos ficam pendentes de
+        // fechar; a sessão segue sem áudio novo até religar.
         setStatus("falhou");
         soltarTudo();
       };
@@ -223,6 +297,7 @@ export function useListen() {
       streamRef.current = stream;
       inicioRef.current = Date.now();
       acumuladoRef.current = 0;
+      inicioDoTrechoRef.current = inicioMs;
       setElapsedMs(0);
       setMimeType(recorder.mimeType || formato || "audio/webm");
       setStatus("ouvindo");
@@ -235,40 +310,34 @@ export function useListen() {
     }
   }, [soltarTudo]);
 
-  /** Encerra e devolve o que foi gravado. Null quando não há áudio. */
+  /**
+   * Encerra a sessão inteira e devolve todos os trechos gravados — os que já
+   * tinham sido fechados por `disable` mais o que estiver gravando agora.
+   *
+   * Sempre seguro de chamar, mesmo sem nada gravando no momento: uma aula em
+   * que a pessoa desligou o áudio e nunca religou antes de encerrar ainda tem
+   * os trechos de antes, e eles não podem ficar presos aqui dentro.
+   */
   const stop = useCallback(async (): Promise<ListenResult | null> => {
-    const recorder = recorderRef.current;
-    if (!recorder || recorder.state === "inactive") {
-      soltarTudo();
-      setStatus((s) => (s === "ouvindo" || s === "pausado" ? "parado" : s));
-      return null;
-    }
-
-    const duracao =
-      acumuladoRef.current +
-      (recorder.state === "recording" ? Date.now() - inicioRef.current : 0);
-    const tipo = recorder.mimeType || mimeType || "audio/webm";
-
-    const blob = await new Promise<Blob>((resolve) => {
-      recorder.onstop = () => {
-        resolve(new Blob(pedacosRef.current, { type: tipo }));
-      };
-      try {
-        recorder.stop();
-      } catch {
-        // Já parado por conta própria: o que foi recebido ainda serve.
-        resolve(new Blob(pedacosRef.current, { type: tipo }));
-      }
-    });
-
+    await fecharTrechoAtual();
     soltarTudo();
-    setStatus("parado");
-    setElapsedMs(duracao);
-    if (blob.size === 0) return null;
-    return { blob, mimeType: tipo, durationMs: duracao };
-  }, [mimeType, soltarTudo]);
+    setStatus((s) => (s === "ouvindo" || s === "pausado" ? "parado" : s));
+    setElapsedMs(0);
 
-  /** Silenciar sem encerrar: o áudio para, a aula continua. */
+    const trechos = trechosRef.current;
+    trechosRef.current = [];
+    if (trechos.length === 0) return null;
+    return { segments: trechos };
+  }, [fecharTrechoAtual, soltarTudo]);
+
+  /**
+   * Silenciar sem encerrar: o áudio para, a aula continua — mesmo trecho.
+   *
+   * Diferente de `disable`: aqui o `MediaRecorder` só pausa, o microfone
+   * continua com a track aberta, e é o mesmo trecho que retoma ao religar.
+   * Serve para uma pausa curta; não é o botão que a pessoa toca no selo — esse
+   * é `disable`, que solta o hardware de verdade.
+   */
   const pause = useCallback(() => {
     const recorder = recorderRef.current;
     if (!recorder || recorder.state !== "recording") return;
@@ -296,27 +365,26 @@ export function useListen() {
   }, []);
 
   /**
-   * Desistir do áudio, com ou sem gravação em curso.
+   * Desligar de verdade: fecha o trecho em curso — sem jogá-lo fora, ao
+   * contrário do que este método fazia antes — e solta o microfone.
    *
    * Chamável a qualquer momento, inclusive durante o "pedindo": é justamente
    * aí que ele mais importa, porque é a janela em que o microfone podia ficar
    * preso. `soltarTudo` incrementa a geração e a tentativa pendente morre
    * sozinha quando voltar.
+   *
+   * Assíncrono de propósito: fechar o trecho espera o `MediaRecorder` entregar
+   * o que já gravou antes de soltar o stream. Quem chama não precisa esperar
+   * — o hardware para de qualquer jeito, mesmo que o blob acabe de montar um
+   * instante depois.
    */
-  const disable = useCallback(() => {
-    const recorder = recorderRef.current;
-    if (recorder && recorder.state !== "inactive") {
-      try {
-        recorder.stop();
-      } catch {
-        /* já parado */
-      }
-    }
+  const disable = useCallback(async () => {
+    await fecharTrechoAtual();
     pedacosRef.current = [];
     soltarTudo();
     setStatus("parado");
     setElapsedMs(0);
-  }, [soltarTudo]);
+  }, [fecharTrechoAtual, soltarTudo]);
 
   /**
    * O estado real das tracks de microfone, perguntado ao hardware.
@@ -350,6 +418,8 @@ export function useListen() {
     estadoDoMicrofone,
     /** Se há gravação correndo agora — o que o indicador da tela reflete. */
     gravando: status === "ouvindo" || status === "pausado",
+    /** Quantos trechos já fechados existem nesta sessão, sem contar o atual. */
+    trechosFechados: () => trechosRef.current.length,
     start,
     stop,
     pause,
