@@ -1044,7 +1044,8 @@ export function CameraShell({
             />
           }
           /*
-           * A promessa some quando algo melhor ocupa o lugar dela.
+           * A promessa some quando algo melhor ocupa o lugar dela — e some
+           * sozinha depois de ensinar o que veio ensinar.
            *
            * Medido a 390 px: a coluna de cima do SliD ocupa 70→236 px, 28 % da
            * altura da tela, em cinco elementos. Com a linha da fala ligada
@@ -1055,18 +1056,25 @@ export function CameraShell({
            * LISTEN · IDENTIFY" é a promessa em três bolinhas, e a frase que a
            * pessoa acabou de falar é a promessa acontecendo. A segunda é prova
            * muito melhor que a primeira, e nenhuma das duas precisa da outra.
-           *
            * Então elas se revezam em vez de empilhar. No caso comum — e a
            * maioria dos navegadores não transcreve — nada muda.
+           *
+           * E depois dos primeiros segundos, nenhuma das duas precisa mais
+           * aparecer: quem já viu "SEE · LISTEN · IDENTIFY" uma vez entendeu o
+           * produto, e dali em diante o selo do Listen (ali embaixo) e a
+           * trilha de momentos (à direita) já contam a mesma história em
+           * menos espaço. Uma aula de quarenta minutos não precisa da aula de
+           * vocabulário ligada o tempo todo.
            */
           promessa={
-            transcript.transcrevendo && transcript.parcial ? null : (
+            slid.elapsedMs < 16000 &&
+            !(transcript.transcrevendo && transcript.parcial) ? (
               <SeeListenIdentify
                 vendo={slid.sceneReady}
                 ouvindo={listen.status === "ouvindo"}
                 identificou={slid.captures.length}
               />
-            )
+            ) : null
           }
         />
       )}

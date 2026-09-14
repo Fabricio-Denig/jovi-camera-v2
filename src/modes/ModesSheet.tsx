@@ -209,12 +209,20 @@ function ModeCard({
       onClick={onSelect}
       aria-pressed={active}
       /*
-       * `overflow-hidden` não é detalhe: com a altura fixa pela proporção do
-       * Figma, uma descrição de três linhas transbordava o card e cobria o
-       * vizinho — o card de Microfilme roubava o toque do de Vídeo. Um texto
-       * que escapa do próprio card não é só feio, ele quebra o painel.
+       * `overflow-hidden` não é detalhe: com a altura fixa, uma descrição
+       * comprida transbordava o card e cobria o vizinho — o card de
+       * Microfilme roubava o toque do de Vídeo. Um texto que escapa do
+       * próprio card não é só feio, ele quebra o painel.
+       *
+       * A proporção do Figma era 105×113, alta o bastante para duas linhas de
+       * resumo. Medido card por card: com dezesseis modos reais, quatorze das
+       * dezesseis descrições precisavam de três linhas para não truncar no
+       * meio de uma palavra — "Captura padrão, equilibrada para..." não diz
+       * nada que a pessoa não soubesse já. 105×128 abre a terceira linha sem
+       * virar um card "grande": ainda cabem três por fileira, ainda é um
+       * ícone e duas frases curtas.
        */
-      className={`flex aspect-[105/113] w-full flex-col items-start overflow-hidden rounded-2xl border p-2.5 text-left transition-transform duration-150 active:scale-[0.95] ${
+      className={`flex aspect-[105/128] w-full flex-col items-start overflow-hidden rounded-2xl border p-2.5 text-left transition-transform duration-150 active:scale-[0.95] ${
         active
           ? "border-accent bg-accent-soft ring-1 ring-accent/60"
           : "border-line bg-surface-2"
@@ -226,8 +234,7 @@ function ModeCard({
       <span className="mt-1 line-clamp-1 w-full text-[11.5px] font-medium text-ink">
         {mode.label}
       </span>
-      {/* Duas linhas, como no Figma: a terceira não cabe em 113 px de altura. */}
-      <p className="mt-0.5 line-clamp-2 text-[9.5px] leading-[1.3] text-ink-muted">
+      <p className="mt-0.5 line-clamp-3 text-[9.5px] leading-[1.3] text-ink-muted">
         {mode.summary}
       </p>
       {/*

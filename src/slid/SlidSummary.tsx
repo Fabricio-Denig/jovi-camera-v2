@@ -212,8 +212,17 @@ export function SlidSummary({
       <header className="border-b border-line px-5 pb-4 pt-[max(18px,env(safe-area-inset-top))]">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-accent">
-              Resumo da aula
+            {/*
+             * "Resumo da aula" sozinho lia como o topo de um formulário — o
+             * mesmo tom de uma tela que ainda vai pedir várias coisas. Esta
+             * tela pede duas, as duas opcionais, e o que ela é de verdade é
+             * a confirmação de que a aula terminou organizada. "Pronto" na
+             * frente muda a primeira palavra que a pessoa lê de "preencha
+             * isto" para "terminou".
+             */}
+            <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-accent">
+              <CheckBadgeIcon />
+              Pronto · resumo da aula
             </p>
             {/* The title is the class itself, not a form field waiting at the
                 bottom of the screen. */}
@@ -484,6 +493,24 @@ export function SlidSummary({
         )}
       </footer>
     </div>
+  );
+}
+
+function CheckBadgeIcon() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="3"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="m5 13 4 4L19 7" />
+    </svg>
   );
 }
 
