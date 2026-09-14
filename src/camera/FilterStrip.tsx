@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CAMERA_FILTERS, DEFAULT_INTENSITY, applyFilter } from "./filters";
+import { CAMERA_FILTERS, applyFilter } from "./filters";
 import { useFilterFavorites } from "./useFilterFavorites";
 
 /**
@@ -14,9 +14,18 @@ import { useFilterFavorites } from "./useFilterFavorites";
  * o ponto de partida. Com onze filtros no catálogo, "os rápidos" só continuam
  * rápidos se o que a pessoa mais usa não estiver atrás de sete outros.
  *
+ * "Leitura" fura a fila mesmo sem estar favoritado: é o filtro que este
+ * produto existe para justificar — um estudante fotografando quadro e slide
+ * — e enterrá-lo na décima posição do catálogo seria escondê-lo de quem mais
+ * precisa. Uma vez favoritado, ele já vem na leva de favoritos e este caso
+ * nem entra em jogo.
+ *
  * As miniaturas são uma amostra só, redesenhada com filtros de CSS diferentes,
  * e a amostra vem de fora — é a mesma que o painel usa. Catálogo inteiro em
  * <video> ao vivo disputaria a linha principal com a análise da aula.
+ * Mostradas no máximo (100%), não na intensidade padrão: numa miniatura de
+ * 56 px a diferença entre os onze precisa bater o olho, e é o painel — não a
+ * tira — o lugar de ver como cada um fica na intensidade em uso.
  */
 export function FilterStrip({
   amostra,
@@ -47,8 +56,14 @@ export function FilterStrip({
   const filtrosOrdenados = useMemo(() => {
     const [nenhum, ...resto] = CAMERA_FILTERS;
     const favoritados = resto.filter((f) => favoritos.includes(f.id));
-    const outros = resto.filter((f) => !favoritos.includes(f.id));
-    return [nenhum, ...favoritados, ...outros];
+    const leituraJaEntrou = favoritados.some((f) => f.id === "leitura");
+    const leitura = !leituraJaEntrou
+      ? resto.filter((f) => f.id === "leitura")
+      : [];
+    const outros = resto.filter(
+      (f) => !favoritos.includes(f.id) && f.id !== "leitura",
+    );
+    return [nenhum, ...favoritados, ...leitura, ...outros];
   }, [favoritos]);
 
   useEffect(() => {
@@ -101,11 +116,11 @@ export function FilterStrip({
                     alt=""
                     className="size-full object-cover"
                     style={{
-                      // A miniatura mostra o filtro na intensidade padrão:
-                      // sete miniaturas iguais com nomes diferentes não
-                      // ajudam ninguém a escolher antes de tocar.
+                      // A miniatura mostra o filtro no máximo: onze cards
+                      // parecidos com nomes diferentes não ajudam ninguém a
+                      // escolher antes de tocar.
                       filter: (() => {
-                        const css = applyFilter(filtro.id, DEFAULT_INTENSITY);
+                        const css = applyFilter(filtro.id, 100);
                         return css === "none" ? undefined : css;
                       })(),
                       transform: mirrored ? "scaleX(-1)" : undefined,

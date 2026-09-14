@@ -48,7 +48,7 @@ export const MODES: CameraMode[] = [
   {
     id: "photo",
     label: "Foto",
-    summary: "Captura padrão, equilibrada para qualquer cena.",
+    summary: "Captura padrão, para qualquer cena.",
     whenToUse: "O modo para o dia a dia, quando nada de especial é exigido.",
     kind: "photo",
     fidelity: "real",
@@ -58,7 +58,7 @@ export const MODES: CameraMode[] = [
   {
     id: "video",
     label: "Vídeo",
-    summary: "Grava vídeo com áudio no armazenamento do dispositivo.",
+    summary: "Grava vídeo com áudio no aparelho.",
     whenToUse: "Para registrar movimento e som em vez de um instante.",
     kind: "video",
     fidelity: "real",
@@ -68,8 +68,7 @@ export const MODES: CameraMode[] = [
   {
     id: "slid",
     label: "SliD",
-    summary:
-      "Entende a aula e salva sozinho só os momentos que importam.",
+    summary: "Vê a aula e salva sozinho o que importa.",
     whenToUse:
       "Aulas longas: em vez de escolher entre prestar atenção e registrar, você só assiste.",
     kind: "photo",
@@ -96,7 +95,7 @@ export const MODES: CameraMode[] = [
   {
     id: "night",
     label: "Noite",
-    summary: "Junta vários quadros para tirar o granulado de cenas escuras.",
+    summary: "Combina quadros para clarear cenas escuras.",
     whenToUse: "Ambientes com pouca luz, com o celular apoiado.",
     kind: "photo",
     /*
@@ -117,7 +116,7 @@ export const MODES: CameraMode[] = [
   {
     id: "food",
     label: "Comida",
-    summary: "Realça cor e textura do prato, no visor e na foto.",
+    summary: "Realça cor e textura do prato.",
     whenToUse: "Fotografar comida sem que ela pareça sem graça.",
     kind: "photo",
     /*
@@ -135,7 +134,7 @@ export const MODES: CameraMode[] = [
   {
     id: "microfilm",
     label: "Microfilme",
-    summary: "Clipes curtos com tratamento cinematográfico.",
+    summary: "Clipes curtos com ar de cinema.",
     whenToUse: "Quando um vídeo comum não transmite a atmosfera que você quer.",
     kind: "video",
     fidelity: "simulated",
@@ -147,7 +146,7 @@ export const MODES: CameraMode[] = [
   {
     id: "slow-motion",
     label: "Câmera lenta",
-    summary: "Grava em alta taxa de quadros e reproduz devagar.",
+    summary: "Grava em câmera lenta.",
     whenToUse: "Movimentos rápidos que o olho não acompanha.",
     kind: "video",
     fidelity: "simulated",
@@ -159,7 +158,7 @@ export const MODES: CameraMode[] = [
   {
     id: "timelapse",
     label: "Intervalo",
-    summary: "Captura a cada intervalo e junta tudo em um vídeo acelerado.",
+    summary: "Fotos em intervalos, viram vídeo acelerado.",
     whenToUse: "Processos longos: um pôr do sol, uma obra, o céu mudando.",
     kind: "video",
     /*
@@ -190,7 +189,7 @@ export const MODES: CameraMode[] = [
   {
     id: "pro",
     label: "Profissional",
-    summary: "Controle manual de ISO, obturador, foco e balanço de branco.",
+    summary: "Controle manual de ISO, obturador e foco.",
     whenToUse: "Quando você sabe exatamente o ajuste que quer e o automático atrapalha.",
     kind: "photo",
     fidelity: "simulated",
@@ -214,7 +213,7 @@ export const MODES: CameraMode[] = [
   {
     id: "supermoon",
     label: "Superlua",
-    summary: "Zoom e processamento dedicados para fotografar a lua.",
+    summary: "Zoom dedicado para fotografar a lua.",
     whenToUse: "Céu limpo com lua visível — o modo normal só entrega um ponto branco.",
     kind: "photo",
     fidelity: "simulated",
@@ -241,7 +240,7 @@ export const MODES: CameraMode[] = [
   {
     id: "snapshot",
     label: "Instantâneo",
-    summary: "Dispara imediatamente, sem ajustes prévios.",
+    summary: "Dispara na hora, sem ajustes.",
     whenToUse: "Cenas que não esperam: uma criança, um animal, um instante.",
     kind: "photo",
     fidelity: "real",

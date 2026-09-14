@@ -12,7 +12,7 @@ import { FrameGuides } from "./FrameGuides";
 import { FilterStrip } from "./FilterStrip";
 import { FiltersSheet } from "./FiltersSheet";
 import { EffectLayer } from "./EffectLayer";
-import { FOOD_LOOK, applyFilter, DEFAULT_INTENSITY } from "./filters";
+import { FOOD_LOOK, applyFilter, findFilter, DEFAULT_INTENSITY } from "./filters";
 import { useFrameSample } from "./useFrameSample";
 import {
   SettingsSheet,
@@ -1044,7 +1044,8 @@ export function CameraShell({
             />
           }
           /*
-           * A promessa some quando algo melhor ocupa o lugar dela.
+           * A promessa some quando algo melhor ocupa o lugar dela — e some
+           * sozinha depois de ensinar o que veio ensinar.
            *
            * Medido a 390 px: a coluna de cima do SliD ocupa 70→236 px, 28 % da
            * altura da tela, em cinco elementos. Com a linha da fala ligada
@@ -1055,18 +1056,25 @@ export function CameraShell({
            * LISTEN · IDENTIFY" é a promessa em três bolinhas, e a frase que a
            * pessoa acabou de falar é a promessa acontecendo. A segunda é prova
            * muito melhor que a primeira, e nenhuma das duas precisa da outra.
-           *
            * Então elas se revezam em vez de empilhar. No caso comum — e a
            * maioria dos navegadores não transcreve — nada muda.
+           *
+           * E depois dos primeiros segundos, nenhuma das duas precisa mais
+           * aparecer: quem já viu "SEE · LISTEN · IDENTIFY" uma vez entendeu o
+           * produto, e dali em diante o selo do Listen (ali embaixo) e a
+           * trilha de momentos (à direita) já contam a mesma história em
+           * menos espaço. Uma aula de quarenta minutos não precisa da aula de
+           * vocabulário ligada o tempo todo.
            */
           promessa={
-            transcript.transcrevendo && transcript.parcial ? null : (
+            slid.elapsedMs < 16000 &&
+            !(transcript.transcrevendo && transcript.parcial) ? (
               <SeeListenIdentify
                 vendo={slid.sceneReady}
                 ouvindo={listen.status === "ouvindo"}
                 identificou={slid.captures.length}
               />
-            )
+            ) : null
           }
         />
       )}
@@ -1261,9 +1269,20 @@ export function CameraShell({
                   type="button"
                   onClick={() => setFiltersOpen((aberto) => !aberto)}
                   aria-expanded={filtersOpen}
-                  className="min-h-10 rounded-full bg-black/40 px-4 text-[11.5px] font-medium text-white/85 transition-transform active:scale-95"
+                  className={`min-h-10 rounded-full px-4 text-[11.5px] font-medium transition-transform active:scale-95 ${
+                    filterId !== "nenhum"
+                      ? "bg-accent/90 text-accent-ink"
+                      : "bg-black/40 text-white/85"
+                  }`}
                 >
-                  Filtros {filtersOpen ? "⌃" : "⌄"}
+                  {/*
+                   * "Filtros" sozinho não dizia qual estava ligado — quem
+                   * fechasse a tira só descobria abrindo de novo. Com um
+                   * filtro ativo, o botão passa a dizer QUAL ele é, na cor de
+                   * destaque: o mesmo lugar vira o indicador de estado.
+                   */}
+                  {filterId !== "nenhum" ? findFilter(filterId).label : "Filtros"}{" "}
+                  {filtersOpen ? "⌃" : "⌄"}
                 </button>
                 {filtersOpen && (
                   <div className="w-full animate-[slid-enter_220ms_ease-out]">
