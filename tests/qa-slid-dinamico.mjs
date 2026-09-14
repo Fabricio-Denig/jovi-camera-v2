@@ -17,6 +17,15 @@ async function aula(cena, segundos, { zoomEm = null } = {}) {
   await p.goto(APP + "/", { waitUntil: "networkidle" });
   await p.waitForTimeout(2500);
   await p.getByRole("button", { name: "SliD", exact: true }).click();
+  // Sem dispensar o cartão do microfone, ele fica por cima da tela e o
+  // clique de zoom (`zoomEm`) mais abaixo nunca chega no botão de verdade.
+  // Sem `waitForTimeout` extra aqui: esta suíte mede detecção em tempo real
+  // contra o relógio de parede, e cada milissegundo a mais desalinha os
+  // `segundos` do loop abaixo com o que a câmera realmente mostrou.
+  await p
+    .getByRole("button", { name: "Continuar sem áudio" })
+    .click({ timeout: 2000 })
+    .catch(() => {});
 
   // A trilha lateral conta os momentos ao vivo, sem encerrar a aula.
   const marcos = [];
