@@ -1,5 +1,6 @@
 import type { TranscriptSegment } from "../shared/lib/mediaStore";
 import { MARCAS_DE_ENFASE, semAcento, VAZIAS, JANELA_DEPOIS_MS } from "./speechInsights";
+import { MENSAGEM_TRECHO_DEGENERADO } from "./transcriptSanitizer";
 
 /**
  * Palavras genéricas demais para virar assunto ou título — mesmo sendo
@@ -27,7 +28,11 @@ const PALAVRAS_GENERICAS_DEMAIS = new Set(
     "interessante geral outro outra outros outras mesmo mesma mesmos " +
     "mesmas varios varias diferente diferentes tudo algo alguma algum " +
     "alguns algumas coisa coisas coisinha jeito modo maneira coitado " +
-    "coitada tal tais coisarada"
+    "coitada tal tais coisarada " +
+    // Verbos genéricos demais para virar tópico sozinhos — achado com um
+    // segundo teste físico real: "Ficar" apareceu em "Para revisar" (de
+    // "...pode ficar na prova", um erro do reconhecimento por "cair").
+    "ficar fica ficam fazer faz fazem hoje"
   ).split(/\s+/),
 );
 
@@ -48,6 +53,36 @@ const PALAVRAS_DE_MARCA = new Set(
     (w) => w.length >= 3,
   ),
 );
+
+/**
+ * As marcas de `MARCAS_DE_ENFASE` que sinalizam SÍNTESE ("resumindo", "em
+ * resumo"...), não um aviso específico ("prestem atenção", "cai na prova").
+ *
+ * Ficam FORA só de "Professor destacou" (`gerarResumoGlobal`) — a aba Texto
+ * (`classText.ts`/`TranscriptView.tsx`, via `acharDestaques`) continua
+ * marcando essas frases normalmente, porque ali o objetivo é diferente:
+ * mostrar TODA frase onde o professor usou uma expressão de ênfase, não
+ * escolher UM destaque curado. A diferença importa porque "resumindo, os
+ * principais pontos são X, Y e Z" costuma ser uma frase inteira listando
+ * vários assuntos — virar "Professor destacou" com ela vira um bloco enorme
+ * no lugar de um destaque específico (achado com um teste físico real).
+ */
+const MARCAS_DE_SINTESE = new Set(
+  ["resumindo", "em resumo", "o principal e", "o principal é", "vamos revisar"].map(
+    semAcento,
+  ),
+);
+
+/** Uma frase cuja ÚNICA marca de ênfase é uma marca de síntese — não deve
+    virar uma linha isolada em "Professor destacou". */
+function ehApenasMarcaDeSintese(texto: string): boolean {
+  const normal = semAcento(texto);
+  const encontradas = MARCAS_DE_ENFASE.filter((m) => normal.includes(semAcento(m)));
+  return (
+    encontradas.length > 0 &&
+    encontradas.every((m) => MARCAS_DE_SINTESE.has(semAcento(m)))
+  );
+}
 
 /**
  * O resumo GLOBAL da aula — uma síntese, não a transcrição de volta.
@@ -132,7 +167,10 @@ interface Frase {
 function frasesDaFala(segments: TranscriptSegment[]): Frase[] {
   const frases: Frase[] = [];
   for (const s of segments) {
-    if (!s.final || !s.text.trim()) continue;
+    // O aviso do sanitizador ("Trecho pouco claro no áudio.") é honesto na
+    // aba Texto, mas não é conteúdo — nunca deve virar ponto, destaque ou
+    // título. Comparação exata: é uma constante fixa, não um padrão a caçar.
+    if (!s.final || !s.text.trim() || s.text.trim() === MENSAGEM_TRECHO_DEGENERADO) continue;
     const marcadoAqui = temMarcaDeEnfase(s.text);
     const partes = s.text
       .split(/(?<=[.!?…])\s+/)
@@ -242,6 +280,86 @@ function termoDominante(
   extraExcluir?: Set<string>,
 ): string | null {
   return termosFortes(texto, peso, totalCandidatos, extraExcluir)[0] ?? null;
+}
+
+/** Uma frase mais curta que isto já É um conceito — comprimi-la mais perderia
+    naturalidade ("Multiplicação de matrizes" lê melhor que "multiplicação
+    matrizes"). Acima disto, só os termos mais fortes valem a pena mostrar. */
+const MAX_PALAVRAS_CONCEITO_CURTO = 6;
+
+/**
+ * O CONCEITO de uma frase — não a frase inteira.
+ *
+ * Achado com um teste físico real: o resumo estava embutindo frases INTEIRAS
+ * (às vezes quebradas pelo reconhecimento — "Matriz são estruturas
+ * organizadas em igrejas e colunas") direto no texto final. Um resumo lido
+ * como estudo precisa de CONCEITOS ("Organização em linhas e colunas"), não
+ * da transcrição bruta reaproveitada.
+ *
+ * Duas saídas, conforme o tamanho: uma frase já curta (<=6 palavras, como
+ * "Multiplicação de matrizes.") é o próprio conceito — mostrar como está
+ * lê melhor que picar em termos soltos. Uma frase mais longa vira os DOIS
+ * termos mais fortes que ela carrega, na ordem em que aparecem no texto
+ * (não por peso) — "matriz identidade" lê melhor que "identidade matriz". Os
+ * pesos já favorecem termos repetidos em VÁRIAS frases da aula (`peso` é uma
+ * contagem por-frase agregada), então um erro isolado do reconhecimento
+ * ("igrejas" por "linhas", dito uma vez só) tende a perder para o termo
+ * certo, dito várias vezes — sem precisar de um corretor ortográfico.
+ */
+function fraseDeConceito(
+  texto: string,
+  peso: Map<string, number>,
+  totalCandidatos: number,
+  formas: Map<string, string>,
+  extraExcluir?: Set<string>,
+): string | null {
+  const semPontuacao = texto.trim().replace(/[.!?…]+$/, "");
+  const curta = semPontuacao.split(/\s+/).length <= MAX_PALAVRAS_CONCEITO_CURTO;
+  // Curta E majoritariamente conteúdo real (poucas palavras vazias/verbo de
+  // preenchimento) — "Multiplicação de matrizes" já É o conceito, picar em
+  // termos só pioraria a leitura. Uma frase curta mas rala ("Hoje falaremos
+  // sobre matrizes.") ainda cai no corte de termos abaixo.
+  if (curta && densidadeDeConteudo(texto, peso) >= 0.6) {
+    return semPontuacao;
+  }
+
+  const vistos = new Map<string, number>();
+  for (const bruto of semAcento(texto).split(/[^\p{L}\p{N}]+/u)) {
+    if (
+      bruto.length < 3 ||
+      VAZIAS.has(bruto) ||
+      (extraExcluir && extraExcluir.has(bruto)) ||
+      vistos.has(bruto)
+    )
+      continue;
+    const w = peso.get(bruto) ?? 0;
+    if (w > 0) vistos.set(bruto, w);
+  }
+  if (vistos.size === 0) return curta ? semPontuacao : null;
+
+  /*
+   * Prefere palavras ESPECÍFICAS desta frase — a mesma ideia de "comum
+   * demais" que `termosFortes` usa para deduplicar (uma aula sobre
+   * escalação do Corinthians repete "time"/"Corinthians" em quase toda
+   * frase; o que torna ESTA frase diferente das outras é "escalação", não
+   * o nome do time). Mas aqui é só PREFERÊNCIA, não corte definitivo: se a
+   * frase não tiver duas palavras específicas (uma saudação/abertura como
+   * "Hoje falaremos sobre matrizes." só tem "falaremos" de específico),
+   * completa com a mais forte mesmo que comum — perder o próprio assunto
+   * da aula por rigor demais é pior que repetir o termo dominante.
+   */
+  const limite = totalCandidatos * 0.5;
+  const todos = [...vistos.entries()].sort((a, b) => b[1] - a[1]);
+  const especificos = todos.filter(([, w]) => w < limite || totalCandidatos <= 2);
+  const especificosChaves = new Set(especificos.map(([t]) => t));
+  const comuns = todos.filter(([t]) => !especificosChaves.has(t));
+  const escolhidos = [...especificos, ...comuns].slice(0, 2).map(([t]) => t);
+
+  const normal = semAcento(texto);
+  const naOrdemDoTexto = [...escolhidos].sort(
+    (a, b) => normal.indexOf(a) - normal.indexOf(b),
+  );
+  return naOrdemDoTexto.map((t) => formas.get(t) ?? t).join(" ");
 }
 
 /** Abaixo disto, uma frase falada tem palavra(s) reais demais espalhadas em
@@ -492,25 +610,33 @@ function montarVisaoGeral(
   temFala: boolean,
   temQuadro: boolean,
   teto: number,
+  peso: Map<string, number>,
+  totalCandidatos: number,
+  formas: Map<string, string>,
 ): string {
   if (principaisPorPontos.length === 0) return "";
   const principais = ordenarParaAbertura(principaisPorPontos);
+  // O CONCEITO da frase, não a frase inteira — ver `fraseDeConceito`. Cai
+  // para a frase original só se nada sobrar (não deveria acontecer, já que
+  // estes candidatos exigem `termo !== null` — ver `candidatosComConteudo`).
+  const conceito = (c: Candidato) =>
+    comoTopico(fraseDeConceito(c.texto, peso, totalCandidatos, formas) ?? c.texto);
 
   const frases: string[] = [];
   const [primeiro, segundo, ...resto] = principais;
 
   frases.push(
     segundo
-      ? `A aula abordou ${comoTopico(primeiro.texto)}, com destaque para ${comoTopico(segundo.texto)}.`
-      : `A aula abordou ${comoTopico(primeiro.texto)}.`,
+      ? `A aula abordou ${conceito(primeiro)}, com destaque para ${conceito(segundo)}.`
+      : `A aula abordou ${conceito(primeiro)}.`,
   );
 
   const maisDois = resto.slice(0, 2);
   if (maisDois.length === 1) {
-    frases.push(`Também foi mencionado ${comoTopico(maisDois[0].texto)}.`);
+    frases.push(`Também foi mencionado ${conceito(maisDois[0])}.`);
   } else if (maisDois.length === 2) {
     frases.push(
-      `Também foram mencionados ${comoTopico(maisDois[0].texto)} e ${comoTopico(maisDois[1].texto)}.`,
+      `Também foram mencionados ${conceito(maisDois[0])} e ${conceito(maisDois[1])}.`,
     );
   }
 
@@ -653,12 +779,17 @@ export function gerarResumoGlobal({
     if (b.atMs === null) return -1;
     return a.atMs - b.atMs;
   });
-  const pontosPrincipais = principaisOrdenados.map((c) => pontuar(c.texto));
+  // O CONCEITO de cada ponto, não a frase inteira — ver `fraseDeConceito`.
+  const pontosPrincipais = principaisOrdenados.map((c) =>
+    pontuar(fraseDeConceito(c.texto, peso, totalCandidatos, formas) ?? c.texto),
+  );
 
   // "Professor destacou": frases marcadas por expressão de ênfase, também
   // deduplicadas por conceito — quatro avisos sobre a MESMA prova não viram
   // quatro linhas.
-  const destaquesCandidatos = candidatos.filter((c) => c.marcado && c.atMs !== null);
+  const destaquesCandidatos = candidatos.filter(
+    (c) => c.marcado && c.atMs !== null && !ehApenasMarcaDeSintese(c.texto),
+  );
   const destaquesDedup = deduplicarPorConceito(destaquesCandidatos)
     .sort((a, b) => a.atMs! - b.atMs!)
     .slice(0, MAX_DESTAQUES);
@@ -671,7 +802,14 @@ export function gerarResumoGlobal({
     const vizinho = termoProprio
       ? null
       : vizinhoDeConteudo(d, candidatosVizinhos, JANELA_DEPOIS_MS, peso);
-    const textoFinal = vizinho ? vizinho.texto : d.texto;
+    // O CONCEITO, não a frase de aviso inteira — "Multiplicação de
+    // matrizes", não "Prestem atenção, porque multiplicação de matrizes é
+    // importante e pode ficar na prova". Quando o conteúdo é da própria
+    // frase (sem vizinho), as palavras da marca de ênfase ficam de fora —
+    // elas não são o que foi destacado, só o aviso em volta.
+    const textoFinal = vizinho
+      ? (fraseDeConceito(vizinho.texto, peso, totalCandidatos, formas) ?? vizinho.texto)
+      : (fraseDeConceito(d.texto, peso, totalCandidatos, formas, PALAVRAS_DE_MARCA) ?? d.texto);
     return {
       atMs: d.atMs!,
       text: pontuar(textoFinal),
@@ -689,11 +827,26 @@ export function gerarResumoGlobal({
   for (const d of destaquesDedup) {
     if (!d.termo || termosNosPontos.has(d.termo) || vistoRevisar.has(d.termo)) continue;
     vistoRevisar.add(d.termo);
-    paraRevisar.push(maiuscula(formas.get(d.termo) ?? d.termo));
+    // O conceito (1-2 termos, "matriz identidade"), não só `d.termo` sozinho
+    // — "Ficar" isolado (um verbo genérico que passou pelo corte de termo
+    // dominante antes de `PALAVRAS_GENERICAS_DEMAIS` cobrir este caso) nunca
+    // devia ter sido um tópico de revisão; um conceito de 1-2 palavras reais
+    // é mais parecido com o que alguém escreveria numa lista de estudo.
+    const conceito = fraseDeConceito(d.texto, peso, totalCandidatos, formas);
+    paraRevisar.push(maiuscula(conceito ?? formas.get(d.termo) ?? d.termo));
     if (paraRevisar.length >= MAX_REVISAR) break;
   }
 
-  const overview = montarVisaoGeral(principais, destaquesDedup, temFala, temQuadro, tetoResumo);
+  const overview = montarVisaoGeral(
+    principais,
+    destaquesDedup,
+    temFala,
+    temQuadro,
+    tetoResumo,
+    peso,
+    totalCandidatos,
+    formas,
+  );
 
   return {
     overview,
