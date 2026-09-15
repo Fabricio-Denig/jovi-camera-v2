@@ -18,7 +18,9 @@ on:
   # específico dispara sem precisar disso.
   push:
     branches: [claude/trusting-heisenberg-7n394b]
-    paths: [.github/workflows/whisper-model-bench.yml]
+    paths:
+      - .github/workflows/whisper-model-bench.yml
+      - scripts/fetch-whisper-model.mjs
 
 permissions:
   contents: write
