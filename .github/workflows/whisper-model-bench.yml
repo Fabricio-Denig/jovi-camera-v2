@@ -13,7 +13,12 @@ name: Whisper model → bancada de dev
 # Removível a qualquer momento — nenhum outro workflow depende deste.
 
 on:
-  workflow_dispatch:
+  # `workflow_dispatch` só aparece na API depois que o arquivo existe no
+  # branch padrão — este nunca vai para lá de propósito. `push` neste branch
+  # específico dispara sem precisar disso.
+  push:
+    branches: [claude/trusting-heisenberg-7n394b]
+    paths: [.github/workflows/whisper-model-bench.yml]
 
 permissions:
   contents: write
