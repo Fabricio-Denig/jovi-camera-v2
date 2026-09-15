@@ -11,6 +11,10 @@ import { DisciplinePicker } from "./DisciplinePicker";
 import { StatusPicker } from "./StatusPicker";
 import { type ClassStatus } from "./status";
 import { LessonAudioPlayer } from "../listen/LessonAudioPlayer";
+import {
+  jobParecaTravado,
+  transcreverAula,
+} from "../listen/transcribeSession";
 import { getLessonAudio, type LessonAudio } from "../shared/lib/mediaStore";
 import {
   getClassById,
@@ -88,13 +92,40 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
     // aula de abrir.
     void getLessonAudio(classId)
       .then((achado) => {
-        if (active && achado) setAudio(achado);
+        if (!active || !achado) return;
+        setAudio(achado);
+        /*
+         * Uma aula salva por uma versão anterior do app — com áudio, mas sem
+         * `transcriptJobStatus` nenhum — nunca passou pelo motor local.
+         * Processa uma vez, sozinha: o valor de uma transcrição melhor deve
+         * chegar às aulas já guardadas, não só às novas.
+         */
+        if (achado.transcriptJobStatus === undefined) {
+          void transcreverAula(classId);
+        }
       })
       .catch(() => {});
     return () => {
       active = false;
     };
   }, [classId]);
+
+  /*
+   * Enquanto o motor local está processando (nesta aba ou numa aba que já
+   * fechou), a tela só descobre que terminou relendo o armazém — não há
+   * evento, é um `Promise` solto rodando em segundo plano. O intervalo para
+   * sozinho assim que o status sai de "processando", e nunca chega a existir
+   * quando não há job nenhum rodando.
+   */
+  useEffect(() => {
+    if (audio?.transcriptJobStatus !== "processando") return;
+    const id = window.setInterval(() => {
+      void getLessonAudio(classId).then((achado) => {
+        if (achado) setAudio(achado);
+      });
+    }, 2000);
+    return () => window.clearInterval(id);
+  }, [classId, audio?.transcriptJobStatus]);
 
   // The name is committed when the student leaves the field, not on every
   // keystroke: renaming rewrites every moment of the class.
@@ -293,6 +324,27 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
           </div>
         )}
 
+        {audio && (
+          <TranscricaoEmAndamento
+            audio={audio}
+            onTentarDeNovo={() => {
+              /*
+               * Otimista, e necessário: `transcreverAula` só escreve
+               * "processando" no IndexedDB — sem atualizar `audio` aqui, o
+               * efeito que faz o polling nunca liga (ele só liga quando
+               * `audio.transcriptJobStatus` JÁ é "processando"), e a tela
+               * ficava presa mostrando "falhou" até a pessoa sair e voltar.
+               */
+              setAudio({
+                ...audio,
+                transcriptJobStatus: "processando",
+                transcriptJobStartedAt: Date.now(),
+              });
+              void transcreverAula(classId);
+            }}
+          />
+        )}
+
         {tab === "imagens" && (
           <ClassImagesTab
             momentos={record.moments}
@@ -361,4 +413,53 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
       )}
     </div>
   );
+}
+
+/**
+ * O estado do reprocessamento — discreto, e quieto na maior parte do tempo.
+ *
+ * Ele não aparece quando termina bem: uma aula pronta simplesmente mostra a
+ * transcrição nas abas Texto e Resumo, sem crachá-lo em lugar nenhum. Só fala
+ * quando há algo a dizer — ainda organizando, ou não deu certo — porque um
+ * selo "transcrito com sucesso" permanente seria propaganda de recurso, não
+ * informação.
+ */
+function TranscricaoEmAndamento({
+  audio,
+  onTentarDeNovo,
+}: {
+  audio: LessonAudio;
+  onTentarDeNovo: () => void;
+}) {
+  if (audio.transcriptJobStatus === "processando" && !jobParecaTravado(audio)) {
+    return (
+      <p className="mb-4 flex items-center gap-2 rounded-xl bg-surface-2 px-3 py-2.5 text-[12.5px] text-ink-muted">
+        <span
+          aria-hidden="true"
+          className="size-2 shrink-0 animate-pulse rounded-full bg-accent"
+        />
+        Organizando o que foi dito…
+      </p>
+    );
+  }
+
+  const travado = jobParecaTravado(audio);
+  if (audio.transcriptJobStatus === "falhou" || travado) {
+    return (
+      <div className="mb-4 flex items-center justify-between gap-3 rounded-xl bg-surface-2 px-3 py-2.5">
+        <p className="text-[12.5px] leading-snug text-ink-muted">
+          Não foi possível organizar o que foi dito agora.
+        </p>
+        <button
+          type="button"
+          onClick={onTentarDeNovo}
+          className="min-h-9 shrink-0 rounded-full bg-accent-soft px-3 text-[12.5px] font-medium text-accent transition-transform active:scale-95"
+        >
+          Tentar de novo
+        </button>
+      </div>
+    );
+  }
+
+  return null;
 }

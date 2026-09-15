@@ -54,6 +54,7 @@ import {
 } from "../night/stackFrames";
 import { ListenBadge, SeeListenIdentify } from "../listen/ListenBadge";
 import { MicPermissionPrompt } from "../listen/MicPermissionPrompt";
+import { transcreverAula } from "../listen/transcribeSession";
 import {
   SemEspacoError,
   getLatestCapture,
@@ -1152,6 +1153,16 @@ export function CameraShell({
                   transcript: gravacao.transcript,
                   transcriptStatus: gravacao.transcriptStatus,
                 });
+                /*
+                 * "Salva os dados importantes, depois processa" — a aula já
+                 * está guardada na linha de cima; isto só começa DEPOIS,
+                 * sem `await`, porque salvar não pode esperar minutos de
+                 * transcrição para terminar. `transcreverAula` decide
+                 * sozinha se há trabalho (aula sem áudio, sai na hora).
+                 */
+                if (gravacao.segments.length > 0) {
+                  void transcreverAula(sessionId);
+                }
               } catch (erro) {
                 // A aula fica sem áudio e continua aula — as imagens e o texto
                 // já estão salvos. Mas se foi falta de espaço, vale dizer:
