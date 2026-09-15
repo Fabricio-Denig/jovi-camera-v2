@@ -136,10 +136,16 @@ console.log("═══ a transcrição local organiza uma aula gravada ═══
     /classe/i.test(resumo) && /objeto/i.test(resumo),
     "com os conceitos que a aula realmente apresentou",
   );
+  // "Prestem atenção" é o AVISO, não o conteúdo — desde a rodada P0 do
+  // sanitizador, "Professor destacou" mostra o CONCEITO associado ("herança"),
+  // não a expressão de ênfase em si. Ver lessonSummary.ts: fraseDeConceito.
   check(
-    /Professor destacou/i.test(resumo) &&
-      /prestem atenção/i.test(resumo.toLowerCase()),
-    "e 'prestem atenção' vira um momento marcado, com evidência",
+    /Professor destacou/i.test(resumo) && /heran[cç]a/i.test(resumo),
+    "e a ênfase vira um momento marcado, apontando para o conceito ('herança')",
+  );
+  check(
+    !/prestem atenção/i.test(resumo.toLowerCase()),
+    "sem mostrar a expressão de aviso em si, só o que ela destacou",
   );
   check(
     !/\bIA\b/.test(await p.locator("body").innerText()),
