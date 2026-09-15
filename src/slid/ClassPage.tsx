@@ -128,7 +128,32 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
     if (audio?.transcriptJobStatus !== "processando") return;
     const id = window.setInterval(() => {
       void getLessonAudio(classId).then((achado) => {
-        if (achado) setAudio(achado);
+        if (!achado) return;
+        /*
+         * Só os campos da transcrição, nunca o objeto inteiro — o IndexedDB
+         * devolve um `Blob` novo a cada leitura, mesmo com os bytes
+         * idênticos. Substituir `audio` inteiro trocava a identidade desse
+         * Blob a cada 2s, e `LessonAudioPlayer` (via `useObjectUrl`) tratava
+         * isso como um áudio novo: revogava a URL antiga, criava outra, e o
+         * `<audio>` reiniciava — posição e duração resetadas para zero,
+         * medido com o player parando de responder a "ouvir deste ponto"
+         * bem no meio do reprocessamento. Os campos de áudio (`segments`,
+         * `blob`, `mimeType`, `durationMs`, `startedAtMs`) não mudam durante
+         * a transcrição — só a leitura os duplica — então preservar a
+         * identidade do estado anterior para eles é seguro, e é o que evita
+         * o problema pela raiz.
+         */
+        setAudio((atual) =>
+          atual
+            ? {
+                ...atual,
+                transcript: achado.transcript,
+                transcriptStatus: achado.transcriptStatus,
+                transcriptJobStatus: achado.transcriptJobStatus,
+                transcriptJobStartedAt: achado.transcriptJobStartedAt,
+              }
+            : achado,
+        );
       });
     }, 2000);
     return () => window.clearInterval(id);
