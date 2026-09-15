@@ -2,6 +2,54 @@ import type { TranscriptSegment } from "../shared/lib/mediaStore";
 import { MARCAS_DE_ENFASE, semAcento, VAZIAS, JANELA_DEPOIS_MS } from "./speechInsights";
 
 /**
+ * Palavras genéricas demais para virar assunto ou título — mesmo sendo
+ * "conteúdo" no sentido gramatical (substantivos, adjetivos), não carregam
+ * assunto nenhum sozinhas.
+ *
+ * Diferente de `VAZIAS` (artigos, pronomes, verbos de ligação — a gramática
+ * do português), esta lista é sobre o CONCEITO: "conteúdo", "assunto" e
+ * "importante" são palavras reais, com sentido, mas um resumo que usa
+ * qualquer uma delas como o tema da aula está mentindo por vagueza. Achada
+ * com um teste físico real: "Aula sem título" virou "Último" porque a
+ * palavra "último" (comum no jeito de falar de um professor, mas sem
+ * assunto nenhum) tinha peso suficiente para vencer a disputa por título.
+ *
+ * Fica FORA da contagem de termos (`contarTermosLocal`), então o efeito é
+ * automático em toda parte que lê o mapa de pesos: pontuação de frases
+ * (`pontuarFrase`), agrupamento (`termosFortes`), assunto amplo
+ * (`topicoAmplo`) e título (`sugerirTitulo`) — todos herdam o corte de um
+ * lugar só.
+ */
+const PALAVRAS_GENERICAS_DEMAIS = new Set(
+  (
+    "ultimo ultima primeiro primeira conteudo assunto momento teste " +
+    "importante proximo proxima preparar possibilidade necessario " +
+    "interessante geral outro outra outros outras mesmo mesma mesmos " +
+    "mesmas varios varias diferente diferentes tudo algo alguma algum " +
+    "alguns algumas coisa coisas coisinha jeito modo maneira coitado " +
+    "coitada tal tais coisarada"
+  ).split(/\s+/),
+);
+
+/**
+ * As palavras que compõem as próprias expressões de ênfase (`MARCAS_DE_ENFASE`)
+ * — "prestem", "atenção", "prova", "importante", "anotem"... — derivadas
+ * automaticamente da lista, não escritas à mão.
+ *
+ * Servem só para UMA pergunta: uma frase marcada como destaque ("Prestem
+ * atenção porque isso cai na prova.") tem ALGUM assunto próprio, além de
+ * avisar que algo importa? Sem excluir estas palavras, "prova" sozinha conta
+ * como conteúdo e a frase parece ter assunto — quando na verdade ela só
+ * aponta para um assunto que está em outra frase (achado com um teste real:
+ * "Professor destacou" mostrava a frase de aviso em vez do que foi avisado).
+ */
+const PALAVRAS_DE_MARCA = new Set(
+  MARCAS_DE_ENFASE.flatMap((m) => semAcento(m).split(/[^\p{L}\p{N}]+/u)).filter(
+    (w) => w.length >= 3,
+  ),
+);
+
+/**
  * O resumo GLOBAL da aula — uma síntese, não a transcrição de volta.
  *
  * A diferença entre esta camada e `speechInsights.ts` é o tamanho da unidade
@@ -126,7 +174,13 @@ function contarTermosLocal(
     for (const bruto of texto.split(/[^\p{L}\p{N}]+/u)) {
       const palavraOriginal = bruto.trim();
       const chave = semAcento(palavraOriginal);
-      if (chave.length < 3 || VAZIAS.has(chave) || /^\d+$/.test(chave)) continue;
+      if (
+        chave.length < 3 ||
+        VAZIAS.has(chave) ||
+        PALAVRAS_GENERICAS_DEMAIS.has(chave) ||
+        /^\d+$/.test(chave)
+      )
+        continue;
       // Uma vez por frase: uma palavra repetida três vezes na MESMA frase não
       // deve pesar como se tivesse aparecido em três frases diferentes.
       if (vistos.has(chave)) continue;
@@ -161,10 +215,17 @@ function termosFortes(
   texto: string,
   peso: Map<string, number>,
   totalCandidatos: number,
+  extraExcluir?: Set<string>,
 ): string[] {
   const vistos = new Map<string, number>();
   for (const bruto of semAcento(texto).split(/[^\p{L}\p{N}]+/u)) {
-    if (bruto.length < 3 || VAZIAS.has(bruto) || vistos.has(bruto)) continue;
+    if (
+      bruto.length < 3 ||
+      VAZIAS.has(bruto) ||
+      (extraExcluir && extraExcluir.has(bruto)) ||
+      vistos.has(bruto)
+    )
+      continue;
     const w = peso.get(bruto) ?? 0;
     if (w > 0) vistos.set(bruto, w);
   }
@@ -178,8 +239,70 @@ function termoDominante(
   texto: string,
   peso: Map<string, number>,
   totalCandidatos: number,
+  extraExcluir?: Set<string>,
 ): string | null {
-  return termosFortes(texto, peso, totalCandidatos)[0] ?? null;
+  return termosFortes(texto, peso, totalCandidatos, extraExcluir)[0] ?? null;
+}
+
+/** Abaixo disto, uma frase falada tem palavra(s) reais demais espalhadas em
+ * ruído demais para valer como ponto principal por conta própria. */
+const DENSIDADE_MINIMA_FALA = 0.4;
+
+/**
+ * Quanto da frase é palavra com peso real — não só "tem alguma palavra
+ * forte" (`termoDominante`), mas "a MAIORIA da frase é sobre isso".
+ *
+ * Existe para o caso do reconhecimento quebrado que ainda acerta uma ou duas
+ * palavras reais no meio do ruído — "Carregar na prova e necessário do
+ * Tudo." tem "prova" (uma palavra real), mas é ruído demais em volta para
+ * merecer virar um ponto principal com essas palavras exatas. Achado com um
+ * teste físico real: essa frase quebrada sobreviveu ao corte de
+ * `termoDominante` sozinho e virou ponto principal.
+ */
+function densidadeDeConteudo(texto: string, peso: Map<string, number>): number {
+  const tokens = semAcento(texto).split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  if (tokens.length === 0) return 0;
+  const vistas = new Set<string>();
+  let reais = 0;
+  for (const t of tokens) {
+    if (t.length < 3 || VAZIAS.has(t) || vistas.has(t)) continue;
+    vistas.add(t);
+    if ((peso.get(t) ?? 0) > 0) reais += 1;
+  }
+  return reais / tokens.length;
+}
+
+/**
+ * Uma frase de conteúdo perto o bastante de um destaque para explicar o que
+ * foi destacado — a frase marcada em si não conta ("Prestem atenção porque
+ * isso cai na prova." não é conteúdo, é um aviso), nem outra frase também
+ * marcada (dois avisos seguidos não se explicam um ao outro).
+ *
+ * A mais PRÓXIMA no tempo vence, dentro da mesma janela usada para associar
+ * fala a um momento visual (`JANELA_DEPOIS_MS`) — perto o bastante para ser
+ * "sobre a mesma coisa", longe o bastante para cobrir "o professor fala do
+ * assunto e só depois avisa que cai na prova".
+ */
+function vizinhoDeConteudo(
+  destaque: Candidato,
+  candidatos: Candidato[],
+  janelaMs: number,
+  peso: Map<string, number>,
+): Candidato | null {
+  if (destaque.atMs === null) return null;
+  let melhor: Candidato | null = null;
+  let melhorDist = Infinity;
+  for (const c of candidatos) {
+    const ehOMesmo = c.atMs === destaque.atMs && c.texto === destaque.texto;
+    if (ehOMesmo || c.origem !== "fala" || c.marcado || c.termo === null) continue;
+    if (densidadeDeConteudo(c.texto, peso) < DENSIDADE_MINIMA_FALA) continue;
+    if (c.atMs === null) continue;
+    const dist = Math.abs(c.atMs - destaque.atMs);
+    if (dist > janelaMs || dist >= melhorDist) continue;
+    melhorDist = dist;
+    melhor = c;
+  }
+  return melhor;
 }
 
 /**
@@ -427,7 +550,8 @@ export function gerarResumoGlobal({
   ocrLinhas: string[];
   momentosMs: number[];
 }): LessonSummary {
-  const frasesFala = frasesDaFala(transcript).filter(
+  const frasesFalaTodas = frasesDaFala(transcript);
+  const frasesFala = frasesFalaTodas.filter(
     (f) => f.texto.split(/\s+/).length >= MIN_PALAVRAS_FRASE,
   );
   const frasesOcr: Frase[] = [...new Set(ocrLinhas)]
@@ -461,7 +585,11 @@ export function gerarResumoGlobal({
     };
   }
 
-  const termosFala = contarTermosLocal(frasesFala.map((f) => f.texto));
+  // Todas as frases da fala contam para o peso das palavras, mesmo as curtas
+  // demais para virar ponto principal sozinhas ("Multiplicação de matrizes.",
+  // três palavras) — elas ainda são conteúdo real, só não têm corpo bastante
+  // para carregar um resumo por conta própria (ver `MIN_PALAVRAS_FRASE`).
+  const termosFala = contarTermosLocal(frasesFalaTodas.map((f) => f.texto));
   const termosOcr = contarTermosLocal(frasesOcr.map((f) => f.texto));
   const peso = new Map<string, number>();
   const formas = new Map<string, string>();
@@ -486,7 +614,38 @@ export function gerarResumoGlobal({
     amplo: topicoAmplo(f.texto, peso),
   }));
 
-  const deduplicados = deduplicarPorConceito(candidatos).sort((a, b) => b.pontos - a.pontos);
+  // O mesmo cálculo, mas para TODA frase da fala, sem o corte de tamanho —
+  // usado só para achar o conteúdo vizinho de um destaque (`vizinhoDeConteudo`).
+  // Uma frase curta demais para ser um ponto principal ainda pode ser
+  // exatamente o que um destaque próximo estava apontando.
+  const candidatosVizinhos: Candidato[] = frasesFalaTodas.map((f) => ({
+    ...f,
+    pontos: pontuarFrase(f, peso, momentosMs),
+    termo: termoDominante(f.texto, peso, totalCandidatos),
+    grupo: assinaturaDoGrupo(f.texto, peso, totalCandidatos),
+    amplo: topicoAmplo(f.texto, peso),
+  }));
+
+  /*
+   * Só frases com termo real disputam vaga de ponto principal / visão geral —
+   * uma frase sem NENHUMA palavra específica (saudação, transição, fragmento
+   * quebrado do reconhecimento) não é um conceito, é ruído. Sem este corte, ela
+   * ainda concorre e vence quando sobra vaga — foi assim que um teste real
+   * produziu "Agora eu vou preparar um pouco sobre o último." como "ponto
+   * principal": a frase não tinha assunto nenhum, só não tinha concorrência.
+   * `professorDestacou`, abaixo, usa `candidatos` sem este corte de propósito —
+   * uma frase de ênfase sem termo próprio ainda pode ser útil ali (herda o
+   * termo de uma frase vizinha, quando essa associação existir).
+   */
+  const candidatosComConteudo = candidatos.filter(
+    (c) =>
+      c.termo !== null &&
+      (c.origem !== "fala" || densidadeDeConteudo(c.texto, peso) >= DENSIDADE_MINIMA_FALA),
+  );
+
+  const deduplicados = deduplicarPorConceito(candidatosComConteudo).sort(
+    (a, b) => b.pontos - a.pontos,
+  );
   const principais = diversificarPorTermo(deduplicados, MAX_PONTOS);
   const principaisOrdenados = [...principais].sort((a, b) => {
     if (a.atMs === null && b.atMs === null) return 0;
@@ -503,11 +662,22 @@ export function gerarResumoGlobal({
   const destaquesDedup = deduplicarPorConceito(destaquesCandidatos)
     .sort((a, b) => a.atMs! - b.atMs!)
     .slice(0, MAX_DESTAQUES);
-  const professorDestacou = destaquesDedup.map((d) => ({
-    atMs: d.atMs!,
-    text: pontuar(d.texto),
-    marca: MARCAS_DE_ENFASE.find((m) => semAcento(d.texto).includes(semAcento(m))) ?? "",
-  }));
+  const professorDestacou = destaquesDedup.map((d) => {
+    // A frase de aviso só vale como conteúdo se, TIRANDO as palavras da
+    // própria expressão de ênfase, ainda sobrar algo — "prova" não conta,
+    // "matrizes" conta. Sem conteúdo próprio, procura na frase de fala mais
+    // próxima o que foi de fato destacado.
+    const termoProprio = termoDominante(d.texto, peso, totalCandidatos, PALAVRAS_DE_MARCA);
+    const vizinho = termoProprio
+      ? null
+      : vizinhoDeConteudo(d, candidatosVizinhos, JANELA_DEPOIS_MS, peso);
+    const textoFinal = vizinho ? vizinho.texto : d.texto;
+    return {
+      atMs: d.atMs!,
+      text: pontuar(textoFinal),
+      marca: MARCAS_DE_ENFASE.find((m) => semAcento(d.texto).includes(semAcento(m))) ?? "",
+    };
+  });
 
   // "Para revisar": os termos do que o professor marcou, mas que ainda não
   // apareceram como ponto principal — pista extra, não repetição.

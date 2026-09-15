@@ -190,9 +190,39 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
   }, [name, record, onChanged]);
 
   if (record === undefined) {
+    /*
+     * Nunca uma tela preta com "Abrindo a aula…" no meio — um teste físico
+     * real mostrou até 12s nesse estado numa abertura fria, e uma tela em
+     * branco por 12s parece quebrada mesmo quando o app está funcionando.
+     * O "Voltar" continua respondendo (a pessoa não fica presa), e o
+     * esqueleto ocupa o lugar onde o cabeçalho de verdade vai entrar assim
+     * que `getClassById` responder — sem saltar de tamanho quando o
+     * conteúdo real chega.
+     */
     return (
-      <div className="flex h-full items-center justify-center bg-canvas">
-        <p className="text-sm text-ink-muted">Abrindo a aula…</p>
+      <div className="flex h-full flex-col bg-canvas">
+        <header className="border-b border-line px-4 pb-0 pt-[max(14px,env(safe-area-inset-top))]">
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              onClick={onClose}
+              className="-ml-2 flex min-h-11 items-center gap-1.5 rounded-full px-2 pr-3 text-[14px] text-ink-muted transition-transform active:scale-95 active:opacity-70"
+            >
+              <span aria-hidden="true" className="text-[17px] leading-none">
+                ‹
+              </span>
+              Voltar
+            </button>
+          </div>
+          <div className="animate-pulse pb-4 pt-1" aria-hidden="true">
+            <div className="h-24 rounded-2xl bg-surface-2" />
+            <div className="mt-3 h-4 w-2/3 rounded bg-surface-2" />
+            <div className="mt-2 h-3 w-1/3 rounded bg-surface-2" />
+          </div>
+        </header>
+        <p className="sr-only" role="status">
+          Abrindo a aula…
+        </p>
       </div>
     );
   }
