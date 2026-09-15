@@ -10,8 +10,10 @@ import {
   registrarAudioSegmento,
   registrarAudioReproduzivel,
   registrarInferencia,
+  registrarTranscricaoChunk,
   registrarErro,
 } from "./listenDiag";
+import { sanitizarTrecho, MENSAGEM_TRECHO_DEGENERADO } from "./transcriptSanitizer";
 
 /**
  * O motor de transcrição local, num lugar só — o mesmo desenho de
@@ -160,6 +162,8 @@ type Transcritor = (
     stride_length_s: number;
     return_timestamps: true;
     max_new_tokens: number;
+    repetition_penalty: number;
+    no_repeat_ngram_size: number;
   },
 ) => Promise<{
   text: string;
@@ -441,6 +445,29 @@ export async function transcreverTrecho(
        * uma frase real de professor no meio.
        */
       max_new_tokens: 128,
+      /*
+       * Achado com um teste físico real: um trecho pouco claro ("Eu vou
+       * fazer um pouco de...") fez o modelo entrar num loop de repetição —
+       * "um pouco de um pouco de um pouco..." — dezenas de vezes, até bater
+       * no teto de `max_new_tokens`. Confirmado lendo o código-fonte da
+       * versão instalada (`node_modules/@huggingface/transformers`, 4.2.0):
+       * `repetition_penalty` e `no_repeat_ngram_size` são parâmetros REAIS de
+       * `GenerationConfig`, aplicados de forma genérica a qualquer modelo —
+       * Whisper incluso — via `_get_logits_processor`
+       * (`src/models/modeling_utils.js`). Outros mecanismos do Whisper em
+       * Python (`condition_on_prev_tokens`, `compression_ratio_threshold`,
+       * `no_speech_threshold`, `temperature`/fallback) NÃO existem nesta
+       * versão da biblioteca — confirmado por busca no código-fonte inteiro,
+       * zero ocorrências — por isso não estão aqui: seria inventar uma opção
+       * que a biblioteca instalada não lê.
+       *
+       * Isto REDUZ a chance de um loop, não a elimina — por isso
+       * `transcriptSanitizer.ts` (abaixo) continua sendo a garantia de
+       * verdade: mesmo que o modelo repita, o texto sanitizado é o único que
+       * chega a qualquer tela.
+       */
+      repetition_penalty: 1.3,
+      no_repeat_ngram_size: 3,
     });
   } catch (erro) {
     registrarErro("inference", erro);
@@ -452,22 +479,47 @@ export async function transcreverTrecho(
     chunks: resultado.chunks?.length ?? 0,
   });
 
+  /*
+   * RAW MODEL OUTPUT → sanitizado, antes de qualquer outra coisa ver este
+   * texto. `sanitizeTranscript` (`transcriptSanitizer.ts`) corta loops de
+   * repetição ("um pouco de um pouco de..." — achado com um teste físico
+   * real) e classifica o que sobra. O bruto nunca é devolvido — só existe
+   * para `?debug=listen` (`registrarTranscricaoChunk`), nunca persistido com
+   * a aula.
+   */
+  const sanitizarELograr = (chunkIndex: number, bruto: string): string => {
+    const r = sanitizarTrecho(bruto);
+    registrarTranscricaoChunk({
+      segmentoIndex: indice,
+      chunkIndex,
+      bruto,
+      sanitizado: r.text,
+      qualidade: r.qualidade,
+      loopDetectado: r.loopDetectado,
+    });
+    // Nada sobrou (trecho inteiro degenerado): um aviso curto e honesto no
+    // lugar do texto — nunca um buraco silencioso, nunca o texto quebrado.
+    return r.text || MENSAGEM_TRECHO_DEGENERADO;
+  };
+
   // Sem blocos (áudio curto, sem `chunks` no retorno): o texto inteiro vira
   // um trecho só, do início ao fim do arquivo — melhor que descartar uma
   // transcrição que existe só porque não veio fatiada.
   if (!resultado.chunks || resultado.chunks.length === 0) {
-    const texto = resultado.text.trim();
-    return texto ? [{ startMs: 0, endMs: 0, text: texto }] : [];
+    const bruto = resultado.text.trim();
+    if (!bruto) return [];
+    const texto = sanitizarELograr(0, bruto);
+    return [{ startMs: 0, endMs: 0, text: texto }];
   }
 
   return resultado.chunks
-    .map((c) => ({
+    .map((c, i) => ({
       startMs: Math.round(c.timestamp[0] * 1000),
       // `timestamp[1]` vem nulo quando o áudio acaba no meio de uma
       // palavra que o modelo não fechou — o começo do bloco ainda é uma
       // âncora válida, então o fim herda dele em vez de descartar o bloco.
       endMs: Math.round((c.timestamp[1] ?? c.timestamp[0]) * 1000),
-      text: c.text.trim(),
+      text: c.text.trim() ? sanitizarELograr(i, c.text.trim()) : "",
     }))
     .filter((c) => c.text.length > 0);
 }

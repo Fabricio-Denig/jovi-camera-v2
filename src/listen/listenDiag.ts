@@ -77,6 +77,27 @@ export interface InferenceDiag {
   chunks: number | null;
 }
 
+/**
+ * O que o modelo devolveu para um trecho, e o que sobrou depois do
+ * `sanitizeTranscript` (`transcriptSanitizer.ts`) — lado a lado, só para
+ * `?debug=listen`.
+ *
+ * Existe porque um teste físico real mostrou o motor entrando num loop de
+ * repetição ("um pouco de um pouco de...") sem nenhum jeito de confirmar,
+ * depois, se a causa foi a decodificação em si ou uma etapa posterior
+ * (concatenação, merge de segmentos). Com RAW e SANITIZED lado a lado por
+ * trecho, a próxima vez que isso acontecer em aparelho real, a resposta está
+ * aqui — não precisa supor de novo.
+ */
+export interface TranscriptChunkDiag {
+  segmentoIndex: number;
+  chunkIndex: number;
+  bruto: string;
+  sanitizado: string;
+  qualidade: string;
+  loopDetectado: boolean;
+}
+
 export interface ErrorDiag {
   stage: string;
   name: string;
@@ -92,6 +113,7 @@ export interface ListenDiagSnapshot {
   downloads: DownloadFileDiag[];
   audio: AudioSegmentDiag[];
   inference: InferenceDiag;
+  transcricao: TranscriptChunkDiag[];
   error: ErrorDiag | null;
 }
 
@@ -116,6 +138,7 @@ function vazio(): ListenDiagSnapshot {
       duracaoInferenciaMs: null,
       chunks: null,
     },
+    transcricao: [],
     error: null,
   };
 }
@@ -200,6 +223,11 @@ export function obterAudioReproduzivel(
 
 export function registrarInferencia(patch: Partial<InferenceDiag>) {
   estado = { ...estado, inference: { ...estado.inference, ...patch } };
+  persistir();
+}
+
+export function registrarTranscricaoChunk(diag: TranscriptChunkDiag) {
+  estado = { ...estado, transcricao: [...estado.transcricao, diag] };
   persistir();
 }
 
