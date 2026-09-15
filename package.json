@@ -8,8 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "prebuild": "node scripts/copy-ocr-assets.mjs",
-    "predev": "node scripts/copy-ocr-assets.mjs"
+    "prebuild": "node scripts/copy-ocr-assets.mjs && node scripts/copy-ort-assets.mjs",
+    "predev": "node scripts/copy-ocr-assets.mjs && node scripts/copy-ort-assets.mjs"
   },
   "dependencies": {
     "@huggingface/transformers": "^4.2.0",
