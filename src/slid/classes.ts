@@ -2,6 +2,7 @@ import {
   deleteCapturesForever,
   deleteLessonAudio,
   getAllCaptures,
+  getCapturesBySession,
   getTrashedCaptures,
   restoreCaptures,
   saveCapture,
@@ -106,9 +107,20 @@ export async function getTrashedClasses(): Promise<ClassRecord[]> {
   );
 }
 
+/**
+ * Abre UMA aula, sem ler a galeria inteira.
+ *
+ * `getClasses()` (usado antes aqui) varre TODAS as capturas de TODAS as
+ * aulas para achar uma — medido em aparelho real em ~12s de "Abrindo a
+ * aula…", crescendo com o tamanho da galeria, não desta aula. O índice
+ * `bySession` (`mediaStore.ts`) devolve só os registros desta sessão.
+ */
 export async function getClassById(id: string): Promise<ClassRecord | null> {
-  const classes = await getClasses();
-  return classes.find((record) => record.id === id) ?? null;
+  const items = (await getCapturesBySession(id)).filter(
+    (item) => !item.deletedAt,
+  );
+  if (items.length === 0) return null;
+  return toRecord(id, items);
 }
 
 /**

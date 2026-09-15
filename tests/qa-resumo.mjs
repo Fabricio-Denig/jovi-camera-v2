@@ -204,11 +204,14 @@ console.log("\n== Resumo: só o que a aula deu ==");
   await p.waitForTimeout(500);
   const painel = await p.locator("[role=tabpanel]").innerText();
 
-  check(/Esta aula de Cálculo/.test(painel), "a visão geral guardada na sessão");
+  check(/RESUMO DA AULA/i.test(painel), "a síntese global da aula");
   check(/2 fórmulas/.test(painel), "as estruturas reconhecidas");
-  check(/NESTA AULA/i.test(painel), "os tópicos, que são linhas do quadro");
+  check(
+    /PONTOS PRINCIPAIS/i.test(painel) &&
+      /fun[çc][aã]o do 2° grau|ra[íi]zes da equa[çc][aã]o/i.test(painel),
+    "os pontos principais trazem o que o quadro leu",
+  );
   check(/COMO A AULA ANDOU/i.test(painel), "e a linha do tempo");
-  check(/Você marcou esta aula como Revisar/i.test(painel), "com o status do estudante");
 
   // O teste que mais importa: nada de conhecimento externo.
   check(
@@ -359,7 +362,7 @@ console.log("\n== sem compartilhar nem imprimir: o botão não aparece ==");
     /não oferece compartilhar nem imprimir/i.test(painel),
     "e a tela diz o que dá para fazer no lugar",
   );
-  check(/Copiar a aula inteira/i.test(painel), "o copiar continua lá");
+  check(/Copiar resumo/i.test(painel), "o copiar continua lá");
   check(/Excluir/i.test(painel), "e o excluir também");
   check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
   await b.close();

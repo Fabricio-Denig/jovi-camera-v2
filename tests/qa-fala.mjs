@@ -253,9 +253,9 @@ console.log("\n== o resumo usa o que foi dito ==");
   await irPara(p, "Resumo");
 
   const resumo = await p.locator("[role=tabpanel]").innerText();
-  check(/O que foi dito/i.test(resumo), "há uma seção do que foi falado");
+  check(/Pontos principais/i.test(resumo), "há uma seção do que foi falado");
   check(
-    /O professor marcou/i.test(resumo),
+    /Professor destacou/i.test(resumo),
     "e outra do que o professor marcou",
   );
   check(
@@ -264,19 +264,27 @@ console.log("\n== o resumo usa o que foi dito ==");
   );
 
   /*
-   * A verificação que vale mais que todas: cada linha de "O que foi dito" tem
-   * de existir, literalmente, na transcrição. Uma frase plausível que ninguém
+   * A verificação que vale mais que todas: cada linha de "Pontos principais"
+   * tem de existir, literalmente (a menos de maiúscula/pontuação — o próprio
+   * resumo capitaliza e pontua as frases, de propósito, ver `pontuar()` em
+   * `lessonSummary.ts`), na transcrição. Uma frase plausível que ninguém
    * disse é o defeito que este produto inteiro existe para não cometer, e é
    * o mais difícil de perceber olhando a tela — porque ela parece certa.
    */
+  const normalizar = (t) =>
+    t
+      .toLowerCase()
+      .trim()
+      .replace(/^•\s*/, "")
+      .replace(/[.!?…]+$/, "");
   const secao = p
     .locator("section")
-    .filter({ hasText: "O que foi dito" })
+    .filter({ hasText: "Pontos principais" })
     .locator("li");
   const linhas = await secao.allInnerTexts();
-  const ditas = FALA_REACT.map(([, , t]) => t);
+  const ditas = FALA_REACT.map(([, , t]) => normalizar(t));
   const inventadas = linhas.filter(
-    (l) => !ditas.some((d) => d.includes(l.replace(/^•\s*/, "").trim())),
+    (l) => !ditas.some((d) => d.includes(normalizar(l))),
   );
   check(
     linhas.length > 0,
@@ -342,11 +350,11 @@ console.log("\n== copiar a aula leva a parte falada junto ==");
   await abrirAula(p, "sem quadro");
   await irPara(p, "Resumo");
 
-  await p.getByRole("button", { name: /Copiar a aula inteira/i }).click();
+  await p.getByRole("button", { name: /Copiar resumo/i }).click();
   await p.waitForTimeout(700);
   const copiado = await p.evaluate(() => navigator.clipboard.readText());
   check(
-    /O QUE FOI DITO/.test(copiado),
+    /PONTOS PRINCIPAIS/.test(copiado),
     "o texto copiado tem a seção do que foi falado",
   );
   check(
