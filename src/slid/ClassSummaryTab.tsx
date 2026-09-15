@@ -1,48 +1,30 @@
 import { CopyButton } from "./CopyButton";
 import { QuickActions } from "./QuickActions";
 import { ListenFromHere } from "./ListenFromHere";
-import { classAsText } from "./classText";
-import {
-  KIND_NAMES,
-  overviewWithStatus,
-  type ContentKind,
-} from "./readContent";
-import { STATUS_STYLES } from "./status";
+import { resumoAsText, linesWithoutTitle } from "./classText";
+import { KIND_NAMES, type ContentKind } from "./readContent";
 import { formatClock } from "../shared/lib/time";
 import type { ClassRecord } from "./classes";
-import {
-  acharDestaques,
-  frasesRepresentativas,
-  topicosDaFala,
-} from "../listen/speechInsights";
+import { gerarResumoGlobal } from "../listen/lessonSummary";
 import type { TranscriptSegment } from "../shared/lib/mediaStore";
 
 /**
- * A aba Resumo: a aula condensada no que dá para afirmar sobre ela.
+ * A aba Resumo: o payoff do SliD.
  *
- * O wireframe chama esta aba de "Resumo IA" e desenha, embaixo das fórmulas,
- * três marcadores do tipo "Δ > 0 → duas raízes reais". Isso é conhecimento
- * sobre o assunto, não leitura da captura — nenhuma daquelas três linhas está
- * escrita no slide desenhado. É exatamente a coisa que este produto não faz.
+ * Não é mais um relatório sobre o que o SISTEMA fez ("esta aula registrou 3
+ * momentos em 8 minutos") — isso vira metadata pequena, quando sobra. O que
+ * abre a tela agora é uma síntese GLOBAL de sobre o que a aula foi, montada
+ * por `gerarResumoGlobal` (transcrição + quadro + momentos + destaques do
+ * professor, todos juntos) — não uma lista de frases soltas que cresce com a
+ * duração da aula. Um teste real expôs exatamente esse defeito: a aba
+ * virando "quase a transcrição de volta" numa aula de menos de um minuto.
+ * `gerarResumoGlobal` garante compressão de verdade, com um teto de
+ * palavras que nunca deixa o resumo crescer proporcional à aula.
  *
- * Então a forma do Figma fica e a fonte do conteúdo continua sendo a aula:
- * quantos momentos, quanto tempo, que estruturas a câmera reconheceu pela
- * forma, e quais linhas o professor escreveu como título. Quando a leitura não
- * deu nada, as seções somem em vez de encherem com texto plausível — um resumo
- * convincente de uma aula que não aconteceu é a pior coisa que esta tela
- * poderia produzir.
- *
- * **O que a fala acrescenta, e o limite dela.** Desde que a aula passou a ser
- * transcrita, o resumo tem duas fontes em vez de uma. Isso resolve o caso que
- * o teste no celular expôs — quadro ilegível, resumo genérico, e a aula
- * inteira falada ali do lado — e não afrouxa nada: as frases mostradas aqui
- * **foram ditas**, palavra por palavra, escolhidas entre as que existem por
- * frequência de termos, proximidade de um momento guardado e marcação de
- * ênfase. Nenhuma é gerada.
- *
- * O limite continua valendo nos dois sentidos. Se a fala disser só "isso aqui
- * é importante" sem dizer o quê, o resumo não descobre o assunto: a frase
- * aparece como foi dita, e nada é completado em volta dela.
+ * A regra que continua valendo, herdada da versão anterior desta aba: nada é
+ * inventado. Cada frase aqui foi dita ou lida; o que muda é que agora elas
+ * são agrupadas por conceito e costuradas com conectores, não despejadas uma
+ * a uma.
  */
 export function ClassSummaryTab({
   record,
@@ -62,57 +44,126 @@ export function ClassSummaryTab({
   onExcluir: () => void;
 }) {
   const momentosMs = record.moments.map((m) => m.atMs);
-  const falado = frasesRepresentativas(transcript, momentosMs);
-  const destaques = acharDestaques(transcript, 4);
-  /*
-   * Termos da fala só quando o quadro não deu tópico nenhum.
-   *
-   * Com os dois, a lista misturaria o que o professor escreveu como título com
-   * palavras que ele repetiu falando — e as primeiras são muito melhores,
-   * porque alguém decidiu escrevê-las. Sem os primeiros, os segundos são a
-   * única resposta honesta para "do que foi esta aula", e deixar a seção
-   * sumir seria esconder o que o app sabe.
-   */
-  const topicos =
-    record.topics.length > 0 ? record.topics : topicosDaFala(transcript);
+  // As duas formas do quadro: os tópicos já curados (`summariseTopics`, um
+  // título por vez) e as linhas de cada momento (mais detalhe). As duas
+  // entram como evidência — `gerarResumoGlobal` decide o que usar.
+  const ocrLinhas = [
+    ...record.topics,
+    ...record.moments.flatMap((m) => linesWithoutTitle(m)),
+  ];
+  const resumo = gerarResumoGlobal({ transcript, ocrLinhas, momentosMs });
 
-  const nada =
-    !record.overview &&
-    topicos.length === 0 &&
-    record.kinds.length === 0 &&
-    falado.length === 0;
+  const semNadaMesmo =
+    !resumo.temConteudo && record.kinds.length === 0 && record.moments.length === 0;
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Que a aula foi gravada é um fato sobre ela, e entra no resumo como
-          qualquer outro — não como propaganda de um recurso.
-
-          As duas frases são separadas porque as duas coisas são separadas: o
-          arquivo de áudio é gravado pelo app e fica neste aparelho; a
-          transcrição é feita pelo reconhecimento do navegador, e o que ele faz
-          com o som é decisão dele, não deste app. Dizer "transcrição local"
-          seria uma garantia que não temos como dar. */}
-      {temAudio && (
+      {/*
+        Independente de o resumo ter dado certo por outra fonte (o quadro):
+        o áudio existir e a transcrição ter falhado é um fato sobre ESSA
+        fonte, e precisa ser dito mesmo quando o quadro sustenta o resumo
+        sozinho — as duas fontes falham de forma independente, e escondida
+        atrás de um resumo bem-sucedido esta informação nunca chegaria a
+        quem só tem aquele um navegador quebrado para descobrir.
+      */}
+      {temAudio && transcriptStatus === "indisponivel" && (
         <p className="-mb-2 text-[12.5px] text-ink-muted">
-          Esta aula tem gravação de áudio.
-          {falado.length > 0
-            ? " O que foi dito também foi transcrito."
-            : transcriptStatus === "indisponivel"
-              ? " A transcrição da fala não funcionou neste navegador."
-              : ""}
+          A transcrição da fala não funcionou neste navegador. O áudio da
+          aula continua salvo.
         </p>
       )}
 
-      {record.overview && (
-        <p className="text-[15px] leading-relaxed text-ink">
-          {overviewWithStatus(
-            record.overview,
-            record.status,
-            record.status ? STATUS_STYLES[record.status].label : null,
+      {resumo.temConteudo ? (
+        <>
+          {/* O PAYOFF: a síntese global, não um relatório sobre o sistema. */}
+          <section>
+            <h2 className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
+              Resumo da aula
+            </h2>
+            <p className="mt-1.5 text-[15.5px] leading-relaxed text-ink">
+              {resumo.overview}
+            </p>
+          </section>
+
+          {resumo.pontosPrincipais.length > 0 && (
+            <section className="rounded-2xl bg-surface-2 px-4 py-4">
+              <h2 className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
+                Pontos principais
+              </h2>
+              <ul className="mt-2.5 flex flex-col gap-1.5">
+                {resumo.pontosPrincipais.map((ponto) => (
+                  <li
+                    key={ponto}
+                    className="flex gap-2 text-[14px] leading-snug text-ink"
+                  >
+                    <span aria-hidden="true" className="text-accent">
+                      •
+                    </span>
+                    <span className="min-w-0 flex-1">{ponto}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
           )}
+
+          {/* Os instantes em que alguém disse que aquilo importa — com a hora,
+              porque a hora é o que leva de volta até lá. */}
+          {resumo.professorDestacou.length > 0 && (
+            <section className="rounded-2xl border border-accent/25 bg-accent/[0.06] px-4 py-4">
+              <h2 className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-accent">
+                Professor destacou
+              </h2>
+              <ul className="mt-2.5 flex flex-col gap-2.5">
+                {resumo.professorDestacou.map((d) => (
+                  <li key={`${d.atMs}-${d.marca}`} className="flex flex-col gap-1">
+                    <span className="text-[13.5px] leading-snug text-ink">
+                      {d.text}
+                    </span>
+                    <span className="flex items-center gap-2">
+                      <span className="font-mono text-[11.5px] tabular-nums text-accent">
+                        ★ {formatClock(d.atMs)}
+                      </span>
+                      {onOuvir && (
+                        <ListenFromHere atMs={d.atMs} onOuvir={onOuvir} compacto />
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {resumo.paraRevisar.length > 0 && (
+            <section>
+              <h2 className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
+                Para revisar
+              </h2>
+              <ul className="flex flex-col gap-1.5">
+                {resumo.paraRevisar.map((item) => (
+                  <li
+                    key={item}
+                    className="flex gap-2 text-[14px] leading-snug text-ink"
+                  >
+                    <span aria-hidden="true" className="text-accent">
+                      ◦
+                    </span>
+                    <span className="min-w-0 flex-1">{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </>
+      ) : (
+        <p className="pt-6 text-center text-sm text-ink-muted">
+          {semNadaMesmo
+            ? "Ainda não há conteúdo suficiente para resumir esta aula."
+            : "A câmera guardou os momentos desta aula, mas não conseguiu ler o suficiente para montar um resumo."}
         </p>
       )}
 
+      {/* Metadata do que a câmera reconheceu — pequena de propósito, nunca
+          ocupando o lugar do resumo. */}
       {record.kinds.length > 0 && (
         <section>
           <h2 className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
@@ -128,84 +179,6 @@ export function ClassSummaryTab({
               </span>
             ))}
           </div>
-        </section>
-      )}
-
-      {topicos.length > 0 && (
-        <section className="rounded-2xl bg-surface-2 px-4 py-4">
-          <h2 className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
-            Nesta aula
-          </h2>
-          <ul className="mt-2.5 flex flex-col gap-1.5">
-            {topicos.map((topic) => (
-              <li
-                key={topic}
-                className="flex gap-2 text-[14.5px] leading-snug text-ink"
-              >
-                <span aria-hidden="true" className="text-accent">
-                  •
-                </span>
-                <span className="min-w-0 flex-1">{topic}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {/*
-        O que foi dito — e é literalmente o que foi dito.
-
-        Esta seção é a diferença entre "o SliD escuta" e "o SliD entende o que
-        escutou". Cada linha é uma frase reconhecida, escolhida por três
-        sinais que já existem na aula: os termos que mais se repetem nela, a
-        proximidade de um momento que a câmera achou digno de guardar, e a
-        marcação de ênfase do próprio professor. Nenhuma foi escrita aqui.
-      */}
-      {falado.length > 0 && (
-        <section>
-          <h2 className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
-            O que foi dito
-          </h2>
-          <ul className="flex flex-col gap-2">
-            {falado.map((frase) => (
-              <li
-                key={frase}
-                className="flex gap-2 text-[14px] leading-snug text-ink"
-              >
-                <span aria-hidden="true" className="text-accent">
-                  •
-                </span>
-                <span className="min-w-0 flex-1">{frase}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {/* Os instantes em que alguém disse que aquilo importa — com a hora,
-          porque a hora é o que leva de volta até lá. */}
-      {destaques.length > 0 && (
-        <section className="rounded-2xl border border-accent/25 bg-accent/[0.06] px-4 py-4">
-          <h2 className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-accent">
-            O professor marcou
-          </h2>
-          <ul className="mt-2.5 flex flex-col gap-2.5">
-            {destaques.map((d) => (
-              <li key={`${d.atMs}-${d.marca}`} className="flex flex-col gap-1">
-                <span className="text-[13.5px] leading-snug text-ink">
-                  {d.text}
-                </span>
-                <span className="flex items-center gap-2">
-                  <span className="font-mono text-[11.5px] tabular-nums text-accent">
-                    ★ {formatClock(d.atMs)}
-                  </span>
-                  {onOuvir && (
-                    <ListenFromHere atMs={d.atMs} onOuvir={onOuvir} compacto />
-                  )}
-                </span>
-              </li>
-            ))}
-          </ul>
         </section>
       )}
 
@@ -246,17 +219,9 @@ export function ClassSummaryTab({
         </section>
       )}
 
-      {nada && (
-        <p className="pt-6 text-center text-sm text-ink-muted">
-          Esta aula não tem resumo — a câmera guardou os momentos, mas não
-          conseguiu ler o suficiente para montar um.
-        </p>
+      {resumo.temConteudo && (
+        <CopyButton texto={resumoAsText(record, resumo)} rotulo="Copiar resumo" />
       )}
-
-      <CopyButton
-        texto={classAsText(record, transcript)}
-        rotulo="Copiar a aula inteira"
-      />
 
       <QuickActions
         record={record}

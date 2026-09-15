@@ -218,7 +218,7 @@ console.log("═══ JORNADA 1 — SliD completo, com áudio ═══\n");
   check(/COMO A AULA ANDOU/i.test(resumo), "Resumo: a aula condensada");
   check(!/\bIA\b/.test(await p.locator("body").innerText()), "e nenhuma promessa de IA");
 
-  await p.getByRole("button", { name: /Copiar a aula inteira/i }).click();
+  await p.getByRole("button", { name: /Copiar resumo/i }).click();
   await p.waitForTimeout(700);
   const area = await p.evaluate(() => navigator.clipboard.readText());
   check(area.length > 30, "copiar a aula põe texto na área de transferência", `${area.length} caracteres`);
@@ -436,7 +436,7 @@ console.log(
   await p.waitForTimeout(800);
   const resumo = await p.locator("[role=tabpanel]").innerText();
   check(
-    /O que foi dito/i.test(resumo),
+    /PONTOS PRINCIPAIS|RESUMO DA AULA/i.test(resumo),
     "o Resumo usa o que foi dito, não só o que foi lido",
     resumo.slice(0, 80).replace(/\n/g, " · "),
   );
@@ -445,13 +445,13 @@ console.log(
     "e nada nele soa como aula fracassada",
   );
 
-  await p.getByRole("button", { name: /Copiar a aula inteira/i }).click();
+  await p.getByRole("button", { name: /Copiar resumo/i }).click();
   await p.waitForTimeout(700);
   const copiado = await p
     .evaluate(() => navigator.clipboard.readText())
     .catch(() => "");
   check(
-    /O QUE FOI DITO/.test(copiado),
+    /PONTOS PRINCIPAIS/.test(copiado),
     "copiar a aula leva a parte falada junto",
     copiado.slice(0, 60).replace(/\n/g, " · "),
   );

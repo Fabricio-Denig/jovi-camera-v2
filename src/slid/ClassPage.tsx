@@ -16,6 +16,7 @@ import {
   transcreverAula,
 } from "../listen/transcribeSession";
 import { ListenDebugReport } from "../listen/ListenDebugReport";
+import { sugerirTitulo } from "../listen/lessonSummary";
 import { getLessonAudio, type LessonAudio } from "../shared/lib/mediaStore";
 
 /** `?debug=listen` abre o diagnóstico do Listen — o que cada etapa da
@@ -157,6 +158,26 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
       });
     }, 2000);
     return () => window.clearInterval(id);
+  }, [classId, audio?.transcriptJobStatus]);
+
+  /*
+   * Assim que a transcrição real termina, uma chance de trocar "Aula sem
+   * título" por um título de verdade — só quando a pessoa nunca escreveu um.
+   * Só dispara na transição para "pronto" (não a cada poll): sem isso,
+   * tentaria de novo a cada 2s enquanto o status ficasse parado em "pronto",
+   * e a exigência de confiança alta em `sugerirTitulo` já existe — não
+   * precisa ser reforçada tentando repetidamente.
+   */
+  useEffect(() => {
+    if (!record || record.subject !== "Aula sem título") return;
+    if (audio?.transcriptJobStatus !== "pronto") return;
+    const ocrTopicos = record.topics;
+    const sugerido = sugerirTitulo(ocrTopicos, audio.transcript ?? []);
+    if (!sugerido) return;
+    setRecord((atual) => (atual ? { ...atual, subject: sugerido } : atual));
+    setName(sugerido);
+    void renameClass(classId, sugerido).then(() => onChanged?.());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [classId, audio?.transcriptJobStatus]);
 
   // The name is committed when the student leaves the field, not on every

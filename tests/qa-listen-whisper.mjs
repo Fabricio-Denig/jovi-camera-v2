@@ -131,13 +131,13 @@ console.log("═══ a transcrição local organiza uma aula gravada ═══
   await p.getByRole("tab", { name: "Resumo", exact: true }).click();
   await p.waitForTimeout(500);
   const resumo = await p.locator("[role=tabpanel]").innerText();
-  check(/O que foi dito/i.test(resumo), "o Resumo tem a seção do que foi dito");
+  check(/Resumo da aula/i.test(resumo), "o Resumo tem a síntese global da aula");
   check(
     /classe/i.test(resumo) && /objeto/i.test(resumo),
     "com os conceitos que a aula realmente apresentou",
   );
   check(
-    /O professor marcou/i.test(resumo) &&
+    /Professor destacou/i.test(resumo) &&
       /prestem atenção/i.test(resumo.toLowerCase()),
     "e 'prestem atenção' vira um momento marcado, com evidência",
   );

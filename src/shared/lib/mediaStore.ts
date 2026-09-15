@@ -9,12 +9,30 @@ import type { CapturedMedia } from "../../types/camera";
 
 const DB_NAME = "jovi-camera-v2";
 /**
- * v2 acrescentou o armazém de áudio. A subida é aditiva — cria o que falta e
- * não toca no que existe —, então uma aula guardada antes do Listen continua
- * abrindo, só que sem gravação.
+ * v2 acrescentou o armazém de áudio. v3 acrescenta o índice `bySession`
+ * (abaixo). As duas subidas são aditivas — criam o que falta e não tocam no
+ * que existe —, então uma aula guardada antes de qualquer uma delas continua
+ * abrindo igual.
  */
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const STORE_NAME = "captures";
+/**
+ * Índice por `session.id`, criado em v3.
+ *
+ * Sem ele, abrir UMA aula (`getClassById`) chamava `getAllCaptures()` — toda
+ * a galeria, cada Blob de cada foto/vídeo/momento de TODAS as aulas,
+ * desserializado só para descartar quase tudo em seguida com um `.filter()`
+ * em JS. Um teste físico real mostrou ~12s parado em "Abrindo a aula…" — o
+ * defeito cresce com o tamanho da galeria, não com o tamanho da aula. Um
+ * índice do IndexedDB faz o motor do navegador devolver só os registros da
+ * sessão pedida, sem tocar nos outros.
+ *
+ * Path de chave aninhado (`"session.id"`): o IndexedDB indexa isso nativamente
+ * — registros sem `session` (fotos/vídeos manuais) simplesmente não entram no
+ * índice, o que é exatamente o comportamento certo (eles não pertencem a
+ * nenhuma aula).
+ */
+const SESSION_INDEX = "bySession";
 /**
  * O áudio da aula, num armazém próprio e com a chave da sessão.
  *
@@ -30,8 +48,11 @@ function openDb(): Promise<IDBDatabase> {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.onupgradeneeded = () => {
       const db = request.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME, { keyPath: "id" });
+      const store = db.objectStoreNames.contains(STORE_NAME)
+        ? request.transaction!.objectStore(STORE_NAME)
+        : db.createObjectStore(STORE_NAME, { keyPath: "id" });
+      if (!store.indexNames.contains(SESSION_INDEX)) {
+        store.createIndex(SESSION_INDEX, "session.id");
       }
       if (!db.objectStoreNames.contains(AUDIO_STORE)) {
         db.createObjectStore(AUDIO_STORE, { keyPath: "sessionId" });
@@ -121,6 +142,29 @@ async function readAll(): Promise<CapturedMedia[]> {
  */
 export async function getAllCaptures(): Promise<CapturedMedia[]> {
   return (await readAll()).filter((item) => !item.deletedAt);
+}
+
+/**
+ * Tudo de UMA aula, direto pelo índice — sem tocar nas outras.
+ *
+ * Inclui itens na lixeira: quem chama decide se filtra `deletedAt`, o mesmo
+ * contrato que `readAll()` já tinha para os outros métodos.
+ */
+export async function getCapturesBySession(
+  sessionId: string,
+): Promise<CapturedMedia[]> {
+  const db = await openDb();
+  const items = await new Promise<CapturedMedia[]>((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readonly");
+    const request = tx
+      .objectStore(STORE_NAME)
+      .index(SESSION_INDEX)
+      .getAll(IDBKeyRange.only(sessionId));
+    request.onsuccess = () => resolve(request.result as CapturedMedia[]);
+    request.onerror = () => reject(request.error);
+  });
+  db.close();
+  return items;
 }
 
 /** What is in the trash, most recently thrown away first. */

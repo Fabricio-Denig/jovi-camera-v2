@@ -26,7 +26,7 @@ import { formatClock } from "../shared/lib/time";
  * tela do estudante, e uma estrela em cima de uma frase comum destrói a
  * confiança nas outras.
  */
-const MARCAS_DE_ENFASE = [
+export const MARCAS_DE_ENFASE = [
   "isso é importante",
   "isso e importante",
   "é importante",
@@ -73,7 +73,8 @@ export interface SpeechHighlight {
   marca: string;
 }
 
-const semAcento = (t: string) =>
+/** Minúsculo e sem acento — a forma que compara duas palavras pelo som, não pela grafia. */
+export const semAcento = (t: string) =>
   t.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
 /**
@@ -107,7 +108,7 @@ export function acharDestaques(
  *
  * Sem esta lista, os "tópicos" de qualquer aula seriam "que", "de" e "a".
  */
-const VAZIAS = new Set(
+export const VAZIAS = new Set(
   (
     "a o e de da do das dos em no na nos nas um uma uns umas para por com sem " +
     "que se ao aos à às ou mas como quando onde qual quais quem cujo este esta " +
@@ -117,7 +118,11 @@ const VAZIAS = new Set(
     "pouco bem tambem ja ainda so apenas todo toda todos todas cada outro outra " +
     "sobre entre ate desde assim porque pois logo entao gente pessoal turma aula " +
     "hoje ontem amanha professor aluno alunos coisa coisas jeito forma parte partes " +
-    "ver vendo vamos falar falando fala olha olhem certo ta ok beleza tipo ne"
+    "ver vendo vamos falar falando fala olha olhem certo ta ok beleza tipo ne " +
+    // Saudações — abrem quase toda aula gravada e não carregam assunto nenhum;
+    // sem isto, "boa tarde" repetido no começo virava termo forte o bastante
+    // para disputar título com o assunto de verdade (achado com um teste real).
+    "bom boa tarde noite dia ola oi galera"
   ).split(/\s+/),
 );
 

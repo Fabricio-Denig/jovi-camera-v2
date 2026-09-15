@@ -117,9 +117,12 @@ console.log("== CENÁRIO A — quadro bom + fala boa ==");
   await p.waitForTimeout(1800);
   const resumo = await abrirAula(p, "React");
 
-  check(/Nesta aula/i.test(resumo), "o resumo traz os tópicos do quadro");
-  check(/O que foi dito/i.test(resumo), "e a seção da fala");
-  check(/O professor marcou/i.test(resumo), "e os destaques falados");
+  check(/RESUMO DA AULA/i.test(resumo), "o resumo tem a síntese global");
+  check(
+    /PONTOS PRINCIPAIS/i.test(resumo) && /useState|useEffect|estado/i.test(resumo),
+    "com o quadro e a fala combinados",
+  );
+  check(/Professor destacou/i.test(resumo), "e os destaques falados");
   check(
     fracassos(resumo).length === 0,
     "e nada que soe como aula fracassada",
@@ -148,12 +151,12 @@ console.log("\n== CENÁRIO B — quadro ruim + fala boa (o caso do celular) ==")
     "o resumo NÃO diz que não identificou o conteúdo",
     fracassos(resumo).join(", "),
   );
-  check(/O que foi dito/i.test(resumo), "porque a fala carrega o resumo");
+  check(/PONTOS PRINCIPAIS/i.test(resumo), "porque a fala carrega o resumo");
   check(
     /useState|useEffect|estado/i.test(resumo),
     "e ela traz o assunto de verdade da aula",
   );
-  check(/O professor marcou/i.test(resumo), "com os destaques no lugar");
+  check(/Professor destacou/i.test(resumo), "com os destaques no lugar");
   check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
   await b.close();
 }
@@ -172,8 +175,7 @@ console.log("\n== CENÁRIO C — quadro bom + sem transcrição ==");
   await p.waitForTimeout(1800);
   const resumo = await abrirAula(p, "React");
 
-  check(/Nesta aula/i.test(resumo), "o See/Identify sustenta o resumo sozinho");
-  check(!/O que foi dito/i.test(resumo), "sem seção de fala que não existe");
+  check(/PONTOS PRINCIPAIS/i.test(resumo), "o See/Identify sustenta o resumo sozinho");
   check(
     fracassos(resumo).length === 0,
     "e nada faz a aula parecer que falhou",
@@ -207,8 +209,8 @@ console.log("\n== CENÁRIO D — os dois ruins: o produto não inventa ==");
     "a tela diz a verdade: não deu para montar um resumo",
   );
   check(
-    !/O que foi dito/i.test(resumo),
-    "sem fala, porque não houve fala",
+    !/PONTOS PRINCIPAIS/i.test(resumo),
+    "sem seção de pontos, porque não há evidência nenhuma",
   );
   check(
     !/useState|useEffect|derivada|imutável/i.test(resumo),

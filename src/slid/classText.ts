@@ -7,6 +7,7 @@ import {
   acharDestaques,
   frasesRepresentativas,
 } from "../listen/speechInsights";
+import type { LessonSummary } from "../listen/lessonSummary";
 
 /** Chave frouxa para comparar duas leituras da mesma linha. */
 const chave = (linha: string) => linha.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -121,5 +122,37 @@ export function momentsAsText(record: ClassRecord): string {
     partes.push(`[${formatClock(momento.atMs)}] ${momento.label}`);
     for (const linha of linhas) partes.push(linha);
   }
+  return partes.join("\n").trim();
+}
+
+/**
+ * Só o RESUMO — o que a aba Resumo mostra, não a aula inteira.
+ *
+ * Antes, "copiar" na aba Resumo copiava `classAsText` (tudo: cabeçalho,
+ * imagens, transcrição inteira). Isso confundia duas perguntas diferentes —
+ * "o que foi dito" (a aba Texto já responde) e "o que eu preciso lembrar" (a
+ * aba Resumo) — na mesma ação. Agora cada aba copia só o que ela mostra.
+ */
+export function resumoAsText(record: ClassRecord, resumo: LessonSummary): string {
+  const partes: string[] = [record.subject];
+
+  if (resumo.overview) partes.push("", resumo.overview);
+
+  if (resumo.pontosPrincipais.length > 0) {
+    partes.push("", "PONTOS PRINCIPAIS");
+    for (const ponto of resumo.pontosPrincipais) partes.push(`• ${ponto}`);
+  }
+
+  if (resumo.professorDestacou.length > 0) {
+    partes.push("", "PROFESSOR DESTACOU");
+    for (const d of resumo.professorDestacou)
+      partes.push(`★ [${formatClock(d.atMs)}] ${d.text}`);
+  }
+
+  if (resumo.paraRevisar.length > 0) {
+    partes.push("", "PARA REVISAR");
+    for (const item of resumo.paraRevisar) partes.push(`• ${item}`);
+  }
+
   return partes.join("\n").trim();
 }
