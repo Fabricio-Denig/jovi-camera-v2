@@ -65,15 +65,12 @@ const FILES = [
   "tokenizer_config.json",
   "onnx/encoder_model_quantized.onnx",
   "onnx/decoder_model_merged_quantized.onnx",
-  // Teste temporário: o onnxruntime-web (wasm) desta versão falha ao
-  // carregar a variante "_quantized" (QDQ/MatMulNBits — ver o comentário em
-  // whisperEngine.ts). fp32 provou o ponto errado — o decoder fp32 passa de
-  // 100MB e o GitHub recusa o push (nem chegou a testar no navegador).
-  // "_int8" é uma quantização mais simples (por tensor, sem os blocos que
-  // usam MatMulNBits) — testando se evita o mesmo bug sem o problema de
-  // tamanho.
-  "onnx/encoder_model_int8.onnx",
-  "onnx/decoder_model_merged_int8.onnx",
+  // Teste temporário: "_int8" não existe neste repositório (404) — só fp32
+  // (sem sufixo) e "_quantized" (q8) estão publicados para whisper-tiny.
+  // fp32 é a última tentativa: o encoder cabe, o decoder (113MB) passa do
+  // limite do GitHub — dividido em partes pelo workflow de bancada.
+  "onnx/encoder_model.onnx",
+  "onnx/decoder_model_merged.onnx",
 ];
 
 const OUT_DIR = path.join(process.cwd(), "public", "models", MODEL_ID);

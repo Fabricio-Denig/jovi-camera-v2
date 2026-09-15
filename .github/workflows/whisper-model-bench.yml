@@ -34,6 +34,16 @@ jobs:
         with:
           node-version: 22
       - run: node scripts/fetch-whisper-model.mjs
+      # O GitHub recusa qualquer arquivo > 100MB neste branch sem Git LFS
+      # (que não vale montar para um utilitário descartável). Um .onnx fp32
+      # pode passar disso — divide em partes de 90MB antes de commitar; a
+      # bancada reconstrói com `cat` depois do `git fetch`.
+      - run: |
+          find public/models -type f -size +95M -print0 | while IFS= read -r -d '' f; do
+            echo "dividindo $f ($(stat -c%s "$f") bytes)"
+            split -b 90M -d -a 3 "$f" "$f.part"
+            rm "$f"
+          done
       - run: |
           git config user.name "whisper-model-bench"
           git config user.email "actions@users.noreply.github.com"
