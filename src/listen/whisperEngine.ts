@@ -21,17 +21,55 @@
  * Chrome manda o áudio para um serviço do navegador. Ver a nota de
  * transparência em `transcribeSession.ts`.
  *
- * **O que não pôde ser medido nesta bancada.** O ambiente de desenvolvimento
- * onde este código foi escrito bloqueia acesso a huggingface.co por política
- * de rede — o mesmo motivo, aliás, que já tinha feito o Scanner abandonar o
- * CDN padrão do Tesseract e passar a servir os arquivos deste próprio
- * domínio (ver o comentário de `ocr/engine.ts`). Não foi possível baixar o
- * modelo e medir tempo real de download/inferência num navegador aqui. O
- * carregamento (`pipeline(...)`) e a chamada de transcrição usam a API
- * documentada da biblioteca exatamente como descrita — mas a validação de
- * verdade, em rede normal e no aparelho da banca, ainda está por fazer. Se
- * aquela rede também bloquear huggingface.co, a próxima etapa é hospedar os
- * pesos do modelo neste mesmo domínio, como o Scanner já faz com o Tesseract.
+ * **O que foi validado nesta bancada, e com áudio de verdade — não com texto
+ * injetado.** O ambiente de desenvolvimento onde este código foi escrito
+ * bloqueia acesso a huggingface.co por política de rede, então não foi
+ * possível baixar o modelo e medir tempo real de download/inferência aqui.
+ * Mas o caminho até essa barreira foi exercitado de ponta a ponta, sem
+ * nenhum dublê: fala real em PT-BR (sintetizada por TTS offline, não texto
+ * escrito à mão) entrando pelo microfone do Chromium via
+ * `--use-file-for-fake-audio-capture`, gravada pelo `MediaRecorder` real da
+ * sessão, salva, e o job real (`transcreverAula`, sem
+ * `window.__transcreverMock__`) tentando transcrever de verdade. O
+ * resultado, reproduzido duas vezes (a tentativa original e um "Tentar de
+ * novo" — os dois geraram uma requisição de rede nova e genuína, não uma
+ * resposta em cache nem uma falha simulada):
+ *
+ *     GET https://huggingface.co/Xenova/whisper-tiny/resolve/main/config.json
+ *     net::ERR_TUNNEL_CONNECTION_FAILED
+ *
+ * Ou seja: a URL do modelo está correta, o pipeline chega até a tentativa de
+ * rede de verdade, e a falha — quando acontece — é tratada exatamente como
+ * desenhado (`transcriptJobStatus: "falhou"`, aviso honesto, retry que
+ * tenta de novo por completo, nada perdido). O que fica por medir é o outro
+ * lado dessa mesma linha: com a rede liberada, quanto tempo o download e a
+ * inferência levam num celular real.
+ *
+ * **Um limite específico do que deu para confirmar.** O `config.json` do
+ * modelo é a PRIMEIRA coisa que o pipeline busca — antes de precisar do
+ * runtime WASM para nada. Como essa busca já falha aqui, a auto-hospedagem
+ * do runtime (`env.backends.onnx.wasm.wasmPaths`, abaixo) nunca chega a ser
+ * exercitada de ponta a ponta nesta bancada: confirmado que o arquivo existe
+ * e responde 200 em `/ort/ort-wasm-simd-threaded.wasm` (medido com `curl`),
+ * e que o código está correto contra o próprio código-fonte da biblioteca —
+ * mas não que o navegador realmente o busca no meio de uma transcrição real,
+ * porque a transcrição real nunca chega tão longe aqui. Se a rede da banca
+ * também bloquear huggingface.co, a próxima etapa é hospedar os pesos do
+ * modelo neste mesmo domínio, como o Scanner já faz com o Tesseract.
+ *
+ * **Isto não é a primeira vez que a pergunta foi feita.** Existe um spike
+ * anterior (`docs/spike-transcricao-offline.md`, 11/set) que mediu
+ * Transformers.js e decidiu **não** incluí-lo, por três motivos: o momento
+ * errado (transcrição ao vivo precisa do modelo carregado *durante* a
+ * sessão), o aparelho errado (rodar inferência pesada competindo com câmera
+ * + `MediaRecorder` + análise ao vivo arrisca a aba ser encerrada pelo
+ * sistema) e a rede errada (um segundo download pesado herda o problema que
+ * já tinha tirado o Tesseract do CDN padrão). Os dois primeiros motivos não
+ * se aplicam aqui: este motor roda **depois** de `slid.status === "finished"`
+ * — a sessão já terminou, a câmera e o `MediaRecorder` já soltaram o
+ * aparelho, e não existe promessa de legenda ao vivo sendo quebrada. O
+ * terceiro motivo continua valendo, e é tratado abaixo (auto-hospedagem do
+ * runtime, e como fallback documentado para o modelo).
  *
  * **O modelo escolhido.** `Xenova/whisper-tiny`, quantizado (`dtype: "q8"`) —
  * o menor da família Whisper multilíngue (inclui português), documentado
@@ -39,6 +77,19 @@
  * para um celular médio sem GPU dedicada no navegador: `whisper-base` lê
  * melhor mas quase dobra de tamanho e de tempo de inferência, e a diferença
  * importa mais numa demonstração ao vivo do que alguns pontos de acerto.
+ *
+ * **O runtime (ONNX) é auto-hospedado, e na variante menor.** Medido no
+ * build: sem configurar nada, a biblioteca escolhe sozinha, em tempo de
+ * execução, entre duas variantes do WebAssembly do onnxruntime-web — e para
+ * qualquer navegador que não seja Safari, ela pede a variante "asyncify"
+ * (pensada para WebGPU) **de um CDN externo (jsdelivr)**: 23,5 MB crus. Este
+ * app não usa WebGPU (só `device: "wasm"`), então essa variante paga um
+ * custo que não compra nada. `scripts/copy-ort-assets.mjs` copia a variante
+ * simples (12,9 MB crus — quase metade) para `public/ort/`, e as duas linhas
+ * abaixo apontam `env.backends.onnx.wasm` para ela antes de qualquer
+ * `pipeline(...)` — o mesmo padrão do Tesseract: nada busca um CDN de
+ * terceiro, e a rede da sala de aula só precisa alcançar este domínio (para
+ * o runtime) e o Hugging Face Hub (só para os pesos do modelo, abaixo).
  */
 
 /** O identificador do modelo no Hugging Face Hub. Ajustar aqui, em um lugar
@@ -72,11 +123,34 @@ let motorRef: Promise<Transcritor> | null = null;
 async function motorCompartilhado(): Promise<Transcritor> {
   if (!motorRef) {
     motorRef = (async () => {
-      const { pipeline } = await import("@huggingface/transformers");
+      const { env, pipeline } = await import("@huggingface/transformers");
+
+      /*
+       * Precisa vir ANTES do `pipeline(...)`: a biblioteca só faz a própria
+       * escolha (CDN externo, variante "asyncify") quando `wasmPaths` ainda
+       * está vazio. Uma vez setado aqui, o caminho automático nem roda.
+       *
+       * `numThreads: 1` porque este site não manda os cabeçalhos de
+       * isolamento de origem (COOP/COEP) que o WebAssembly com threads de
+       * verdade exige — o GitHub Pages não deixa configurar isso. O mesmo
+       * arquivo .wasm funciona sem threads; só precisa saber que não pode
+       * abrir nenhuma.
+       */
+      const wasm = env.backends.onnx.wasm;
+      if (!wasm) {
+        throw new Error("onnxruntime-web sem backend wasm neste navegador");
+      }
+      const base = `${window.location.origin}${import.meta.env.BASE_URL}ort/`;
+      wasm.wasmPaths = {
+        wasm: new URL("ort-wasm-simd-threaded.wasm", base).href,
+        mjs: new URL("ort-wasm-simd-threaded.mjs", base).href,
+      };
+      wasm.numThreads = 1;
+
       const transcritor = await pipeline(
         "automatic-speech-recognition",
         MODELO,
-        { dtype: "q8" },
+        { dtype: "q8", device: "wasm" },
       );
       return transcritor as unknown as Transcritor;
     })().catch((erro) => {

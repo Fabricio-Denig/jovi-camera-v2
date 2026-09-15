@@ -106,7 +106,14 @@ export function FilterStrip({
               className="shrink-0 transition-transform duration-150 active:scale-95"
             >
               <span
-                className={`block size-14 overflow-hidden rounded-xl border-2 bg-black/40 transition-colors ${
+                /*
+                 * 56×66, não 56×56: o Figma (`Camera inicial v2`, `298:136`)
+                 * desenha a miniatura um pouco mais alta que larga — o
+                 * mesmo card em pé que o painel completo usa (`FiltersSheet`,
+                 * aspect-[80/96]). Quadrada, a tira lia como um teclado de
+                 * ícones; a proporção vertical lê como carretel de filme.
+                 */
+                className={`block h-[66px] w-14 overflow-hidden rounded-xl border-2 bg-black/40 transition-colors ${
                   selecionado ? "border-white" : "border-white/25"
                 }`}
               >
@@ -161,7 +168,7 @@ export function FilterStrip({
         aria-label="Abrir todos os filtros e efeitos"
         className="shrink-0 pt-0.5 transition-transform duration-150 active:scale-95"
       >
-        <span className="flex size-14 items-center justify-center rounded-xl border-2 border-dashed border-white/35 bg-black/55 text-[19px] leading-none text-white/85 backdrop-blur">
+        <span className="flex h-[66px] w-14 items-center justify-center rounded-xl border-2 border-dashed border-white/35 bg-black/55 text-[19px] leading-none text-white/85 backdrop-blur">
           +
         </span>
         <span className="mt-1 block text-center text-[10px] font-medium text-white/65">

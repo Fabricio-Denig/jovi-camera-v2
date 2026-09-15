@@ -213,7 +213,7 @@ console.log("\n═══ JORNADA 2 — sem microfone: a aula acontece igual ═�
   check(/Áudio desativado/i.test(corpo), "a tela diz que o áudio está desativado");
   check(!/Ouvindo/i.test(corpo), "e não finge estar ouvindo");
   check(
-    /Acompanhando a aula|Procurando o conteúdo/i.test(corpo),
+    /SliD ativo|Procurando o conteúdo/i.test(corpo),
     "a sessão do SliD continua inteira",
   );
 

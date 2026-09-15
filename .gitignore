@@ -25,4 +25,6 @@ dist-ssr
 
 # OCR runtime, gerado por scripts/copy-ocr-assets.mjs
 public/tesseract
+# Runtime ONNX, gerado por scripts/copy-ort-assets.mjs
+public/ort
 tests/cenas/

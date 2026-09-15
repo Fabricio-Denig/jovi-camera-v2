@@ -282,7 +282,7 @@ console.log("\n== microfone negado: See e Identify continuam inteiros ==");
 
   // A prova que mais importa: a sessão continua funcionando inteira.
   check(
-    /Acompanhando a aula|Procurando o conteúdo/i.test(corpo),
+    /SliD ativo|Procurando o conteúdo/i.test(corpo),
     "a sessão do SliD continua de pé",
   );
 
@@ -311,7 +311,7 @@ console.log("\n== sem MediaRecorder: degrada, não quebra ==");
     corpo.split("\n").slice(0, 3).join(" · "),
   );
   check(
-    /Acompanhando a aula|Procurando o conteúdo/i.test(corpo),
+    /SliD ativo|Procurando o conteúdo/i.test(corpo),
     "e a sessão continua",
   );
   check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");
@@ -689,7 +689,7 @@ console.log("\n== sem reconhecimento de fala: o SliD não sente ==");
   // O que importa de verdade: See e Identify inteiros.
   check(
     (await p.getByRole("button", { name: /^Encerrar$/ }).count()) >= 0 &&
-      /Acompanhando a aula|Procurando o conteúdo/i.test(corpo),
+      /SliD ativo|Procurando o conteúdo/i.test(corpo),
     "a sessão segue de pé",
   );
   check(erros.length === 0, "sem erro de runtime", erros[0] ?? "");

@@ -164,7 +164,7 @@ async function tela(nome, p) {
     ),
   );
   check(
-    anunciados.some((t) => /Acompanhando|Procurando|Pausado/i.test(t)),
+    anunciados.some((t) => /SliD ativo|Procurando|Pausado/i.test(t)),
     "o estado da sessão é anunciado quando muda",
     anunciados.join(" | "),
   );
