@@ -29,7 +29,7 @@ import path from "node:path";
 
 /** Ajustar aqui, em um lugar só, se `whisper-base` provar necessário depois
     de um teste real — mesma constante que `whisperEngine.ts` usa. */
-const MODEL_ID = "Xenova/whisper-base";
+const MODEL_ID = "Xenova/whisper-tiny";
 
 /**
  * "main" por enquanto: o repositório não tem um commit conhecido fixado
@@ -65,6 +65,12 @@ const FILES = [
   "tokenizer_config.json",
   "onnx/encoder_model_quantized.onnx",
   "onnx/decoder_model_merged_quantized.onnx",
+  // Teste temporário: o onnxruntime-web (wasm) desta versão falha ao
+  // carregar QUALQUER variante "_quantized" (QDQ/MatMulNBits — ver o
+  // comentário em whisperEngine.ts). fp32 (sem sufixo, sem quantização)
+  // testa se o problema é mesmo a quantização ou outra coisa.
+  "onnx/encoder_model.onnx",
+  "onnx/decoder_model_merged.onnx",
 ];
 
 const OUT_DIR = path.join(process.cwd(), "public", "models", MODEL_ID);
