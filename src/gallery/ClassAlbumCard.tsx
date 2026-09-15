@@ -89,7 +89,15 @@ export function ClassAlbumCard({
         </span>
       )}
 
-      <div className="absolute inset-x-0 bottom-0 p-2.5">
+      {/*
+       * `backdrop-blur-sm` no bloco de texto, não só o degradê escuro: uma
+       * captura de quadro com texto claro (um slide de código, por exemplo)
+       * ainda mostra as próprias linhas por trás do degradê na parte de
+       * cima dele — miniatura pequena, mas visível o bastante para brigar
+       * com o título por cima. O blur resolve o caso que o degradê sozinho
+       * não cobria, sem escurecer mais o card inteiro.
+       */}
+      <div className="absolute inset-x-0 bottom-0 p-2.5 backdrop-blur-[2px]">
         {/*
          * O Figma escreve "Funções - Cálculo": assunto e matéria na mesma
          * linha. A matéria só aparece quando existe — nenhum card inventa uma.

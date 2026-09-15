@@ -651,6 +651,44 @@ function ordenarParaAbertura(principais: Candidato[], maxPalavras = 14): Candida
  * sistema que a guardou. Templada: a estrutura da frase é escrita aqui, mas
  * todo substantivo dentro dela veio de uma frase real, dita ou lida.
  */
+/**
+ * Palavras que só aparecem em português como verbo conjugado — nunca como
+ * substantivo, pronome ou preposição comuns. `semAcento` embaralharia "é"
+ * (verbo) com "e" (conjunção "e"), então "é" é comparado à parte, sem tirar
+ * o acento.
+ */
+const VERBOS_SEM_AMBIGUIDADE = new Set(
+  ["sao", "foi", "era", "eram", "seria", "seriam", "sera", "serao"].map(semAcento),
+);
+
+/**
+ * Um conceito com VERBO PRÓPRIO — "matrizes são estruturas organizadas",
+ * "falaremos sobre matrizes" — em vez de uma frase nominal — "multiplicação
+ * de matrizes", "matriz identidade".
+ *
+ * Existe só para `montarVisaoGeral`: um conceito com verbo próprio QUEBRA a
+ * gramática quando colado como complemento de outro verbo — "com destaque
+ * para matrizes são estruturas organizadas" tem dois verbos disputando a
+ * mesma oração. Achado com um teste real: `fraseDeConceito` (a janela em
+ * torno do termo mais forte, ver o comentário lá) pode incluir um verbo que
+ * estava no meio do caminho — ela nunca INVENTA palavra nenhuma, mas nem
+ * toda janela literal vira uma frase nominal limpa. `pontosPrincipais` e
+ * "Para revisar" não têm este problema (cada linha é a própria sentença,
+ * nunca o complemento de outra), então não usam este corte.
+ */
+function pareceClausula(texto: string): boolean {
+  for (const bruto of texto.split(/\s+/)) {
+    const semPontuacao = bruto.replace(/[.,!?;:…]+$/, "");
+    if (semPontuacao === "é" || semPontuacao === "É") return true;
+    const normal = semAcento(semPontuacao);
+    if (VERBOS_SEM_AMBIGUIDADE.has(normal)) return true;
+    // "-mos" é quase sempre 1ª pessoa do plural conjugada (falaremos,
+    // veremos, abordamos) — substantivo português raramente termina assim.
+    if (normal.length >= 5 && normal.endsWith("mos")) return true;
+  }
+  return false;
+}
+
 function montarVisaoGeral(
   principaisPorPontos: Candidato[],
   destaques: Candidato[],
@@ -669,21 +707,40 @@ function montarVisaoGeral(
     comoTopico(fraseDeConceito(c.texto, peso, totalCandidatos) ?? c.texto);
 
   const frases: string[] = [];
-  const [primeiro, segundo, ...resto] = principais;
 
-  frases.push(
-    segundo
-      ? `A aula abordou ${conceito(primeiro)}, com destaque para ${conceito(segundo)}.`
-      : `A aula abordou ${conceito(primeiro)}.`,
-  );
+  /*
+   * Só conceitos SEM verbo próprio entram nos conectores da abertura ("A
+   * aula abordou X, com destaque para Y" / "Também foi mencionado Z") — os
+   * dois esperam X/Y/Z como complemento nominal, e um conceito com verbo
+   * próprio quebra a frase ao ser colado ali (ver `pareceClausula`). Menos
+   * texto correto vale mais que mais texto quebrado.
+   */
+  const comConceito = principais.map((c) => ({ texto: conceito(c) }));
+  const paraConectores = comConceito.filter(({ texto }) => !pareceClausula(texto));
+  const [primeiro, segundo, ...resto] = paraConectores;
 
-  const maisDois = resto.slice(0, 2);
-  if (maisDois.length === 1) {
-    frases.push(`Também foi mencionado ${conceito(maisDois[0])}.`);
-  } else if (maisDois.length === 2) {
+  if (primeiro) {
     frases.push(
-      `Também foram mencionados ${conceito(maisDois[0])} e ${conceito(maisDois[1])}.`,
+      segundo
+        ? `A aula abordou ${primeiro.texto}, com destaque para ${segundo.texto}.`
+        : `A aula abordou ${primeiro.texto}.`,
     );
+
+    const maisDois = resto.slice(0, 2);
+    if (maisDois.length === 1) {
+      frases.push(`Também foi mencionado ${maisDois[0].texto}.`);
+    } else if (maisDois.length === 2) {
+      frases.push(
+        `Também foram mencionados ${maisDois[0].texto} e ${maisDois[1].texto}.`,
+      );
+    }
+  } else {
+    // Nenhum conceito sem verbo próprio sobrou — a única evidência que
+    // existe tem verbo próprio, então vira UMA sentença curta por conta
+    // própria, nunca o complemento de outra: "Matrizes são estruturas
+    // organizadas.", não "A aula abordou matrizes são estruturas
+    // organizadas.".
+    frases.push(pontuar(comConceito[0].texto));
   }
 
   if (destaques.length > 0) {

@@ -387,8 +387,13 @@ function MomentChip({
       }`}
     >
       {url && <img src={url} alt="" className="size-full object-cover" />}
+      {/* Anel branco fino: o ponto é `bg-accent` (azul), e a miniatura é uma
+          captura real — um quadro com marcador azul, ou um slide de fundo
+          azul, deixaria o ponto quase invisível sem alguma borda que não
+          dependa da cor por baixo. O mesmo motivo do selo de áudio da
+          Galeria (`ClassAlbumCard.tsx`), aplicado aqui. */}
       <span
-        className={`absolute right-1 top-1 size-2 rounded-full ${
+        className={`absolute right-1 top-1 size-2 rounded-full ring-1 ring-white/80 ${
           fresh ? "animate-pulse bg-accent" : "bg-accent/70"
         }`}
       />
