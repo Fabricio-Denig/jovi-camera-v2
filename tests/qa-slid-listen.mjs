@@ -6,6 +6,7 @@
    abriu seria o pior defeito que este recurso poderia ter. */
 import { chromium } from "/opt/node22/lib/node_modules/playwright/index.mjs";
 import { APP, CENAS, CHROMIUM } from "./caminhos.mjs";
+import { instalarWhisperDeMentira } from "./whisper-de-mentira.mjs";
 
 let fail = 0;
 const check = (ok, l, e = "") => {
@@ -187,6 +188,27 @@ async function abrir({
       }
       window.SpeechRecognition = FalaDeMentira;
       window.webkitSpeechRecognition = FalaDeMentira;
+    });
+
+    /*
+     * Sem isto, o motor local (Whisper) — que agora FUNCIONA de verdade
+     * (ver `whisperEngine.ts`) — reprocessa o áudio de teste (um tom
+     * sintético do dispositivo de microfone falso, não fala real) ao
+     * salvar a aula, e substitui em segundo plano o texto do dublê de
+     * reconhecimento ao vivo acima por um resultado sem conteúdo. O
+     * conteúdo abaixo é o mesmo texto que o dublê ao vivo produz, para que
+     * os testes que verificam esse texto continuem válidos depois do
+     * reprocessamento — a mesma correção já feita em `qa-demo-banca.mjs`.
+     */
+    await p.addInitScript(instalarWhisperDeMentira(), {
+      blocos: [
+        {
+          text: "Prestem atenção nessa parte porque isso cai na prova.",
+          startMs: 0,
+          endMs: 4000,
+        },
+      ],
+      atrasoMs: 500,
     });
   }
 

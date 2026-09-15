@@ -27,6 +27,24 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # Os pesos do Whisper self-hospedado: só o runner do GitHub Actions
+      # alcança huggingface.co (o ambiente onde este projeto é trabalhado
+      # bloqueia o host por política de rede — ver scripts/fetch-whisper-model.mjs
+      # e o comentário em src/listen/whisperEngine.ts). Cacheado entre builds
+      # pela chave abaixo: só baixa de novo se o script mudar.
+      - uses: actions/cache@v4
+        with:
+          path: public/models
+          key: whisper-model-${{ hashFiles('scripts/fetch-whisper-model.mjs') }}
+      - run: node scripts/fetch-whisper-model.mjs
+      # Artifact separado (não é o que vai para o Pages) só para inspeção:
+      # confirmar em CI exatamente quais bytes foram baixados, sem precisar
+      # reproduzir o download em nenhum outro lugar.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: whisper-model
+          path: public/models
+          retention-days: 7
       - run: npm run build
         env:
           GITHUB_PAGES: "true"

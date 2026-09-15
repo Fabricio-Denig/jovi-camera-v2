@@ -27,4 +27,9 @@ dist-ssr
 public/tesseract
 # Runtime ONNX, gerado por scripts/copy-ort-assets.mjs
 public/ort
+# Modelo Whisper self-hospedado, baixado em CI (ver .github/workflows)
+public/models
 tests/cenas/
+
+# Fila interna de trabalho de rodadas longas — nunca commitada
+.claude/

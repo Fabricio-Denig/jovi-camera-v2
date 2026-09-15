@@ -44,6 +44,34 @@ function resolverPosicao(
 }
 
 /**
+ * Aplica uma posição no `<audio>`, contornando um bug real do Chromium.
+ *
+ * Um `<audio>` tocando um Blob webm/opus gravado por `MediaRecorder` reporta
+ * `duration: Infinity` até o navegador escanear o arquivo inteiro pelo menos
+ * uma vez — o container não tem a duração no cabeçalho, só no fim. Enquanto
+ * `duration` é `Infinity`, `el.currentTime = X` é aceito sem lançar erro mas
+ * não tem efeito nenhum (medido: "Ouvir deste ponto" clicava, nenhum erro no
+ * console, o áudio continuava do zero). Buscar um valor absurdamente grande
+ * primeiro força esse scan; quando termina, o navegador dispara `timeupdate`
+ * uma vez com o tempo já perto do fim real — só depois disso a busca para o
+ * alvo verdadeiro funciona.
+ */
+function aplicarPosicao(el: HTMLAudioElement, segundos: number, aoAplicar?: () => void) {
+  if (Number.isFinite(el.duration)) {
+    el.currentTime = segundos;
+    aoAplicar?.();
+    return;
+  }
+  const aoResolverDuracao = () => {
+    el.removeEventListener("timeupdate", aoResolverDuracao);
+    el.currentTime = segundos;
+    aoAplicar?.();
+  };
+  el.addEventListener("timeupdate", aoResolverDuracao);
+  el.currentTime = 1e101;
+}
+
+/**
  * O áudio da aula, na aula guardada.
  *
  * Por dentro pode haver vários trechos — desligar e religar o áudio no meio
@@ -103,8 +131,9 @@ export function LessonAudioPlayer({
       const el = ref.current;
       if (el) {
         try {
-          el.currentTime = resolvido.localSeg;
-          if (tocar) void el.play().then(() => setTocando(true)).catch(() => {});
+          aplicarPosicao(el, resolvido.localSeg, () => {
+            if (tocar) void el.play().then(() => setTocando(true)).catch(() => {});
+          });
         } catch {
           pendenteRef.current = { localSeg: resolvido.localSeg, tocar };
         }
@@ -133,11 +162,12 @@ export function LessonAudioPlayer({
     if (!el || !pendente) return;
     const aplicar = () => {
       try {
-        el.currentTime = pendente.localSeg;
+        aplicarPosicao(el, pendente.localSeg, () => {
+          if (pendente.tocar) void el.play().then(() => setTocando(true)).catch(() => {});
+        });
       } catch {
         /* tenta nos metadados seguintes */
       }
-      if (pendente.tocar) void el.play().then(() => setTocando(true)).catch(() => {});
       pendenteRef.current = null;
     };
     if (el.readyState >= 1) aplicar();
