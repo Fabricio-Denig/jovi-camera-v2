@@ -29,7 +29,7 @@ import path from "node:path";
 
 /** Ajustar aqui, em um lugar só, se `whisper-base` provar necessário depois
     de um teste real — mesma constante que `whisperEngine.ts` usa. */
-const MODEL_ID = "Xenova/whisper-tiny";
+const MODEL_ID = "Xenova/whisper-base";
 
 /**
  * "main" por enquanto: o repositório não tem um commit conhecido fixado
