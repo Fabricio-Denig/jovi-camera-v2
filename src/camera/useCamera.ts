@@ -31,6 +31,33 @@ interface UseCameraResult {
 const MAX_LOG_LINES = 14;
 
 /**
+ * O `.name` de um erro de câmera — "NotAllowedError", "NotFoundError"... —
+ * sem exigir que o erro seja estritamente um `DOMException`.
+ *
+ * `getUserMedia` rejeita com `DOMException` em todo navegador real, mas
+ * `instanceof DOMException` é frágil demais para decidir se um nome de erro
+ * bem formado é "confiável": qualquer coisa que rejeite a Promise por um
+ * caminho diferente (um polyfill, um erro relançado por outra camada) tem
+ * `.name`, só não passa nesse teste — e o código abaixo já sabe transformar
+ * "NotAllowedError" numa mensagem específica e útil ("Autorize o acesso nas
+ * configurações do site..."); descartar esse nome por causa do `instanceof`
+ * é jogar fora a mensagem certa e mostrar "(Erro)" no lugar, quando a
+ * informação para a mensagem certa estava ali o tempo todo.
+ */
+function nomeDoErro(error: unknown): string {
+  if (
+    error &&
+    typeof error === "object" &&
+    "name" in error &&
+    typeof (error as { name: unknown }).name === "string" &&
+    (error as { name: string }).name.length > 0
+  ) {
+    return (error as { name: string }).name;
+  }
+  return "Erro";
+}
+
+/**
  * `ideal` is a preference the browser may ignore, and on several Android
  * devices it does — asking for the rear camera returned the front one. `exact`
  * is a real constraint, so it goes first and only steps down when the device
@@ -43,7 +70,7 @@ async function openVideoStream(target: CameraFacing): Promise<MediaStream> {
       audio: false,
     });
   } catch (error) {
-    const name = error instanceof DOMException ? error.name : "";
+    const name = nomeDoErro(error);
     if (name !== "OverconstrainedError" && name !== "NotFoundError")
       throw error;
     return await navigator.mediaDevices.getUserMedia({
@@ -130,7 +157,7 @@ export function useCamera(): UseCameraResult {
         mediaStream = await openVideoStream(targetFacing);
         addLog("stream de vídeo obtido");
       } catch (error) {
-        const name = error instanceof DOMException ? error.name : "Erro";
+        const name = nomeDoErro(error);
         addLog(`FALHA getUserMedia: ${name}`);
         acquiringRef.current = false;
 
@@ -292,7 +319,7 @@ export function useCamera(): UseCameraResult {
     // iOS Safari does not reliably honour the autoplay attribute for a live
     // stream; calling play() explicitly is what actually starts the preview.
     video.play().catch((error: unknown) => {
-      const name = error instanceof DOMException ? error.name : "Erro";
+      const name = nomeDoErro(error);
       addLog(`play() rejeitado: ${name}`);
       setPaused(true);
     });
