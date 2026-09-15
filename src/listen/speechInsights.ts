@@ -40,9 +40,11 @@ const MARCAS_DE_ENFASE = [
   "atencao nessa parte",
   "cai na prova",
   "cai muito na prova",
-  "costuma cair",
-  "pode cair na prova",
+  "cairá na prova",
+  "caira na prova",
   "vai cair na prova",
+  "pode cair na prova",
+  "costuma cair",
   "lembrem disso",
   "lembre disso",
   "não esqueçam",
@@ -261,12 +263,25 @@ export function frasesRepresentativas(
   const termos = contarTermos(segments);
   if (termos.length === 0) return [];
   const peso = new Map(termos.map(([t, n]) => [semAcento(t), n]));
-  const destaques = new Set(acharDestaques(segments, 20).map((d) => d.text));
 
-  const pontuadas = segments
-    .filter((s) => s.final && s.text.trim().split(/\s+/).length >= 6)
-    .map((s) => {
-      const palavras = semAcento(s.text).split(/[^\p{L}\p{N}]+/u);
+  /*
+   * Candidatos vêm de `blocosDeFala`, não dos trechos crus do reconhecedor.
+   *
+   * Um trecho cru pode ter três ou quatro palavras — Whisper corta por
+   * pausa, não por ideia completa — e o filtro de tamanho abaixo existia
+   * para não escolher um fragmento sem contexto ("é de extrema") como frase
+   * representativa. O problema: com uma aula cujos trechos são todos curtos
+   * (comum — timestamps por bloco de fala, não por frase), o filtro podia
+   * zerar a lista INTEIRA mesmo com a aula inteira transcrita, e o Resumo
+   * mostrava "não conseguiu ler o suficiente" com uma transcrição completa
+   * do lado. `blocosDeFala` já junta trechos em parágrafos por pausa/pontuação
+   * — a mesma agrupação que a aba Texto mostra — então o candidato aqui é
+   * sempre uma unidade que faz sentido sozinha, não um fragmento.
+   */
+  const blocos = blocosDeFala(segments);
+  const pontuadas = blocos
+    .map((b) => {
+      const palavras = semAcento(b.text).split(/[^\p{L}\p{N}]+/u);
       let pontos = 0;
       const vistas = new Set<string>();
       for (const p of palavras) {
@@ -274,17 +289,21 @@ export function frasesRepresentativas(
         vistas.add(p);
         pontos += peso.get(p) ?? 0;
       }
-      // Normaliza pelo tamanho: sem isto a frase mais longa vence sempre, e
-      // "frase mais longa" não é o mesmo que "frase que diz mais".
+      // Normaliza pelo tamanho: sem isto o bloco mais longo vence sempre, e
+      // "bloco mais longo" não é o mesmo que "bloco que diz mais".
       pontos = pontos / Math.sqrt(Math.max(6, palavras.length));
       // Perto de um momento guardado: a câmera achou que aquilo importava.
-      if (momentosMs.some((m) => Math.abs(m - s.startMs) <= JANELA_DEPOIS_MS)) {
+      if (momentosMs.some((m) => Math.abs(m - b.atMs) <= JANELA_DEPOIS_MS)) {
         pontos *= 1.35;
       }
-      // Marcada pelo próprio professor.
-      if (destaques.has(s.text.trim())) pontos *= 1.6;
-      return { texto: s.text.trim(), pontos, startMs: s.startMs };
+      // Marcada pelo próprio professor (`blocosDeFala` já sabe disso).
+      if (b.marcado) pontos *= 1.6;
+      return { texto: b.text.trim(), pontos, startMs: b.atMs, palavras: palavras.length };
     })
+    // Um bloco de uma ou duas palavras ("tá.", "certo?") não representa
+    // nada sozinho — mas o piso é bem mais baixo que o dos trechos crus,
+    // porque um bloco já é uma unidade de sentido, não um fragmento.
+    .filter((b) => b.palavras >= 3)
     .sort((a, b) => b.pontos - a.pontos);
 
   // Sem repetir o que já foi dito: o reconhecimento devolve a mesma frase

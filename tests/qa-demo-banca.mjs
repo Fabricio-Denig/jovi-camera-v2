@@ -8,6 +8,23 @@
 import { chromium } from "/opt/node22/lib/node_modules/playwright/index.mjs";
 import { APP, CENAS, CHROMIUM } from "./caminhos.mjs";
 import { AULA_FALADA, instalarFalaDeMentira } from "./fala-de-mentira.mjs";
+import { instalarWhisperDeMentira } from "./whisper-de-mentira.mjs";
+
+/**
+ * O mesmo conteúdo de `AULA_FALADA`, na forma que o motor local (Whisper)
+ * devolve — blocos com horário, não o protocolo parcial/final do
+ * reconhecimento ao vivo. Precisa existir porque o motor local agora
+ * FUNCIONA de verdade (ver `whisperEngine.ts`): sem este dublê, ele
+ * reprocessaria o áudio de teste (um tom sintético do dispositivo de
+ * microfone falso, não fala real) e substituiria o texto de
+ * `instalarFalaDeMentira` por lixo — a mesma classe de defeito que esta
+ * bancada existe para achar, só que no próprio teste, não no produto.
+ */
+const AULA_FALADA_WHISPER = AULA_FALADA.map((texto, i) => ({
+  text: texto,
+  startMs: i * 4500,
+  endMs: i * 4500 + 4000,
+}));
 
 let fail = 0;
 let passo = 0;
@@ -60,6 +77,13 @@ async function abrirApp({ cena, microfone = true, transcreve = false }) {
      * relatório achar que se mediu reconhecimento de verdade.
      */
     await p.addInitScript(instalarFalaDeMentira(AULA_FALADA), AULA_FALADA);
+    // Ver o comentário em `AULA_FALADA_WHISPER`: sem isto, o motor local
+    // reprocessaria de verdade o tom sintético do áudio falso e apagaria o
+    // texto do dublê acima.
+    await p.addInitScript(instalarWhisperDeMentira(), {
+      blocos: AULA_FALADA_WHISPER,
+      atrasoMs: 500,
+    });
   }
 
   await p.goto(APP + "/", { waitUntil: "networkidle" });
@@ -94,7 +118,17 @@ async function encerrarESalvar(p) {
 }
 
 async function abrirAulaNaGaleria(p) {
-  await p.getByRole("button", { name: "Galeria", exact: true }).click();
+  /*
+   * Depois de salvar uma aula com áudio, o motor local (Whisper, WASM sem
+   * threads) começa a transcrever em segundo plano de verdade agora — antes
+   * a rede bloqueada nesta bancada fazia isso falhar quase instantâneo, sem
+   * nunca chegar a ocupar a thread principal. Um teste real mostrou essa
+   * inferência travando o clique seguinte por bem mais que o timeout padrão
+   * do Playwright (30s) sob carga — um timeout maior aqui é o ajuste ao
+   * novo comportamento real, não um paliativo escondendo travamento sem
+   * limite: a transcrição sempre termina, só não instantaneamente.
+   */
+  await p.getByRole("button", { name: "Galeria", exact: true }).click({ timeout: 90000 });
   await p.waitForTimeout(1200);
   await p
     .getByRole("tablist", { name: "Filtrar a galeria" })
@@ -356,7 +390,9 @@ console.log(
   await p.getByRole("button", { name: /salvar|guardar/i }).first().click();
   await p.waitForTimeout(3500);
 
-  await p.getByRole("button", { name: "Galeria", exact: true }).click();
+  // Ver o comentário em `abrirAulaNaGaleria`: a transcrição real em
+  // segundo plano pode ocupar a thread principal além do timeout padrão.
+  await p.getByRole("button", { name: "Galeria", exact: true }).click({ timeout: 90000 });
   await p.waitForTimeout(1300);
   await p
     .getByRole("tablist", { name: "Filtrar a galeria" })

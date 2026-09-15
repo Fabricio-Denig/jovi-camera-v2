@@ -24,13 +24,32 @@ export interface LeituraDeImagem {
  *
  * A importação é dinâmica de propósito: são cerca de quatro megabytes de
  * runtime, e nenhum deles pode entrar no caminho de abertura da câmera.
+ *
+ * **Os caminhos são absolutos e respeitam o subpath do GitHub Pages.** Eram
+ * `/tesseract/...` — caminho absoluto de RAIZ do domínio, não do app. Em
+ * `localhost:5173/` isso não dá diferença (raiz do domínio = raiz do app),
+ * e nenhuma suíte de bancada tinha testado sob o subpath real antes — é por
+ * isso que este defeito sobreviveu despite o Scanner estar "testado" há
+ * várias rodadas. Publicado em `https://usuario.github.io/jovi-camera-v2/`,
+ * a raiz do domínio é `https://usuario.github.io/`, e `/tesseract/...`
+ * aponta para fora do site inteiro — 404 garantido, OCR quebrado de verdade
+ * em produção. Mesmo padrão de `whisperEngine.ts`: `import.meta.env.BASE_URL`
+ * (que já inclui `/jovi-camera-v2/` no build de produção) entra ANTES de
+ * `tesseract/`.
  */
+function baseAbsoluta(caminho: string): string {
+  return new URL(
+    `${import.meta.env.BASE_URL}${caminho}`,
+    window.location.origin,
+  ).href;
+}
+
 export async function criarLeitor() {
   const { createWorker } = await import("tesseract.js");
   return createWorker("por", 1, {
-    workerPath: "/tesseract/worker.min.js",
-    corePath: "/tesseract/",
-    langPath: "/tesseract/",
+    workerPath: baseAbsoluta("tesseract/worker.min.js"),
+    corePath: baseAbsoluta("tesseract/"),
+    langPath: baseAbsoluta("tesseract/"),
     gzip: true,
   });
 }

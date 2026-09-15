@@ -15,7 +15,13 @@ import {
   jobParecaTravado,
   transcreverAula,
 } from "../listen/transcribeSession";
+import { ListenDebugReport } from "../listen/ListenDebugReport";
 import { getLessonAudio, type LessonAudio } from "../shared/lib/mediaStore";
+
+/** `?debug=listen` abre o diagnóstico do Listen — o que cada etapa da
+    transcrição (áudio, motor, download, inferência) registrou de verdade.
+    Fora do produto normal, mesmo desenho de `?debug=device`. */
+const listenDebug = new URLSearchParams(window.location.search).get("debug") === "listen";
 import {
   getClassById,
   renameClass,
@@ -72,6 +78,7 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
   const [audio, setAudio] = useState<LessonAudio | null>(null);
   /** Para onde o player deve pular, quando um momento pede. */
   const [seekTo, setSeekTo] = useState<number | null>(null);
+  const [relatorioListenAberto, setRelatorioListenAberto] = useState(listenDebug);
 
   useEffect(() => {
     let active = true;
@@ -187,6 +194,18 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
 
   return (
     <div className="flex h-full flex-col bg-canvas">
+      {listenDebug && relatorioListenAberto && (
+        <ListenDebugReport onFechar={() => setRelatorioListenAberto(false)} />
+      )}
+      {listenDebug && !relatorioListenAberto && (
+        <button
+          type="button"
+          onClick={() => setRelatorioListenAberto(true)}
+          className="fixed right-3 top-[max(60px,calc(env(safe-area-inset-top)+48px))] z-40 min-h-9 rounded-full bg-black/70 px-3 font-mono text-[11px] text-white"
+        >
+          diagnóstico
+        </button>
+      )}
       <header className="border-b border-line px-4 pb-0 pt-[max(14px,env(safe-area-inset-top))]">
         {/* "Voltar" à esquerda, como o `339:671` — e não um ✕ à direita. Este é
             o gesto de uma tela que está dentro de outra, e a aula está. */}

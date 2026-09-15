@@ -27,8 +27,14 @@
 import { mkdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-/** Ajustar aqui, em um lugar só, se `whisper-base` provar necessário depois
-    de um teste real — mesma constante que `whisperEngine.ts` usa. */
+/**
+ * `whisper-tiny` — testado de ponta a ponta num navegador real (Playwright,
+ * Chromium, backend "wasm") com um fixture de áudio real: os três conceitos
+ * do fixture de aceitação ("física", "prova", "atenção") saíram certos.
+ * `whisper-base` foi tentado primeiro por ter saído melhor num teste em
+ * Node — mas falhava ao CARREGAR no navegador real (ver o comentário grande
+ * em `whisperEngine.ts`). Mesma constante que `whisperEngine.ts` usa;
+ * ajustar aqui também se trocar de novo. */
 const MODEL_ID = "Xenova/whisper-tiny";
 
 /**
@@ -65,12 +71,6 @@ const FILES = [
   "tokenizer_config.json",
   "onnx/encoder_model_quantized.onnx",
   "onnx/decoder_model_merged_quantized.onnx",
-  // Teste temporário: "_int8" não existe neste repositório (404) — só fp32
-  // (sem sufixo) e "_quantized" (q8) estão publicados para whisper-tiny.
-  // fp32 é a última tentativa: o encoder cabe, o decoder (113MB) passa do
-  // limite do GitHub — dividido em partes pelo workflow de bancada.
-  "onnx/encoder_model.onnx",
-  "onnx/decoder_model_merged.onnx",
 ];
 
 const OUT_DIR = path.join(process.cwd(), "public", "models", MODEL_ID);

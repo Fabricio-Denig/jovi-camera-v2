@@ -5,6 +5,7 @@ import {
   type TranscriptSegment,
 } from "../shared/lib/mediaStore";
 import { descartarMotor, transcreverTrecho } from "./whisperEngine";
+import { iniciarTentativa, registrarErro } from "./listenDiag";
 
 /**
  * O reprocessamento da aula depois de salva: lê o áudio inteiro com o motor
@@ -48,6 +49,10 @@ export async function transcreverAula(sessionId: string): Promise<void> {
   if (segmentos.length === 0) return; // Nada para transcrever.
 
   emAndamento.add(sessionId);
+  // Uma nova tentativa de verdade começa aqui — `?debug=listen` mostra o
+  // número dela, e é o que prova que "Tentar de novo" não está só reciclando
+  // o estado (e o erro) da tentativa anterior.
+  iniciarTentativa();
   await saveLessonAudio({
     ...audio,
     transcriptJobStatus: "processando",
@@ -56,8 +61,9 @@ export async function transcreverAula(sessionId: string): Promise<void> {
 
   try {
     const blocos: TranscriptSegment[] = [];
+    let indice = 0;
     for (const segmento of segmentos) {
-      const trechos = await transcreverTrecho(segmento.blob);
+      const trechos = await transcreverTrecho(segmento.blob, indice++);
       for (const t of trechos) {
         blocos.push({
           // O relógio do arquivo vira o relógio da sessão somando onde este
@@ -82,7 +88,12 @@ export async function transcreverAula(sessionId: string): Promise<void> {
       transcriptStatus: blocos.length > 0 ? "ok" : atual.transcriptStatus,
       transcriptJobStatus: "pronto",
     });
-  } catch {
+  } catch (erro) {
+    // O erro de verdade — não só "falhou" — fica registrado para
+    // `?debug=listen` (ver `listenDiag.ts`). Antes este `catch` descartava
+    // `erro` por completo; era impossível saber, depois de uma falha real em
+    // aparelho, se a causa foi rede, decodificação, memória ou outra coisa.
+    registrarErro("job", erro);
     const atual = (await getLessonAudio(sessionId)) ?? audio;
     await saveLessonAudio({
       ...atual,
