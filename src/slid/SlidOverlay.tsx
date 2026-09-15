@@ -132,11 +132,23 @@ export function SlidOverlay({
             }
           />
           <span className="text-[12.5px] font-semibold text-ink">
+            {/*
+             * "Acompanhando a aula" virou "SliD ativo" — mais perto do Figma
+             * (`Usando slid v2`, `321:296`: a pílula diz só "SliD 07:23"), e
+             * sem perder informação: o ponto pulsando ao lado já diz "vivo",
+             * o relógio contando já diz "gravando", e uma frase inteira para
+             * confirmar os dois é a mesma coisa dita três vezes. Os dois
+             * estados que PRECISAM de frase — procurando, pausado — mantêm a
+             * frase, porque ali a palavra é a única pista de que algo mudou.
+             * Não ficou só "SliD": a palavra sozinha já nomeia a aba e o
+             * modo em outros lugares da tela, e "ativo" é o que esta pílula
+             * de fato está confirmando.
+             */}
             {!running
               ? "Pausado"
               : searching
                 ? "Procurando o conteúdo"
-                : "Acompanhando a aula"}
+                : "SliD ativo"}
           </span>
           <span className="font-mono text-[12px] tabular-nums text-ink-muted">
             {formatClock(elapsedMs)}

@@ -127,7 +127,7 @@ console.log("== os dezesseis modos, um por um ==");
        * O que prova que se está no SliD é a sessão acontecendo na tela.
        */
       check(
-        /Acompanhando a aula|Procurando o conteúdo/.test(corpo),
+        /SliD ativo|Procurando o conteúdo/.test(corpo),
         `${nome}: a sessão está na tela (a barra de modos sai de cena, por desenho)`,
         corpo.slice(0, 70).replace(/\n/g, " · "),
       );
