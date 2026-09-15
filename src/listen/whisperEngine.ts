@@ -81,6 +81,32 @@ import {
  * Depois dos dois: transcrição real, sem erro nenhum, reconhecendo os três
  * conceitos do fixture de aceitação do produto ("física", "prova",
  * "atenção") a partir de áudio sintetizado — não injetado.
+ *
+ * **Isto não é a primeira vez que a pergunta foi feita.** Existe um spike
+ * anterior (`docs/spike-transcricao-offline.md`, 11/set) que mediu
+ * Transformers.js e decidiu **não** incluí-lo, por três motivos: o momento
+ * errado (transcrição ao vivo precisa do modelo carregado *durante* a
+ * sessão), o aparelho errado (rodar inferência pesada competindo com câmera
+ * + `MediaRecorder` + análise ao vivo arrisca a aba ser encerrada pelo
+ * sistema) e a rede errada (um segundo download pesado herda o problema que
+ * já tinha tirado o Tesseract do CDN padrão). Os dois primeiros motivos não
+ * se aplicam aqui: este motor roda **depois** de `slid.status === "finished"`
+ * — a sessão já terminou, a câmera e o `MediaRecorder` já soltaram o
+ * aparelho, e não existe promessa de legenda ao vivo sendo quebrada. O
+ * terceiro motivo é o que a auto-hospedagem dos pesos (acima) resolve por
+ * completo: nem o runtime nem o modelo dependem de um CDN de terceiro.
+ *
+ * **O runtime (ONNX) também é auto-hospedado, na variante menor.** Medido no
+ * build: sem configurar nada, a biblioteca escolhe sozinha, em tempo de
+ * execução, entre duas variantes do WebAssembly do onnxruntime-web — e para
+ * qualquer navegador que não seja Safari, ela pede a variante "asyncify"
+ * (pensada para WebGPU) **de um CDN externo (jsdelivr)**: 23,5 MB crus. Este
+ * app não usa WebGPU (só `device: "wasm"`), então essa variante paga um
+ * custo que não compra nada. `scripts/copy-ort-assets.mjs` copia a variante
+ * simples (12,9 MB crus — quase metade) para `public/ort/`, e as duas linhas
+ * abaixo apontam `env.backends.onnx.wasm` para ela antes de qualquer
+ * `pipeline(...)` — o mesmo padrão do Tesseract: nada busca um CDN de
+ * terceiro, e a rede da sala de aula só precisa alcançar este domínio.
  */
 
 /**
