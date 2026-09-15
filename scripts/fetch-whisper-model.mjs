@@ -66,11 +66,14 @@ const FILES = [
   "onnx/encoder_model_quantized.onnx",
   "onnx/decoder_model_merged_quantized.onnx",
   // Teste temporário: o onnxruntime-web (wasm) desta versão falha ao
-  // carregar QUALQUER variante "_quantized" (QDQ/MatMulNBits — ver o
-  // comentário em whisperEngine.ts). fp32 (sem sufixo, sem quantização)
-  // testa se o problema é mesmo a quantização ou outra coisa.
-  "onnx/encoder_model.onnx",
-  "onnx/decoder_model_merged.onnx",
+  // carregar a variante "_quantized" (QDQ/MatMulNBits — ver o comentário em
+  // whisperEngine.ts). fp32 provou o ponto errado — o decoder fp32 passa de
+  // 100MB e o GitHub recusa o push (nem chegou a testar no navegador).
+  // "_int8" é uma quantização mais simples (por tensor, sem os blocos que
+  // usam MatMulNBits) — testando se evita o mesmo bug sem o problema de
+  // tamanho.
+  "onnx/encoder_model_int8.onnx",
+  "onnx/decoder_model_merged_int8.onnx",
 ];
 
 const OUT_DIR = path.join(process.cwd(), "public", "models", MODEL_ID);
