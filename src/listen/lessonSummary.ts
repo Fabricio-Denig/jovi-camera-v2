@@ -1,5 +1,12 @@
 import type { TranscriptSegment } from "../shared/lib/mediaStore";
-import { MARCAS_DE_ENFASE, semAcento, VAZIAS, JANELA_DEPOIS_MS } from "./speechInsights";
+import {
+  MARCAS_DE_ENFASE,
+  semAcento,
+  VAZIAS,
+  JANELA_DEPOIS_MS,
+  marcaDeEnfaseValida,
+  negadoAntes,
+} from "./speechInsights";
 import { MENSAGEM_TRECHO_DEGENERADO } from "./transcriptSanitizer";
 
 /**
@@ -189,8 +196,7 @@ function frasesDaFala(segments: TranscriptSegment[]): Frase[] {
 }
 
 function temMarcaDeEnfase(texto: string): boolean {
-  const normal = semAcento(texto);
-  return MARCAS_DE_ENFASE.some((m) => normal.includes(semAcento(m)));
+  return marcaDeEnfaseValida(semAcento(texto)) !== null;
 }
 
 /**
@@ -832,6 +838,50 @@ export function gerarResumoGlobal({
   for (const [chave, { forma, n }] of termosOcr) {
     peso.set(chave, (peso.get(chave) ?? 0) + n * 1.3);
     if (!formas.has(chave)) formas.set(chave, forma);
+  }
+
+  /*
+   * Bônus de síntese: "Resumindo, os principais pontos são matrizes, matriz
+   * identidade e multiplicação de matrizes" é o professor dizendo, com todas
+   * as letras, "isto é o que importa" — a evidência mais forte que a fala
+   * pode dar, e ainda assim o peso não refletia isso.
+   *
+   * O bônus vai para o PESO DO TERMO no mapa compartilhado, não só para a
+   * frase de síntese em si. Isso importa porque `fraseDeConceito` extrai
+   * UMA janela de conceito por frase candidata — dar o bônus só à frase
+   * inteira ("Resumindo, os principais pontos são A, B e C.") a fazia
+   * competir melhor por UM lugar nos pontos principais, mas os outros itens
+   * da lista (B e C) continuavam com o peso de sempre. Bonificando o TERMO,
+   * qualquer frase que mencione A, B ou C — a de síntese, ou a explicação
+   * anterior dita como frase própria ("Matrizes são estruturas
+   * organizadas...") — sobe junto, porque é o mesmo mapa de pesos que
+   * `pontuarFrase`/`fraseDeConceito` leem em todo o resto do arquivo.
+   */
+  const BONUS_SINTESE = 3;
+  for (const f of frasesFalaTodas) {
+    const normal = semAcento(f.texto);
+    let temSintese = false;
+    for (const m of MARCAS_DE_SINTESE) {
+      const idx = normal.indexOf(m);
+      if (idx !== -1 && !negadoAntes(normal, idx)) {
+        temSintese = true;
+        break;
+      }
+    }
+    if (!temSintese) continue;
+    const vistos = new Set<string>();
+    for (const bruto of normal.split(/[^\p{L}\p{N}]+/u)) {
+      if (
+        bruto.length < 3 ||
+        VAZIAS.has(bruto) ||
+        PALAVRAS_GENERICAS_DEMAIS.has(bruto) ||
+        PALAVRAS_DE_MARCA.has(bruto) ||
+        vistos.has(bruto)
+      )
+        continue;
+      vistos.add(bruto);
+      peso.set(bruto, (peso.get(bruto) ?? 0) + BONUS_SINTESE);
+    }
   }
 
   const totalCandidatos = frasesFala.length + frasesOcr.length;

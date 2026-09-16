@@ -63,10 +63,15 @@ export function SettingsSheet({
           procura por "o que esse app faz com meus dados" quando a pergunta vem
           depois, e não durante.
 
-          As duas frases são separadas porque as duas coisas são separadas: o
-          arquivo de áudio dá para afirmar que fica no aparelho; o que o
-          reconhecimento do navegador faz com o som, não. Por isso a palavra
-          "local" não cobre as duas.
+          Atualizado numa rodada de confiança: o texto antigo descrevia uma
+          arquitetura que este app não usa mais — o reconhecimento de fala do
+          navegador (`SpeechRecognition`), que dependia do serviço de voz de
+          cada navegador e não era controlado pelo app. Hoje a transcrição
+          roda por um modelo (Whisper) baixado uma vez e executado neste
+          aparelho, depois que a aula termina — ver `whisperEngine.ts`. As
+          duas frases continuam separadas porque continuam sendo fatos
+          diferentes: quando o áudio é guardado (na hora) e quando é
+          transcrito (depois, localmente).
         */}
         <section className="mt-1 rounded-2xl bg-surface-2 px-4 py-3.5">
           <h3 className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
@@ -76,9 +81,9 @@ export function SettingsSheet({
             O áudio da aula é gravado pelo app e fica guardado neste aparelho.
           </p>
           <p className="mt-1 text-[12px] leading-snug text-ink-muted">
-            Quando o navegador oferece transcrição da fala, quem reconhece é
-            ele — e, dependendo do navegador, isso pode usar o serviço de
-            reconhecimento de voz dele. O app não controla essa parte.
+            A transcrição é feita depois, neste mesmo aparelho, por um modelo
+            de reconhecimento de fala baixado uma vez e reaproveitado nas
+            próximas aulas — sem enviar áudio nem texto para nenhum serviço.
           </p>
         </section>
       </div>

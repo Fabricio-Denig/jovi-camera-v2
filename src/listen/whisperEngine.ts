@@ -112,38 +112,55 @@ import { sanitizarTrecho, MENSAGEM_TRECHO_DEGENERADO } from "./transcriptSanitiz
  */
 
 /**
- * `whisper-tiny` — e não `whisper-base`, apesar de um teste real ter medido
- * o `base` melhor em qualidade. As duas frases abaixo são as DUAS metades
- * da mesma investigação, não uma suposição:
+ * `whisper-base`, não mais `whisper-tiny` — mudança feita numa rodada de
+ * confiança motivada por um teste físico real: um professor disse "Falaremos
+ * sobre lógica de programação e programação orientada a objetos" e o app
+ * guardou o título como "Não e sei". A causa raiz é qualidade de STT, e o
+ * benchmark abaixo mediu a diferença com áudio real (TTS PT-BR sintetizado
+ * localmente com espeak-ng+mbrola, nunca texto injetado — os mesmos dois
+ * roteiros de aceitação desta rodada, "matrizes" e "POO", em
+ * `.claude/p0-audio/`, gitignored mas reproduzível pelo script ali):
  *
- * 1. Um teste de inferência genuína (PCM real, áudio TTS PT-BR sintetizado
- *    localmente, nunca texto injetado) rodado em Node (execution provider
- *    "cpu", os pesos reais trazidos de CI) mostrou `whisper-base` acertando
- *    os três conceitos do fixture de aceitação ("física", "prova",
- *    "atenção") onde `whisper-tiny` só acertava dois ("física" virava
- *    "sobrefícies").
- * 2. O MESMO arquivo `whisper-base` testado de ponta a ponta pelo navegador
- *    de verdade (Playwright, Chromium real, execution provider "wasm" —
- *    o que o produto realmente usa) falhou ao CARREGAR o modelo:
+ * - POO, `whisper-tiny`: "Falaremos sobre a nossa operação e programação."
+ *   — os dois conceitos obrigatórios (lógica de programação, programação
+ *   orientada a objetos) desaparecem por completo. É a reprodução exata do
+ *   defeito do teste físico.
+ * - POO, `whisper-base`: "Falaríamos sobre lógica de programação e
+ *   programação oriental da objetos." — os dois conceitos sobrevivem
+ *   (uma flexão errada, "oriental" por "orientada", é o tipo de ruído que a
+ *   camada de interpretação — `speechInsights.ts`/`lessonSummary.ts` —
+ *   já precisa tolerar de qualquer STT, não uma frase perdida).
+ * - Matrizes: `tiny` produz "matricista da cidade", "sanatriz matriblia de
+ *   inútil" — irreconhecível. `base` produz "matarizidade" (reconhecível
+ *   como "identidade"), preserva "linhas e colunas", "multiplicação... pode
+ *   cair na prova" e a estrutura de lista depois de "resumindo".
  *
- *        Can't create a session. ERROR_CODE: 1, ERROR_MESSAGE:
- *        qdq_actions.cc:137 TransposeDQWeightsForMatMulNBits Missing
- *        required scale: model.decoder.embed_tokens.weight_merged_0_scale
+ * A ÚNICA razão histórica para não usar `base` era um bug real:
+ * `onnx/decoder_model_merged_quantized.onnx` falhava ao criar sessão no
+ * backend "wasm" do navegador (`TransposeDQWeightsForMatMulNBits Missing
+ * required scale`) — mesmo arquivo, mesmo teste, rodando sem erro no
+ * backend "cpu" do Node. Essa investigação aconteceu ANTES de
+ * `session_options: { graphOptimizationLevel: "disabled" }` (abaixo) entrar
+ * no código para outro motivo (um bug de repetição do `tiny`). Um novo teste
+ * de ponta a ponta — Playwright, Chromium real, microfone falso, backend
+ * "wasm" de verdade, com essa opção já em vigor — mostra a sessão ONNX
+ * criando normalmente e a transcrição terminando sem o erro QDQ/MatMulNBits.
+ * O bloqueio documentado não existe mais nas condições atuais do código.
  *
- *    O arquivo `onnx/decoder_model_merged_quantized.onnx` do whisper-base
- *    usa um padrão de quantização (QDQ + MatMulNBits) que o backend "cpu"
- *    nativo do Node executa sem problema, mas que o backend "wasm" do
- *    onnxruntime-web (o único que este site tem, sem WebGPU) não suporta.
- *    Uma qualidade melhor que nunca carrega no navegador real não é uma
- *    transcrição melhor — é nenhuma transcrição.
+ * Custo aceito conscientemente: ~77MB em disco contra ~42MB do `tiny`
+ * (`onnx/encoder_model_quantized.onnx` + `decoder_model_merged_quantized.
+ * onnx`), e inferência mais lenta (~9s medidos para 7,5s de áudio no teste
+ * de ponta a ponta, contra ~3s do `tiny` na mesma duração em Node). O
+ * download é único e cacheado pelo navegador; a inferência roda depois que
+ * a aula já terminou, sem concorrer com câmera nem `MediaRecorder`. Continua
+ * a variante MULTILÍNGUE (nunca `.en`) — este produto transcreve português.
  *
- * `whisper-tiny` carrega e roda nos dois backends — é o que o HARD GATE
- * desta rodada exige de verdade. Continua sendo a variante MULTILÍNGUE
- * (nunca `.en`) — este produto transcreve português. Se um teste real
- * futuro (com um dtype diferente, ou uma reconversão do whisper-base sem
- * MatMulNBits) resolver a incompatibilidade, ajustar aqui — mas só depois
- * de confirmar em `device: "wasm"`, não só em Node. */
-const MODELO = "Xenova/whisper-tiny";
+ * Sobre a estratégia remota que esta mesma rodada cogitou como plano B: não
+ * chegou a ser necessária. Este projeto não tem backend nem credenciais de
+ * nenhum serviço de STT pago, e este achado (local já funciona bem, sem
+ * precisar de rede durante a aula) tornou desnecessário inventar uma
+ * infraestrutura nova só para a demonstração. */
+const MODELO = "Xenova/whisper-base";
 
 // A biblioteca inteira (onnxruntime-web incluso) fica fora do caminho de
 // abertura da câmera: a importação só acontece quando alguém de fato pede uma
