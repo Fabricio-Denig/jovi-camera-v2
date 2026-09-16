@@ -198,7 +198,15 @@ export function LessonAudioPlayer({
       : null;
 
   return (
-    <section className="rounded-2xl border border-line bg-surface-2 p-3.5">
+    /*
+     * Antes um cartão preenchido (`rounded-2xl border bg-surface-2`), empilhado
+     * direto sobre o cartão de cabeçalho e, quando havia, sobre o aviso de
+     * transcrição logo abaixo — três caixas iguais em fila liam como uma pilha
+     * de componentes, não como uma tela. Um divisor discreto separa sem
+     * embrulhar: o player continua se destacando pelo próprio conteúdo (o
+     * botão de tocar, a barra), não por uma moldura em volta dele.
+     */
+    <section className="border-b border-line pb-4">
       <div className="flex items-center justify-between">
         <h2 className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
           Áudio da aula

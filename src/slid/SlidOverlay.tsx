@@ -120,7 +120,7 @@ export function SlidOverlay({
         <div
           role="status"
           aria-live="polite"
-          className="flex items-center gap-2 rounded-full bg-canvas/90 px-3.5 py-2 backdrop-blur"
+          className="flex items-center gap-2 rounded-full bg-canvas/90 px-3.5 py-2 shadow-[0_2px_10px_rgba(0,0,0,0.25)] backdrop-blur"
         >
           <span
             className={
@@ -225,7 +225,7 @@ export function SlidOverlay({
               <button
                 type="button"
                 onClick={running ? onPause : onResume}
-                className="min-h-11 rounded-full bg-canvas/85 px-4 py-2.5 text-[13px] font-medium text-ink backdrop-blur active:opacity-70"
+                className="min-h-11 rounded-full bg-canvas/85 px-4 py-2.5 text-[13px] font-medium text-ink shadow-[0_2px_10px_rgba(0,0,0,0.25)] backdrop-blur active:opacity-70"
               >
                 {running ? "Pausar" : "Continuar"}
               </button>
@@ -235,7 +235,7 @@ export function SlidOverlay({
                 onClick={onMarkMoment}
                 disabled={!running}
                 aria-label="Marcar este momento"
-                className="min-h-11 rounded-full border border-white/40 bg-black/35 px-4 py-2.5 text-[13px] font-medium text-white backdrop-blur active:opacity-70 disabled:opacity-30"
+                className="min-h-11 rounded-full border border-white/40 bg-black/35 px-4 py-2.5 text-[13px] font-medium text-white shadow-[0_2px_10px_rgba(0,0,0,0.3)] backdrop-blur active:opacity-70 disabled:opacity-30"
               >
                 Marcar momento
               </button>
@@ -243,7 +243,7 @@ export function SlidOverlay({
               <button
                 type="button"
                 onClick={() => setConfirming(true)}
-                className="min-h-11 rounded-full bg-accent px-4 py-2.5 text-[13px] font-medium text-accent-ink active:opacity-80"
+                className="min-h-11 rounded-full bg-accent px-4 py-2.5 text-[13px] font-medium text-accent-ink shadow-[0_2px_10px_rgba(0,0,0,0.25)] active:opacity-80"
               >
                 Encerrar
               </button>
@@ -382,7 +382,7 @@ function MomentChip({
   return (
     <div
       aria-hidden="true"
-      className={`relative size-[58px] animate-[slid-rise_260ms_ease-out] overflow-hidden rounded-xl border transition-colors duration-500 ${
+      className={`relative size-[58px] animate-[slid-rise_260ms_ease-out] overflow-hidden rounded-xl border shadow-[0_2px_10px_rgba(0,0,0,0.35)] transition-colors duration-500 ${
         fresh ? "border-accent" : "border-white/35"
       }`}
     >

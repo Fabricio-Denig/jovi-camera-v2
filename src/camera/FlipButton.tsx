@@ -23,7 +23,7 @@ export function FlipButton({
         onClick={onSwitch}
         disabled={disabled}
         aria-label="Trocar câmera"
-        className="flex size-11 items-center justify-center rounded-full bg-white/12 text-white backdrop-blur transition-transform active:scale-90 disabled:opacity-30"
+        className="flex size-11 items-center justify-center rounded-full bg-white/12 text-white shadow-[0_2px_8px_rgba(0,0,0,0.3)] backdrop-blur transition-transform active:scale-90 disabled:opacity-30"
       >
         <span className={isSwitching ? "block animate-spin" : "block"}>
           <FlipIcon />

@@ -52,7 +52,10 @@ export function ClassHeaderCard({
   const url = useObjectUrl(capa);
 
   return (
-    <div className="flex gap-3 rounded-2xl border border-line bg-surface-2 p-3">
+    // Sem `border`: o preenchimento sozinho já distingue o cartão do fundo, e
+    // a borda por cima só somava um contorno duro que engrossava a leitura de
+    // "caixa" — o mesmo card, mais leve.
+    <div className="flex gap-3 rounded-2xl bg-surface-2 p-3">
       {/* 103×103 no wireframe; aqui em `rem` para acompanhar a fonte do sistema. */}
       <div className="size-[88px] shrink-0 overflow-hidden rounded-xl bg-surface">
         {url ? (

@@ -63,7 +63,7 @@ export function TopBar({
           onClick={onToggleTorch}
           aria-pressed={torchOn}
           aria-label={torchOn ? "Apagar a lanterna" : "Acender a lanterna"}
-          className={`flex size-11 shrink-0 items-center justify-center rounded-full transition-colors active:scale-95 ${
+          className={`flex size-11 shrink-0 items-center justify-center rounded-full shadow-[0_2px_8px_rgba(0,0,0,0.3)] transition-colors active:scale-95 ${
             torchOn ? "bg-white text-black" : "bg-black/40 text-white"
           }`}
         >
@@ -91,7 +91,7 @@ export function TopBar({
                 ? "Temporizador desligado, tocar para 3 segundos"
                 : `Temporizador de ${timer} segundos`
             }
-            className={`flex h-11 min-w-11 items-center justify-center gap-1 rounded-full px-3 text-[12px] font-semibold transition-colors active:scale-95 ${
+            className={`flex h-11 min-w-11 items-center justify-center gap-1 rounded-full px-3 text-[12px] font-semibold shadow-[0_2px_8px_rgba(0,0,0,0.3)] transition-colors active:scale-95 ${
               timer === 0 ? "bg-black/40 text-white" : "bg-white text-black"
             }`}
           >
@@ -104,7 +104,7 @@ export function TopBar({
             type="button"
             onClick={onCycleAspect}
             aria-label={`Proporção ${aspect}`}
-            className="flex h-11 items-center justify-center rounded-full bg-black/40 px-3 text-[12px] font-semibold text-white transition-colors active:scale-95"
+            className="flex h-11 items-center justify-center rounded-full bg-black/40 px-3 text-[12px] font-semibold text-white shadow-[0_2px_8px_rgba(0,0,0,0.3)] transition-colors active:scale-95"
           >
             {aspect}
           </button>
@@ -119,7 +119,7 @@ export function TopBar({
           // "Câmera" da navegação, e dois controles cujos nomes se contêm são
           // ambíguos para quem navega por leitor de tela — e para os testes.
           aria-label="Ajustes"
-          className="flex size-11 shrink-0 items-center justify-center rounded-full bg-black/40 text-white transition-transform active:scale-95"
+          className="flex size-11 shrink-0 items-center justify-center rounded-full bg-black/40 text-white shadow-[0_2px_8px_rgba(0,0,0,0.3)] transition-transform active:scale-95"
         >
           <GearIcon />
         </button>

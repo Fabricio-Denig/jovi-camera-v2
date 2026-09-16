@@ -143,7 +143,7 @@ function SuggestedCard({
       type="button"
       onClick={onSelect}
       aria-label={`${mode.label} — sugerido agora`}
-      className={`flex aspect-[163/134] w-[46%] min-w-[150px] flex-col items-start overflow-hidden rounded-2xl border p-3 text-left transition-transform duration-150 active:scale-[0.97] ${
+      className={`flex aspect-[163/134] w-[46%] min-w-[150px] flex-col items-start overflow-hidden rounded-2xl border p-3 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition-transform duration-150 active:scale-[0.97] ${
         active ? "border-accent bg-accent-soft" : "border-accent/50 bg-accent-soft/50"
       }`}
     >
@@ -222,7 +222,14 @@ function ModeCard({
        * virar um card "grande": ainda cabem três por fileira, ainda é um
        * ícone e duas frases curtas.
        */
-      className={`flex aspect-[105/128] w-full flex-col items-start overflow-hidden rounded-2xl border p-2.5 text-left transition-transform duration-150 active:scale-[0.95] ${
+      /*
+       * Destaque no alto por dentro da borda, e não sombra: sobre o fundo
+       * quase preto do painel (`--color-canvas`) uma sombra escura some —
+       * conferido por captura de tela. É o mesmo ajuste feito nos cards de
+       * filtro, pela mesma razão: dezesseis cards idênticos precisam de
+       * alguma dimensão para não ler como uma grade plana.
+       */
+      className={`flex aspect-[105/128] w-full flex-col items-start overflow-hidden rounded-2xl border p-2.5 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-transform duration-150 active:scale-[0.95] ${
         active
           ? "border-accent bg-accent-soft ring-1 ring-accent/60"
           : "border-line bg-surface-2"
