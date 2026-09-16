@@ -144,9 +144,18 @@ export function FiltersSheet({
         </div>
       )}
 
-      {/* Cards de 84×134 em 4 colunas, agrupados por família — como no
-          `333:169`, mas com a seção que o wireframe não precisava desenhar
-          porque tinha sete filtros, não onze. */}
+      {/*
+       * 3 colunas, não 4: o wireframe (`333:169`) desenha cards de 84×134 —
+       * proporção alta, quase o dobro de altura da largura — porque tinha só
+       * sete filtros a mostrar de uma vez. Com onze, 4 colunas espremia cada
+       * miniatura a ~78px de largura numa tela de 390px: pequena demais para
+       * comparar cor e contraste entre filtros parecidos ("Suave" vs.
+       * "Quente"), que é a decisão que este painel existe para apoiar. Um
+       * seletor de filtro nativo (Câmera do iOS, Instagram) sempre usa
+       * miniaturas grandes o bastante para ver a cena nelas — 3 colunas dá
+       * ~104px de largura, quase 35% maior, sem perder linhas de rolagem
+       * extra (dois filtros a menos por fileira, é só isso).
+       */}
       {porFamilia.map(({ familia, cards: cardsDaFamilia }, index) => (
         <div
           key={familia.id}
@@ -159,7 +168,7 @@ export function FiltersSheet({
           <h3 className="mb-2.5 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
             {familia.label}
           </h3>
-          <ul className="grid grid-cols-4 gap-2">
+          <ul className="grid grid-cols-3 gap-2.5">
             {cardsDaFamilia.map(({ filtro, css }) => {
           const escolhido = filtro.id === filterId;
           return (
@@ -192,11 +201,11 @@ export function FiltersSheet({
                     />
                   )}
                 </span>
-                <span className="block px-1.5 pb-1.5 pt-1">
-                  <span className="block truncate text-[11.5px] font-medium text-ink">
+                <span className="block px-2 pb-2 pt-1.5">
+                  <span className="block truncate text-[12.5px] font-medium text-ink">
                     {filtro.label}
                   </span>
-                  <span className="block truncate text-[9.5px] text-ink-muted">
+                  <span className="block truncate text-[10.5px] text-ink-muted">
                     {filtro.hint}
                   </span>
                 </span>

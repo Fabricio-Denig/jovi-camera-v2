@@ -238,7 +238,14 @@ export function GalleryPage({
 
   return (
     <div className="flex h-full flex-col overflow-y-auto bg-canvas">
-      <header className="px-6 pb-3 pt-[max(20px,env(safe-area-inset-top))]">
+      {/*
+       * Régua no fim do cabeçalho: a Aula salva (`ClassPage.tsx`) já separa
+       * cabeçalho de conteúdo com uma borda, e a Galeria não tinha nada — os
+       * chips terminavam e a grade começava sem transição nenhuma, um bloco
+       * só de cima a baixo. A mesma régua aqui aproxima as duas telas da
+       * mesma gramática visual: controles acima, conteúdo abaixo.
+       */}
+      <header className="border-b border-line px-6 pb-4 pt-[max(20px,env(safe-area-inset-top))]">
         <h1 className="text-2xl font-semibold text-ink">Galeria</h1>
         <p className="mt-0.5 mb-3 text-[13px] text-ink-muted">
           {semArmazenamento
@@ -304,7 +311,7 @@ export function GalleryPage({
              * de miniaturas; a data é a única divisão que um rolo de câmera
              * tem de verdade.
              */
-            <div key={view} className="pb-6">
+            <div key={view} className="pb-6 pt-1">
               {groupByDay(grid).map((grupo, ordem) => (
                 <section key={grupo.id}>
                   <h2 className="px-6 pb-2 pt-1 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
@@ -524,12 +531,14 @@ function SlidView({
            * card de imagem, sem um título a grade fica indistinguível do rolo
            * de fotos que vem logo abaixo na mesma tela.
            */}
-          <h2 className="px-6 pb-2 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
+          <h2 className="px-6 pb-2.5 pt-1 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
             Álbuns de aula
           </h2>
           {/* Grade de 2 colunas, como no `339:540`: cards de 175×131 com 9 px
-              entre colunas e 28 px entre linhas, em margens de 25 px. */}
-          <ul className="grid grid-cols-2 gap-x-2 gap-y-4 px-6 pb-6">
+              entre colunas. `gap-y-5`, um pouco além dos 28px do wireframe: o
+              card ganhou aro claro (`ClassAlbumCard.tsx`) e precisava de mais
+              respiro entre linhas para as bordas não brigarem visualmente. */}
+          <ul className="grid grid-cols-2 gap-x-2 gap-y-5 px-6 pb-6">
             {classes.map((record, index) => (
               <li
                 key={record.id}

@@ -125,12 +125,13 @@ export function ClassTextTab({
 
       {atual === "quadro" ? (
         <>
-          {comConteudo.map((momento) => (
+          {comConteudo.map((momento, index) => (
             <BlocoDeMomento
               key={momento.media.id}
               momento={momento}
               legenda={legendaDaFala(transcript, momento.atMs)}
               onOuvir={onOuvir}
+              primeiro={index === 0}
             />
           ))}
 
@@ -183,17 +184,28 @@ function BlocoDeMomento({
   momento,
   legenda,
   onOuvir,
+  primeiro = false,
 }: {
   momento: ClassMoment;
   /** O que estava sendo dito por volta deste momento, se algo sustentar. */
   legenda?: string | null;
   onOuvir?: (atMs: number) => void;
+  /** O primeiro bloco não carrega o divisor de cima — não há o que separar dele. */
+  primeiro?: boolean;
 }) {
   const url = useObjectUrl(momento.media.blob);
   const linhas = linesWithoutTitle(momento);
 
+  /*
+   * Era um cartão preenchido — `rounded-2xl border bg-surface-2` — um por
+   * momento, empilhados. Numa aula com vários momentos lidos, isso lia como
+   * uma sequência de balões de chat, cada um com sua própria moldura. Um
+   * divisor fino entre blocos (a partir do segundo) dá o mesmo ritmo de
+   * leitura de documento que a aba ganhou na fala transcrita
+   * (`TranscriptView.tsx`), sem uma caixa nova a cada momento.
+   */
   return (
-    <article className="rounded-2xl border border-line bg-surface-2 p-3.5">
+    <article className={primeiro ? undefined : "border-t border-line pt-3.5"}>
       <div className="flex items-center gap-2">
         <span className="font-mono text-[11.5px] tabular-nums text-accent">
           {formatClock(momento.atMs)}

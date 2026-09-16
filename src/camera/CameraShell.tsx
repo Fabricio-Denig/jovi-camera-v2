@@ -1315,7 +1315,11 @@ export function CameraShell({
               disabled={recorder.isRecording}
             />
 
-            <div className="grid w-full grid-cols-3 items-center px-8">
+            {/* `mt-1.5`: o obturador é a ação que importa nesta fileira — miniatura
+                e virar câmera são coadjuvantes —, e ele precisa de um respiro
+                próprio depois da barra de modos, não ficar colado nela como só
+                mais uma linha do mesmo empilhamento. */}
+            <div className="mt-1.5 grid w-full grid-cols-3 items-center px-8">
               <CaptureThumb
                 media={lastCapture}
                 onOpen={() => setViewerOpen(true)}
