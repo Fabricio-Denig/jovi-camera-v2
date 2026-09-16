@@ -168,11 +168,28 @@ export function ClassSummaryTab({
           )}
         </>
       ) : (
-        <p className="pt-6 text-center text-sm text-ink-muted">
-          {semNadaMesmo
-            ? "Ainda não há conteúdo suficiente para resumir esta aula."
-            : "A câmera guardou os momentos desta aula, mas não conseguiu ler o suficiente para montar um resumo."}
-        </p>
+        /*
+         * Reescrito numa rodada de confiança: a versão antiga ("A câmera
+         * guardou os momentos desta aula, mas não conseguiu ler o suficiente
+         * para montar um resumo") lia como um relatório de falha do sistema —
+         * a câmera fazendo alguma coisa errado. A aula não é a câmera errando;
+         * é só um resumo que não deu para montar, e o que existe (momentos,
+         * áudio) continua ali, intacto. A segunda frase existe para dizer
+         * exatamente isso — nada foi perdido — sempre que houver algo salvo.
+         */
+        <div className="pt-6 text-center">
+          <p className="text-sm text-ink-muted">
+            {semNadaMesmo
+              ? "Ainda não há conteúdo suficiente para resumir esta aula."
+              : "Ainda não foi possível montar um resumo desta aula."}
+          </p>
+          {!semNadaMesmo && (
+            <p className="mt-1.5 text-[13px] leading-snug text-ink-muted/75">
+              Os momentos e o áudio continuam salvos, para revisar quando
+              quiser.
+            </p>
+          )}
+        </div>
       )}
 
       {/* Metadata do que a câmera reconheceu — pequena de propósito, nunca

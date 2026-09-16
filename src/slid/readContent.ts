@@ -138,7 +138,20 @@ export function describeMoment(
     : lines;
 
   const focus = added.length > 0 ? added : lines;
-  const kind = classifyContent(focus);
+  const kindBruto = classifyContent(focus);
+  /*
+   * Uma categoria específica (Fórmula, Código, Tabela...) é uma afirmação
+   * forte sobre o que a câmera leu — e com confiança baixa essa leitura pode
+   * ser ruído puro: um "=" ou um "2-3" isolado que a OCR imaginou, e
+   * `classifyContent` já classifica como fórmula com UMA linha só batendo
+   * (`hits(isFormula) >= 1`). Achado com um teste físico real: um momento
+   * virou "Fórmula apresentada" sem evidência nenhuma de fórmula. Abaixo do
+   * mesmo limiar que já governa o detalhe (`DETAIL_CONFIDENCE`), a categoria
+   * volta a "texto" — o rótulo genérico ("Conceito apresentado"), nunca uma
+   * categoria específica sem confiança para sustentá-la.
+   */
+  const kind: ContentKind =
+    (confidence ?? 100) >= DETAIL_CONFIDENCE ? kindBruto : "texto";
 
   // The label comes from structure and survives a shaky reading; the line
   // itself does not. Showing "(x) =axr2 + bx + c k" under a moment is the same

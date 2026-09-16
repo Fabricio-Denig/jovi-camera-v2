@@ -83,17 +83,19 @@ export function SlidSuggestion({ onAccept, onDismiss }: SlidSuggestionProps) {
                 assusta sem informar, e ninguém lê. Aqui responde a quem
                 perguntou.
 
-                A separação entre as duas é o ponto. O arquivo é gravado pelo
-                app e fica no aparelho — isso dá para afirmar. A transcrição é
-                feita pelo reconhecimento do navegador, e o que ele faz com o
-                som é decisão dele; no Chrome, envia para um serviço. Escrever
-                "100% local" cobrindo as duas seria uma garantia que não temos
-                como dar.
+                Atualizado numa rodada de confiança: o texto antigo descrevia o
+                reconhecimento de fala do NAVEGADOR (`SpeechRecognition`), que
+                em alguns navegadores enviava o áudio a um serviço externo —
+                por isso a ressalva de então, "escrever '100% local' seria uma
+                garantia que não temos como dar". Isso mudou: a transcrição
+                agora roda por um modelo (Whisper) baixado uma vez e executado
+                neste mesmo aparelho, depois que a aula termina — nada do áudio
+                nem do texto reconhecido sai daqui. Ver `whisperEngine.ts`.
               */}
               <p className="mt-1.5 animate-[slid-enter_200ms_ease-out] text-[11px] leading-snug text-ink-muted/75">
-                O áudio da aula fica guardado neste aparelho. Quando o navegador
-                oferece transcrição, o reconhecimento da fala é feito por ele —
-                e pode usar o serviço de reconhecimento do próprio navegador.
+                O áudio e a transcrição da aula ficam neste aparelho. O
+                reconhecimento da fala roda por um modelo baixado uma vez,
+                sem enviar áudio nem texto para nenhum serviço.
               </p>
             </>
           )}

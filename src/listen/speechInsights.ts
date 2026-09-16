@@ -78,6 +78,49 @@ export const semAcento = (t: string) =>
   t.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
 /**
+ * As palavras que desfazem uma marca de ênfase — "NÃO é importante", "isso
+ * NUNCA cai na prova".
+ *
+ * Achado com um teste real: `acharDestaques` (abaixo) e `temMarcaDeEnfase`
+ * (`lessonSummary.ts`) faziam só `String.includes` contra `MARCAS_DE_ENFASE`
+ * — "não precisa ser muito importante" contém "muito importante" pela letra,
+ * e virava um destaque real ("Professor destacou: ..."), o oposto exato do
+ * que a frase disse. Negação é parte do sentido, não ruído a ignorar.
+ */
+const NEGACOES = new Set(["nao", "nunca", "jamais"]);
+
+/**
+ * Se há uma negação nas poucas palavras logo ANTES da posição `indice` (um
+ * índice de caractere dentro de `normal`, já sem acento) — sem cruzar para a
+ * frase anterior, que negaria algo que a marca nem alcança.
+ */
+export function negadoAntes(normal: string, indice: number): boolean {
+  const antes = normal.slice(0, indice);
+  const inicioFrase = Math.max(
+    antes.lastIndexOf("."),
+    antes.lastIndexOf("!"),
+    antes.lastIndexOf("?"),
+    antes.lastIndexOf("…"),
+  );
+  const janela = antes
+    .slice(inicioFrase + 1)
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(-6);
+  return janela.some((p) => NEGACOES.has(p.replace(/[^\p{L}]/gu, "")));
+}
+
+/** Acha a primeira marca de `MARCAS_DE_ENFASE` presente em `normal`, sem
+ *  contar uma que esteja negada logo antes. `null` quando nenhuma sobrevive. */
+export function marcaDeEnfaseValida(normal: string): string | null {
+  for (const m of MARCAS_DE_ENFASE) {
+    const idx = normal.indexOf(semAcento(m));
+    if (idx !== -1 && !negadoAntes(normal, idx)) return m;
+  }
+  return null;
+}
+
+/**
  * Os trechos em que alguém disse, com todas as letras, que aquilo importa.
  *
  * Só trechos finais: um parcial ainda pode virar outra frase, e marcar uma
@@ -91,7 +134,7 @@ export function acharDestaques(
   for (const s of segments) {
     if (!s.final) continue;
     const normal = semAcento(s.text);
-    const marca = MARCAS_DE_ENFASE.find((m) => normal.includes(semAcento(m)));
+    const marca = marcaDeEnfaseValida(normal);
     if (!marca) continue;
     // Uma frase que só tem a marca e mais nada — "isso é importante." — não
     // diz o que é importante, e vira ruído na lista. Precisa de conteúdo em
@@ -122,7 +165,18 @@ export const VAZIAS = new Set(
     // Saudações — abrem quase toda aula gravada e não carregam assunto nenhum;
     // sem isto, "boa tarde" repetido no começo virava termo forte o bastante
     // para disputar título com o assunto de verdade (achado com um teste real).
-    "bom boa tarde noite dia ola oi galera"
+    "bom boa tarde noite dia ola oi galera " +
+    /*
+     * "não"/"nao" — achado com um teste físico real: o app guardou uma aula
+     * com o título "Não e sei". "não" é um advérbio de negação, nunca um
+     * assunto, e sua ausência desta lista era o próprio bug — sem ela, duas
+     * ocorrências de "não" em qualquer transcrição (garantidas em qualquer
+     * aula com uma frase negativa) já bastavam para ele competir por título.
+     * "sei"/"acho"/"tipo" entram pelo mesmo motivo, mais um: são também as
+     * palavras que o Whisper mais alucina em áudio pouco claro ou silencioso
+     * ("não sei", enchimento clássico do modelo) — nunca assunto de aula.
+     */
+    "nao sei acho"
   ).split(/\s+/),
 );
 

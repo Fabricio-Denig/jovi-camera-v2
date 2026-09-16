@@ -30,8 +30,10 @@ const check = (ok, l, e = "") => {
  */
 const SOA_COMO_FRACASSO = [
   /não foi possível identificar/i,
-  /não conseguiu ler o suficiente/i,
-  /esta aula não tem resumo/i,
+  // Reescrito numa rodada de confiança para não soar como relatório de
+  // falha do sistema — ver o comentário em ClassSummaryTab.tsx.
+  /ainda não foi possível montar um resumo/i,
+  /ainda não há conteúdo suficiente para resumir/i,
   /não conseguiu ler texto nesta aula/i,
 ];
 
@@ -205,7 +207,9 @@ console.log("\n== CENÁRIO D — os dois ruins: o produto não inventa ==");
    * resumo convincente de uma aula sobre a qual não se sabe nada.
    */
   check(
-    /não tem resumo|não conseguiu ler o suficiente/i.test(resumo),
+    /ainda não há conteúdo suficiente para resumir|ainda não foi possível montar um resumo/i.test(
+      resumo,
+    ),
     "a tela diz a verdade: não deu para montar um resumo",
   );
   check(
