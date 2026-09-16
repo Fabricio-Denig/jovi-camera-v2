@@ -7,10 +7,14 @@
  * ajudam ninguém a encontrar nada.
  */
 export function ModeIcon({ id, className }: { id: string; className?: string }) {
+  // O comentário deste arquivo sempre disse "32×32 como no Figma", mas o SVG
+  // renderizava 28×28 — divergência real, achada comparando o código com a
+  // própria documentação dele. Corrigido para bater com o que o Figma
+  // (`337:443`) desenha e com o que este arquivo sempre afirmou fazer.
   return (
     <svg
-      width="28"
-      height="28"
+      width="32"
+      height="32"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"

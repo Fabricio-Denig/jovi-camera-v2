@@ -45,8 +45,14 @@ export function TranscriptView({
         porque a expressão foi realmente dita, e a frase mostrada é a frase
         reconhecida.
       */}
+      {/*
+       * Barra de destaque à esquerda, e não um cartão preenchido: o mesmo
+       * ajuste feito em "Professor destacou" na aba Resumo
+       * (`ClassSummaryTab.tsx`), pela mesma razão — continua se destacando
+       * pela cor e pela régua, sem fechar mais uma moldura em volta do texto.
+       */}
       {destaques.length > 0 && (
-        <section className="rounded-2xl border border-accent/25 bg-accent/[0.06] p-3.5">
+        <section className="border-l-2 border-accent pl-3">
           <h3 className="text-[12px] font-semibold uppercase tracking-wide text-accent">
             O professor marcou
           </h3>
@@ -63,17 +69,26 @@ export function TranscriptView({
         </section>
       )}
 
-      {blocos.map((bloco) => (
+      {/*
+       * Cada trecho falado era um cartão preenchido (`rounded-2xl border
+       * bg-surface-2`) — numa aula de quarenta minutos, dezenas deles
+       * empilhados liam como uma conversa de chat, um balão por fala, não
+       * como uma transcrição para reler. Um divisor fino entre trechos (a
+       * partir do segundo) e o horário como rótulo discreto — não mais um
+       * botão do tamanho de uma pílula de estado — dá ritmo de texto corrido,
+       * com a hora ainda tocável para quem quer ouvir daquele ponto.
+       */}
+      {blocos.map((bloco, index) => (
         <article
           key={bloco.atMs}
-          className="rounded-2xl border border-line bg-surface-2 p-3.5"
+          className={index > 0 ? "border-t border-line pt-3" : undefined}
         >
           <HoraBotao
             atMs={bloco.atMs}
             onOuvir={onOuvir}
             estrela={bloco.marcado}
           />
-          <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink-muted">
+          <p className="mt-1 text-[13.5px] leading-relaxed text-ink-muted">
             {bloco.text}
           </p>
         </article>
@@ -120,12 +135,15 @@ function HoraBotao({
     );
   }
 
+  // Fundo mais fraco que antes (`/12` → `/8`) e sem padding lateral extra: o
+  // horário precisa continuar tocável, mas discreto o bastante para não
+  // competir com o texto — que é o conteúdo desta aba, não ele.
   return (
     <button
       type="button"
       onClick={() => onOuvir(atMs)}
       aria-label={`Ouvir a aula a partir de ${formatClock(atMs)}`}
-      className="inline-flex min-h-7 shrink-0 items-center gap-1 rounded-full bg-accent/12 px-2 font-mono text-[11.5px] tabular-nums text-accent transition-transform active:scale-95"
+      className="-ml-1.5 inline-flex min-h-7 shrink-0 items-center gap-1 rounded-full bg-accent/8 px-1.5 font-mono text-[11px] tabular-nums text-accent transition-transform active:scale-95"
     >
       {conteudo}
     </button>

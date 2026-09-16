@@ -109,7 +109,14 @@ export function SlidOverlay({
         className="absolute inset-0 z-[14] cursor-default"
       />
 
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex flex-col items-center gap-2 pt-[max(70px,calc(env(safe-area-inset-top)+54px))]">
+      {/*
+       * `gap-1.5`, não `gap-2`: com o toast de momento removido daqui (foi
+       * para a trilha), a coluna que sobra é só estado + Listen + promessa —
+       * três selos que contam UMA história em sequência, não três avisos
+       * separados. Menos vão entre eles lê como um bloco só de status, mais
+       * perto de como o topo de uma câmera nativa concentra informação.
+       */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex flex-col items-center gap-1.5 pt-[max(70px,calc(env(safe-area-inset-top)+54px))]">
         {/*
          * `aria-live` aqui e não no aviso de cada momento: este texto muda
          * poucas vezes numa aula — procurando, acompanhando, pausado — e é
@@ -159,12 +166,6 @@ export function SlidOverlay({
             câmera está fazendo, uma sobre a outra. */}
         {listen}
         {promessa}
-
-        {running && lastMoment && (
-          // Keyed by the moment so each new one mounts its own toast, instead
-          // of resetting a timer inside an effect.
-          <MomentToast key={lastMoment.id} moment={lastMoment} />
-        )}
       </div>
 
       {/*
@@ -175,7 +176,20 @@ export function SlidOverlay({
         que cabe sem tapar o quadro.
       */}
       {captures.length > 0 && (
-        <div className="pointer-events-none absolute right-3 top-[max(140px,calc(env(safe-area-inset-top)+124px))] z-20 flex max-h-[46%] flex-col gap-2 overflow-hidden">
+        <div className="pointer-events-none absolute right-3 top-[max(140px,calc(env(safe-area-inset-top)+124px))] z-20 flex max-h-[46%] flex-col items-end gap-2 overflow-hidden">
+          {/*
+           * O feedback de momento novo morava no topo, centralizado, na mesma
+           * coluna da pílula de estado e do Listen — um quarto selo disputando
+           * a mesma faixa, e o maior dos quatro. Ele agora nasce colado à
+           * própria trilha, que é onde a miniatura acabou de entrar: a prova
+           * e o aviso no mesmo lugar, em vez de um popup central competindo
+           * com o resto da tela por atenção. Pequeno de propósito — a
+           * miniatura entrando com `slid-rise` já é o feedback principal;
+           * isto só nomeia o motivo.
+           */}
+          {running && lastMoment && (
+            <MomentToast key={lastMoment.id} moment={lastMoment} />
+          )}
           {captures
             .slice(-RAIL_LENGTH)
             .reverse()
@@ -348,10 +362,13 @@ function MomentToast({ moment }: { moment: SlidCapture }) {
 
   if (!visible) return null;
 
+  // Menor que antes (era `px-3.5 py-2` num popup central): perto da própria
+  // miniatura, o texto só precisa nomear o motivo — não competir em tamanho
+  // com a pílula de estado da sessão.
   return (
-    <div className="flex animate-[slid-rise_240ms_ease-out] items-center gap-2 rounded-full bg-accent px-3.5 py-2 text-accent-ink">
+    <div className="flex animate-[slid-rise_240ms_ease-out] items-center gap-1 rounded-full bg-accent py-1 pl-2 pr-2.5 text-accent-ink shadow-[0_2px_8px_rgba(0,0,0,0.3)]">
       <CheckIcon />
-      <span className="text-[12.5px] font-medium">
+      <span className="text-[10.5px] font-medium leading-none">
         {REASON_LABELS[moment.reason]}
       </span>
     </div>
@@ -412,8 +429,8 @@ function MomentChip({
 function CheckIcon() {
   return (
     <svg
-      width="14"
-      height="14"
+      width="11"
+      height="11"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
