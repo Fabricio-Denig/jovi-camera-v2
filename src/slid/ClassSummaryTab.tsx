@@ -86,7 +86,13 @@ export function ClassSummaryTab({
           </section>
 
           {resumo.pontosPrincipais.length > 0 && (
-            <section className="rounded-2xl bg-surface-2 px-4 py-4">
+            /*
+             * Divisor no lugar de um cartão preenchido: logo abaixo do cabeçalho
+             * (já um cartão) e do resumo, mais uma caixa cinza igual só somava
+             * "empilhado" ao invés de "organizado". A régua de cima e o
+             * espaçamento já separam a seção sem embrulhar o conteúdo de novo.
+             */
+            <section className="border-t border-line pt-4">
               <h2 className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
                 Pontos principais
               </h2>
@@ -109,7 +115,14 @@ export function ClassSummaryTab({
           {/* Os instantes em que alguém disse que aquilo importa — com a hora,
               porque a hora é o que leva de volta até lá. */}
           {resumo.professorDestacou.length > 0 && (
-            <section className="rounded-2xl border border-accent/25 bg-accent/[0.06] px-4 py-4">
+            /*
+             * Era um cartão cheio (borda + fundo tingido) — a terceira caixa
+             * em fila depois do cabeçalho e de "Pontos principais". Uma barra
+             * de destaque à esquerda é o mesmo gesto de "isto é diferente" que
+             * qualquer citação em destaque usa, sem fechar mais uma moldura em
+             * volta do texto.
+             */
+            <section className="border-l-2 border-accent pl-3">
               <h2 className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-accent">
                 Professor destacou
               </h2>

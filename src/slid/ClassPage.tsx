@@ -526,9 +526,15 @@ function TranscricaoEmAndamento({
   audio: LessonAudio;
   onTentarDeNovo: () => void;
 }) {
+  /*
+   * Antes uma caixa própria (`rounded-xl bg-surface-2`), logo abaixo do
+   * player — que também era uma caixa. Duas molduras iguais em sequência para
+   * um aviso transitório é peso de mais; o ponto pulsando e a cor já bastam
+   * para distinguir isto do texto ao redor, sem embrulhar de novo.
+   */
   if (audio.transcriptJobStatus === "processando" && !jobParecaTravado(audio)) {
     return (
-      <p className="mb-4 flex items-center gap-2 rounded-xl bg-surface-2 px-3 py-2.5 text-[12.5px] text-ink-muted">
+      <p className="mb-4 flex items-center gap-2 text-[12.5px] text-ink-muted">
         <span
           aria-hidden="true"
           className="size-2 shrink-0 animate-pulse rounded-full bg-accent"
@@ -541,7 +547,7 @@ function TranscricaoEmAndamento({
   const travado = jobParecaTravado(audio);
   if (audio.transcriptJobStatus === "falhou" || travado) {
     return (
-      <div className="mb-4 flex items-center justify-between gap-3 rounded-xl bg-surface-2 px-3 py-2.5">
+      <div className="mb-4 flex items-center justify-between gap-3">
         <p className="text-[12.5px] leading-snug text-ink-muted">
           Não foi possível organizar o que foi dito agora.
         </p>

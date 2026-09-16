@@ -147,8 +147,15 @@ export function FiltersSheet({
       {/* Cards de 84×134 em 4 colunas, agrupados por família — como no
           `333:169`, mas com a seção que o wireframe não precisava desenhar
           porque tinha sete filtros, não onze. */}
-      {porFamilia.map(({ familia, cards: cardsDaFamilia }) => (
-        <div key={familia.id} className="mb-6">
+      {porFamilia.map(({ familia, cards: cardsDaFamilia }, index) => (
+        <div
+          key={familia.id}
+          // Régua fina entre famílias, a partir da segunda: com onze filtros em
+          // quatro grupos, o rótulo em maiúsculas sozinho não bastava para o
+          // olho notar a troca de família rolando rápido — a régua faz o
+          // catálogo ler como catálogo, com seções, não como uma grade só.
+          className={`mb-6 ${index > 0 ? "border-t border-line pt-5" : ""}`}
+        >
           <h3 className="mb-2.5 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
             {familia.label}
           </h3>
@@ -161,7 +168,14 @@ export function FiltersSheet({
                 type="button"
                 aria-pressed={escolhido}
                 onClick={() => onSelectFilter(filtro.id)}
-                className={`w-full overflow-hidden rounded-xl border text-left transition-transform duration-150 active:scale-95 ${
+                /*
+                 * Um destaque fino no alto, por dentro da borda: sobre o fundo
+                 * quase preto do app uma sombra escura não pinta nada (só a
+                 * borda já existente aparecia), e este catálogo de onze cards
+                 * precisa de alguma dimensão para não ler como uma grade plana
+                 * de miniaturas iguais.
+                 */
+                className={`w-full overflow-hidden rounded-xl border text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.07)] transition-transform duration-150 active:scale-95 ${
                   escolhido ? "border-accent ring-1 ring-accent/60" : "border-line"
                 }`}
               >

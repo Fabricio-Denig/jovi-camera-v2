@@ -37,7 +37,16 @@ export function ClassAlbumCard({
      * tela percorre uma lista de aulas. A primeira versão deste card usou
      * `span` e perdeu as duas coisas; o teste de fluxo pegou.
      */
-    <article className="relative aspect-[175/131] w-full overflow-hidden rounded-2xl bg-surface-2 transition-transform duration-150 ease-out has-[button:active]:scale-[0.98] has-[button:active]:opacity-90">
+    /*
+     * `shadow` não funciona aqui: o fundo é `--color-canvas` (#0b0d12), quase
+     * preto — uma sombra preta sobre um fundo já preto não pinta nada visível
+     * (foi tentado e conferido por captura de tela; a primeira versão desta
+     * mudança usava `shadow-[...rgba(0,0,0,...)]` e o card saía idêntico ao
+     * antigo). Um aro claro fininho é o que de fato separa o card do fundo em
+     * tema escuro — a borda que faz cada aula parecer um objeto, uma foto
+     * revelada, em vez de um retângulo de dashboard colado na página.
+     */
+    <article className="relative aspect-[175/131] w-full overflow-hidden rounded-2xl bg-surface-2 ring-1 ring-white/[0.08] transition-transform duration-150 ease-out has-[button:active]:scale-[0.98] has-[button:active]:opacity-90">
       {url && (
         <img
           src={url}

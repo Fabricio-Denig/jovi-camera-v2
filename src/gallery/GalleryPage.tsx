@@ -815,7 +815,10 @@ function GalleryThumb({
       type="button"
       onClick={onOpen}
       aria-label={`Abrir ${media.kind === "photo" ? "foto" : "vídeo"}`}
-      className="relative block aspect-square w-full overflow-hidden rounded-lg bg-surface-2 transition-transform duration-150 ease-out active:scale-95 active:opacity-80"
+      // Aro claro em vez de sombra: sobre `--color-canvas` (quase preto) uma
+      // sombra preta não pinta nada — o aro é o que de fato separa a
+      // miniatura do fundo neste tema.
+      className="relative block aspect-square w-full overflow-hidden rounded-lg bg-surface-2 ring-1 ring-white/[0.07] transition-transform duration-150 ease-out active:scale-95 active:opacity-80"
     >
       {url &&
         (media.kind === "photo" ? (

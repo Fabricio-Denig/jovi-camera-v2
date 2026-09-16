@@ -19,7 +19,10 @@ export function CaptureThumb({ media, onOpen }: CaptureThumbProps) {
       type="button"
       onClick={onOpen}
       aria-label="Ver última captura"
-      className="size-12 overflow-hidden rounded-xl border border-white/30 active:opacity-80"
+      // Sombra: uma miniatura clara (lousa branca, papel) sem ela se perdia
+      // contra um visor igualmente claro — a mesma profundidade que o
+      // obturador ganhou, aqui na terceira coluna da fileira.
+      className="size-12 overflow-hidden rounded-xl border border-white/30 shadow-[0_2px_8px_rgba(0,0,0,0.35)] active:opacity-80"
     >
       {media.kind === "photo" ? (
         <img src={url} alt="" className="size-full object-cover" />
