@@ -549,6 +549,7 @@ function pontuarFrase(
   f: Frase,
   peso: Map<string, number>,
   momentosMs: number[],
+  bonusSintese?: Map<string, number>,
 ): number {
   const palavras = semAcento(f.texto).split(/[^\p{L}\p{N}]+/u);
   let pontos = 0;
@@ -557,6 +558,15 @@ function pontuarFrase(
     if (p.length < 3 || vistas.has(p)) continue;
     vistas.add(p);
     pontos += peso.get(p) ?? 0;
+    // Só para frases FALADAS: o bônus de "resumindo, A, B e C" é sobre o
+    // professor recapitulando o que foi DITO — misturado no peso
+    // compartilhado, ele também empurrava uma linha do QUADRO que só por
+    // acaso compartilha uma palavra com a recapitulação (achado com a
+    // regressão `qa-fala.mjs`: um trecho de código do quadro, "const
+    // [valor, setValor] = useState(0)", virou "ponto principal" só porque
+    // "useState" também apareceu na frase "resumindo..." falada). Aplicado
+    // aqui, na pontuação da frase, e não no mapa de peso compartilhado.
+    if (f.origem === "fala") pontos += bonusSintese?.get(p) ?? 0;
   }
   pontos = pontos / Math.sqrt(Math.max(4, palavras.length));
   if (f.atMs !== null && momentosMs.some((m) => Math.abs(m - f.atMs!) <= JANELA_DEPOIS_MS)) {
@@ -846,18 +856,21 @@ export function gerarResumoGlobal({
    * as letras, "isto é o que importa" — a evidência mais forte que a fala
    * pode dar, e ainda assim o peso não refletia isso.
    *
-   * O bônus vai para o PESO DO TERMO no mapa compartilhado, não só para a
-   * frase de síntese em si. Isso importa porque `fraseDeConceito` extrai
-   * UMA janela de conceito por frase candidata — dar o bônus só à frase
-   * inteira ("Resumindo, os principais pontos são A, B e C.") a fazia
-   * competir melhor por UM lugar nos pontos principais, mas os outros itens
-   * da lista (B e C) continuavam com o peso de sempre. Bonificando o TERMO,
-   * qualquer frase que mencione A, B ou C — a de síntese, ou a explicação
-   * anterior dita como frase própria ("Matrizes são estruturas
-   * organizadas...") — sobe junto, porque é o mesmo mapa de pesos que
-   * `pontuarFrase`/`fraseDeConceito` leem em todo o resto do arquivo.
+   * Num MAPA À PARTE, não no `peso` compartilhado — achado com a regressão
+   * `qa-fala.mjs`: a primeira versão somava o bônus direto no `peso`
+   * compartilhado (o mesmo mapa que também pontua o QUADRO), e um trecho de
+   * código do quadro ("const [valor, setValor] = useState(0)") virou "ponto
+   * principal" só porque "useState" também aparecia na recapitulação
+   * FALADA. O bônus de síntese é sobre o professor recapitulando o que foi
+   * DITO — só frases de origem "fala" o recebem (ver `pontuarFrase`), nunca
+   * o quadro. Ainda assim vale para qualquer frase falada que mencione o
+   * termo — a de síntese, ou a explicação anterior dita como frase própria
+   * ("Matrizes são estruturas organizadas...") —, porque é a PONTUAÇÃO da
+   * frase que soma o bônus, não a escolha de qual palavra é a âncora do
+   * conceito.
    */
   const BONUS_SINTESE = 3;
+  const bonusSintese = new Map<string, number>();
   for (const f of frasesFalaTodas) {
     const normal = semAcento(f.texto);
     let temSintese = false;
@@ -880,14 +893,14 @@ export function gerarResumoGlobal({
       )
         continue;
       vistos.add(bruto);
-      peso.set(bruto, (peso.get(bruto) ?? 0) + BONUS_SINTESE);
+      bonusSintese.set(bruto, (bonusSintese.get(bruto) ?? 0) + BONUS_SINTESE);
     }
   }
 
   const totalCandidatos = frasesFala.length + frasesOcr.length;
   const candidatos: Candidato[] = [...frasesFala, ...frasesOcr].map((f) => ({
     ...f,
-    pontos: pontuarFrase(f, peso, momentosMs),
+    pontos: pontuarFrase(f, peso, momentosMs, bonusSintese),
     termo: termoDominante(f.texto, peso, totalCandidatos),
     grupo: assinaturaDoGrupo(f.texto, peso, totalCandidatos),
     amplo: topicoAmplo(f.texto, peso),
@@ -899,7 +912,7 @@ export function gerarResumoGlobal({
   // exatamente o que um destaque próximo estava apontando.
   const candidatosVizinhos: Candidato[] = frasesFalaTodas.map((f) => ({
     ...f,
-    pontos: pontuarFrase(f, peso, momentosMs),
+    pontos: pontuarFrase(f, peso, momentosMs, bonusSintese),
     termo: termoDominante(f.texto, peso, totalCandidatos),
     grupo: assinaturaDoGrupo(f.texto, peso, totalCandidatos),
     amplo: topicoAmplo(f.texto, peso),

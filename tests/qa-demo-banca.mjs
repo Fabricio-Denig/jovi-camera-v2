@@ -218,10 +218,32 @@ console.log("═══ JORNADA 1 — SliD completo, com áudio ═══\n");
   check(/COMO A AULA ANDOU/i.test(resumo), "Resumo: a aula condensada");
   check(!/\bIA\b/.test(await p.locator("body").innerText()), "e nenhuma promessa de IA");
 
-  await p.getByRole("button", { name: /Copiar resumo/i }).click();
-  await p.waitForTimeout(700);
-  const area = await p.evaluate(() => navigator.clipboard.readText());
-  check(area.length > 30, "copiar a aula põe texto na área de transferência", `${area.length} caracteres`);
+  /*
+   * O microfone falso desta jornada toca o TOM SINTÉTICO padrão do
+   * dispositivo — silêncio quase puro (medido: ~91% em `listenDiag`), não
+   * fala real — e esta jornada usa o motor REAL (Whisper), não o dublê, de
+   * propósito (ver o comentário de `abrirAulaNaGaleria`). Nessas condições,
+   * o modelo pode "alucinar" texto plausível (um defeito conhecido de
+   * Whisper em áudio majoritariamente silencioso) — e a camada de
+   * interpretação (`lessonSummary.ts`) tem de recusar montar um resumo
+   * confiável em cima de alucinação, que é o comportamento CORRETO (é
+   * exatamente o "não copiar lixo" que a rodada de confiança exige), não uma
+   * falha. Então os dois desfechos são válidos aqui: um resumo de verdade
+   * (com "Copiar resumo"), ou a recusa honesta — nunca um terceiro estado,
+   * como uma tela quebrada ou uma promessa vazia.
+   */
+  const copiar = p.getByRole("button", { name: /Copiar resumo/i });
+  if ((await copiar.count()) > 0) {
+    await copiar.click();
+    await p.waitForTimeout(700);
+    const area = await p.evaluate(() => navigator.clipboard.readText());
+    check(area.length > 30, "copiar a aula põe texto na área de transferência", `${area.length} caracteres`);
+  } else {
+    check(
+      /ainda não foi possível montar um resumo|ainda não há conteúdo suficiente/i.test(resumo),
+      "sem resumo confiável, a tela diz isso honestamente — nunca alucinação copiada",
+    );
+  }
 
   const folha = await p.evaluate(() => {
     const f = document.querySelector(".folha-de-impressao");
