@@ -98,6 +98,18 @@ function CartaoDeMomento({
             maxLength={80}
             aria-label={`Título do momento de ${formatClock(momento.atMs)}`}
             placeholder="Título do momento"
+            /*
+             * Seleciona tudo ao abrir. O campo abre com o título AUTOMÁTICO
+             * ("Momento da aula", "Conceito apresentado"), que é justamente o
+             * que a pessoa veio trocar — e com o cursor no fim, começar a
+             * digitar ANEXA. Reproduzido aqui: escrever um título novo
+             * produziu "Momento da aulaIntrodução aos fundamentos de
+             * comunicação entre sistemas distribu", com o fim cortado pelo
+             * limite de 80. No celular, desfazer isso significa apagar
+             * caractere por caractere. Quem quiser só ajustar continua
+             * podendo: um toque no texto desfaz a seleção.
+             */
+            onFocus={(e) => e.currentTarget.select()}
             onChange={(e) => setRascunho(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") confirmar();
