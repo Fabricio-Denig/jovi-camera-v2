@@ -1,4 +1,9 @@
+import { useState } from "react";
 import { CopyButton } from "./CopyButton";
+import { EditPencil } from "../shared/ui/EditPencil";
+import { SummaryEditor } from "./SummaryEditor";
+import type { SummaryManual } from "../types/camera";
+import type { LessonSummary } from "../listen/lessonSummary";
 import { QuickActions } from "./QuickActions";
 import { ListenFromHere } from "./ListenFromHere";
 import { resumoAsText, linesWithoutTitle } from "./classText";
@@ -33,6 +38,9 @@ export function ClassSummaryTab({
   transcriptStatus,
   onOuvir,
   onExcluir,
+  onEditarResumo,
+  onRestaurarResumo,
+  onEditandoChange,
 }: {
   record: ClassRecord;
   /** A aula tem gravação — dito no resumo, porque é fato sobre a aula. */
@@ -42,7 +50,26 @@ export function ClassSummaryTab({
   transcriptStatus?: "ok" | "indisponivel" | "desligada";
   onOuvir?: (atMs: number) => void;
   onExcluir: () => void;
+  /** Persiste o resumo reescrito à mão. Ver `SummaryEditor`. */
+  onEditarResumo?: (manual: SummaryManual) => void;
+  /** Descarta a versão manual e volta a mostrar a do SliD. */
+  onRestaurarResumo?: () => void;
+  /**
+   * Avisa a página que esta aba entrou (ou saiu) do modo de edição.
+   *
+   * A página tem um "Revisar a aula" fixo no rodapé, e durante a edição ele
+   * ficava empilhado logo abaixo do "Salvar resumo" — dois botões azuis
+   * grandes, um sobre o outro, sem nada dizendo qual conclui o que se está
+   * fazendo. Editando, o rodapé sai: a única ação que importa é terminar a
+   * edição.
+   */
+  onEditandoChange?: (editando: boolean) => void;
 }) {
+  const [editando, setEditandoLocal] = useState(false);
+  const setEditando = (v: boolean) => {
+    setEditandoLocal(v);
+    onEditandoChange?.(v);
+  };
   const momentosMs = record.moments.map((m) => m.atMs);
   // As duas formas do quadro: os tópicos já curados (`summariseTopics`, um
   // título por vez) e as linhas de cada momento (mais detalhe). As duas
@@ -51,10 +78,69 @@ export function ClassSummaryTab({
     ...record.topics,
     ...record.moments.flatMap((m) => linesWithoutTitle(m)),
   ];
-  const resumo = gerarResumoGlobal({ transcript, ocrLinhas, momentosMs });
+  const automatico = gerarResumoGlobal({ transcript, ocrLinhas, momentosMs });
+
+  /*
+   * O manual tem prioridade, e é total: ele SUBSTITUI o automático, não
+   * convive com ele. Um resumo meio da máquina e meio da pessoa não é de
+   * ninguém — e a pessoa que reescreveu já decidiu o que a aula foi.
+   *
+   * `marca` existe só porque a tela usa `atMs + marca` como chave de lista, e
+   * o resumo manual não tem por que carregar a marca de ênfase que originou o
+   * destaque: o que importa depois de editado é o texto e o horário.
+   */
+  const manual = record.summaryManual;
+  const resumo: LessonSummary = manual
+    ? {
+        overview: manual.overview,
+        pontosPrincipais: manual.pontosPrincipais,
+        professorDestacou: manual.professorDestacou.map((d) => ({
+          ...d,
+          marca: "manual",
+        })),
+        paraRevisar: manual.paraRevisar,
+        temConteudo:
+          Boolean(manual.overview.trim()) ||
+          manual.pontosPrincipais.length > 0 ||
+          manual.paraRevisar.length > 0 ||
+          manual.professorDestacou.length > 0,
+      }
+    : automatico;
 
   const semNadaMesmo =
     !resumo.temConteudo && record.kinds.length === 0 && record.moments.length === 0;
+
+  /* O rascunho que o editor abre: a versão manual quando existe, senão o que
+     o SliD montou — editar começa do que está na tela, nunca de um formulário
+     em branco. */
+  const rascunho: SummaryManual = {
+    overview: resumo.overview,
+    pontosPrincipais: resumo.pontosPrincipais,
+    professorDestacou: resumo.professorDestacou.map((d) => ({
+      atMs: d.atMs,
+      text: d.text,
+    })),
+    paraRevisar: resumo.paraRevisar,
+    editedAt: Date.now(),
+  };
+
+  if (editando && onEditarResumo) {
+    return (
+      <SummaryEditor
+        inicial={rascunho}
+        editadoAntes={Boolean(manual)}
+        onSalvar={(m) => {
+          onEditarResumo(m);
+          setEditando(false);
+        }}
+        onCancelar={() => setEditando(false)}
+        onRestaurar={() => {
+          onRestaurarResumo?.();
+          setEditando(false);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col gap-5">
@@ -77,12 +163,39 @@ export function ClassSummaryTab({
         <>
           {/* O PAYOFF: a síntese global, não um relatório sobre o sistema. */}
           <section>
-            <h2 className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
-              Resumo da aula
-            </h2>
+            {/*
+              UM lápis para a aba inteira, no topo — e não um por seção. O
+              resumo é uma coisa só; quatro lápis empilhados transformariam a
+              tela de estudo num painel de edição, que é exatamente o que ela
+              não pode parecer.
+            */}
+            <div className="flex items-start justify-between gap-2">
+              <h2 className="mt-1 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
+                Resumo da aula
+              </h2>
+              {onEditarResumo && (
+                <span className="-mr-1 -mt-1">
+                  <EditPencil
+                    onClick={() => setEditando(true)}
+                    rotulo="Editar o resumo da aula"
+                  />
+                </span>
+              )}
+            </div>
             <p className="mt-1.5 text-[15.5px] leading-relaxed text-ink">
               {resumo.overview}
             </p>
+            {/*
+              Dito uma vez, em letra pequena: sem isto, alguém que reescreveu o
+              resumo semanas atrás não tem como saber se o que lê é seu ou do
+              app — e essa é justamente a diferença que decide se dá para
+              confiar no texto na véspera da prova.
+            */}
+            {manual && (
+              <p className="mt-1.5 text-[11.5px] text-ink-muted/75">
+                Editado por você
+              </p>
+            )}
           </section>
 
           {resumo.pontosPrincipais.length > 0 && (

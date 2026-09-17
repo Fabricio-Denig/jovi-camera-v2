@@ -25,13 +25,18 @@ import { getLessonAudio, type LessonAudio } from "../shared/lib/mediaStore";
 const listenDebug = new URLSearchParams(window.location.search).get("debug") === "listen";
 import {
   getClassById,
+  MOMENTO_SEM_TITULO,
   renameClass,
+  renomearMomento,
+  restaurarResumoAutomatico,
   setClassDiscipline,
   setClassFavorite,
   setClassStatus,
+  setClassSummary,
   trashClass,
   type ClassRecord,
 } from "./classes";
+import type { SummaryManual } from "../types/camera";
 
 interface ClassPageProps {
   classId: string;
@@ -78,6 +83,8 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
   /** A gravação desta aula, quando ela tem uma. */
   const [audio, setAudio] = useState<LessonAudio | null>(null);
   /** Para onde o player deve pular, quando um momento pede. */
+  /** A aba Resumo está em modo de edição — o rodapé recua. */
+  const [editandoResumo, setEditandoResumo] = useState(false);
   const [seekTo, setSeekTo] = useState<number | null>(null);
   const [relatorioListenAberto, setRelatorioListenAberto] = useState(listenDebug);
 
@@ -184,6 +191,51 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
     void renameClass(classId, sugerido).then(() => onChanged?.());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [classId, audio?.transcriptJobStatus]);
+
+  /*
+   * As três edições manuais desta tela seguem o mesmo desenho: atualizam o
+   * estado local ANTES de gravar, e gravam em segundo plano.
+   *
+   * O motivo é medido: gravar reescreve todos os momentos da aula no
+   * IndexedDB (os fatos de aula são denormalizados — ver `editClass`), e
+   * esperar isso para só então redesenhar deixa o toque parecendo perdido num
+   * aparelho lento. Atualizando na frente, a tela responde na hora e o disco
+   * alcança depois. `onChanged` avisa a galeria, que mostra o mesmo título.
+   */
+  const salvarResumo = useCallback(
+    (manual: SummaryManual) => {
+      setRecord((atual) => (atual ? { ...atual, summaryManual: manual } : atual));
+      void setClassSummary(classId, manual).then(() => onChanged?.());
+    },
+    [classId, onChanged],
+  );
+
+  const restaurarResumo = useCallback(() => {
+    setRecord((atual) => (atual ? { ...atual, summaryManual: null } : atual));
+    void restaurarResumoAutomatico(classId).then(() => onChanged?.());
+  }, [classId, onChanged]);
+
+  const renomearMomentoDaAula = useCallback(
+    (mediaId: string, label: string) => {
+      const limpo = label.trim();
+      setRecord((atual) =>
+        atual
+          ? {
+              ...atual,
+              moments: atual.moments.map((m) =>
+                m.media.id === mediaId
+                  ? // Título apagado volta ao automático, e a marca sai junto —
+                    // a mesma regra de `renomearMomento`.
+                    { ...m, label: limpo || MOMENTO_SEM_TITULO, labelManual: Boolean(limpo) }
+                  : m,
+              ),
+            }
+          : atual,
+      );
+      void renomearMomento(classId, mediaId, limpo).then(() => onChanged?.());
+    },
+    [classId, onChanged],
+  );
 
   // The name is committed when the student leaves the field, not on every
   // keystroke: renaming rewrites every moment of the class.
@@ -449,6 +501,7 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
           <ClassImagesTab
             momentos={record.moments}
             onAbrir={setReviewing}
+            onRenomear={renomearMomentoDaAula}
             // O player recebe o ms da sessão direto — o mesmo eixo de
             // `capture.atMs` — e resolve sozinho em qual trecho isso cai.
             onOuvir={audio ? (atMs) => setSeekTo(atMs) : undefined}
@@ -472,6 +525,9 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
             transcript={transcript}
             transcriptStatus={audio?.transcriptStatus}
             onExcluir={excluir}
+            onEditarResumo={salvarResumo}
+            onEditandoChange={setEditandoResumo}
+            onRestaurarResumo={restaurarResumo}
             // O player recebe o ms da sessão direto — o mesmo eixo de
             // `capture.atMs` — e resolve sozinho em qual trecho isso cai.
             onOuvir={audio ? (atMs) => setSeekTo(atMs) : undefined}
@@ -479,7 +535,8 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
         )}
       </div>
 
-      {record.moments.length > 0 && (
+      {/* Some durante a edição do resumo: ver `onEditandoChange`. */}
+      {record.moments.length > 0 && !editandoResumo && (
         <footer className="border-t border-line px-4 pb-[max(14px,env(safe-area-inset-bottom))] pt-3">
           {/* Só a ação principal. A lixeira que ficava ao lado virou o cartão
               "Excluir" das ações rápidas, e dois caminhos para a mesma coisa

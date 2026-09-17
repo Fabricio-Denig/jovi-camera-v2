@@ -4,8 +4,9 @@ import { formatDate } from "../shared/lib/time";
 import { ClassAlbumCard } from "./ClassAlbumCard";
 import { groupByDay } from "./groupByDay";
 import { type Chip, FilterChips } from "./FilterChips";
+import { LessonFilterSheet, type FiltroStatus } from "./LessonFilterSheet";
 import { DisciplineManager } from "../slid/DisciplineManager";
-import { CLASS_STATUSES, STATUS_STYLES, type ClassStatus } from "../slid/status";
+import { STATUS_STYLES, type ClassStatus } from "../slid/status";
 import {
   deleteClassForever,
   getClasses,
@@ -70,7 +71,15 @@ export function GalleryPage({
   // tirou com o dedo é o que ele espera encontrar. O SliD é a área especial,
   // alcançada pelo chip — não o que aparece antes de qualquer escolha.
   const [view, setView] = useState<View>("fotos");
-  const [discipline, setDiscipline] = useState("todas");
+  /*
+   * Dois filtros, não um. O antigo `discipline` era uma string só que
+   * carregava três coisas diferentes ("todas", "status:revisar", "favoritas"
+   * ou o nome de uma matéria), e por ser uma só nunca deixava combinar status
+   * com matéria. Separados, a combinação sai de graça.
+   */
+  const [filtroStatus, setFiltroStatus] = useState<FiltroStatus>(null);
+  const [filtroMateria, setFiltroMateria] = useState<string | null>(null);
+  const [filtrando, setFiltrando] = useState(false);
   const [selected, setSelected] = useState<CapturedMedia | null>(null);
   const [managing, setManaging] = useState(false);
   /** Bumped by anything on this screen that writes, so the lists reload. */
@@ -123,9 +132,21 @@ export function GalleryPage({
 
   const reload = () => setLocalRefresh((n) => n + 1);
 
+  /*
+   * Qualquer painel que cobre a tela precisa avisar o shell — e não adianta
+   * subir o z-index.
+   *
+   * A barra de navegação não é vencida por camada: o `AppShell` simplesmente
+   * NÃO A RENDERIZA enquanto algo está aberto por cima. Medido no navegador:
+   * a folha de filtros com `z-[70]` ainda aparecia por baixo de "Modos /
+   * Câmera / Galeria", com o botão "Ver aulas" inalcançável, porque esta
+   * página vive num contexto de empilhamento próprio de onde nenhum z-index
+   * alcança a barra. Os três painéis desta tela (a foto aberta, os filtros e
+   * as matérias) contam a mesma coisa pelo mesmo canal.
+   */
   useEffect(() => {
-    onViewerOpenChange?.(selected !== null);
-  }, [selected, onViewerOpenChange]);
+    onViewerOpenChange?.(selected !== null || filtrando || managing);
+  }, [selected, filtrando, managing, onViewerOpenChange]);
   // Leaving the tab with a capture open must not leave the navigation hidden.
   useEffect(() => () => onViewerOpenChange?.(false), [onViewerOpenChange]);
 
@@ -183,28 +204,42 @@ export function GalleryPage({
     () => classes.filter((record) => record.favorite).length,
     [classes],
   );
+  /*
+   * Um filtro que aponta para algo que deixou de existir prende a galeria num
+   * estado vazio sem explicação: a última aula de Física foi apagada e a tela
+   * diz "nenhuma aula nesta matéria" para sempre. Some sozinho.
+   */
   useEffect(() => {
-    if (discipline === "todas") return;
+    if (filtroStatus === null) return;
     const ainda =
-      discipline === "favoritas"
+      filtroStatus === "favoritas"
         ? favoriteClasses > 0
-        : discipline.startsWith("status:")
-          ? (statusCounts.get(discipline.slice(7) as ClassStatus) ?? 0) > 0
-          : disciplines.some(([name]) => name === discipline);
-    if (!ainda) setDiscipline("todas");
-  }, [disciplines, discipline, favoriteClasses, statusCounts]);
+        : (statusCounts.get(filtroStatus) ?? 0) > 0;
+    if (!ainda) setFiltroStatus(null);
+  }, [favoriteClasses, filtroStatus, statusCounts]);
 
-  // Um trilho só, com matéria e status juntos. Dois trilhos empilhados sob os
-  // chips da galeria seriam três linhas de filtro antes da primeira aula.
+  useEffect(() => {
+    if (filtroMateria === null) return;
+    if (!disciplines.some(([name]) => name === filtroMateria)) setFiltroMateria(null);
+  }, [disciplines, filtroMateria]);
+
+  /*
+   * Os dois eixos são INDEPENDENTES e se acumulam — era um só, e por isso não
+   * dava para perguntar "o que preciso revisar de Cálculo", que é exatamente a
+   * pergunta de quem abre a galeria na véspera da prova.
+   */
   const shownClasses = useMemo(() => {
-    if (discipline === "todas") return classes;
-    if (discipline === "favoritas") return classes.filter((r) => r.favorite);
-    if (discipline.startsWith("status:")) {
-      const wanted = discipline.slice(7);
-      return classes.filter((record) => record.status === wanted);
+    let lista = classes;
+    if (filtroStatus === "favoritas") {
+      lista = lista.filter((r) => r.favorite);
+    } else if (filtroStatus !== null) {
+      lista = lista.filter((r) => r.status === filtroStatus);
     }
-    return classes.filter((record) => record.discipline === discipline);
-  }, [classes, discipline]);
+    if (filtroMateria !== null) {
+      lista = lista.filter((r) => r.discipline === filtroMateria);
+    }
+    return lista;
+  }, [classes, filtroStatus, filtroMateria]);
 
   const trashCount = trashedMedia.length + trashedClasses.length;
 
@@ -246,7 +281,29 @@ export function GalleryPage({
        * mesma gramática visual: controles acima, conteúdo abaixo.
        */}
       <header className="border-b border-line px-6 pb-4 pt-[max(20px,env(safe-area-inset-top))]">
-        <h1 className="text-2xl font-semibold text-ink">Galeria</h1>
+        {/*
+          Matérias sobe para o cabeçalho, ao lado do título.
+
+          Ela estava na fileira de filtros, e ali mentia sobre o que é: um chip
+          entre "Revisar" e "Cálculo" parece mais um recorte da lista, quando na
+          verdade abre o gerenciamento — criar, renomear, excluir. Filtrar POR
+          matéria continua existindo, dentro de "Filtrar"; organizar as matérias
+          é outra ação e agora mora onde se procura por ações da tela.
+        */}
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="text-2xl font-semibold text-ink">Galeria</h1>
+          {view === "slid" && (
+            <button
+              type="button"
+              onClick={() => setManaging(true)}
+              aria-label="Gerenciar matérias"
+              className="-mr-1 mt-0.5 flex min-h-9 shrink-0 items-center gap-1.5 rounded-full bg-surface-2 px-3 text-[12.5px] font-medium text-ink transition-transform active:scale-95 active:opacity-70"
+            >
+              <span aria-hidden="true">⚙</span>
+              Matérias
+            </button>
+          )}
+        </div>
         <p className="mt-0.5 mb-3 text-[13px] text-ink-muted">
           {semArmazenamento
             ? "Não consegui abrir o armazenamento deste navegador"
@@ -281,12 +338,14 @@ export function GalleryPage({
         <SlidView
           classes={shownClasses}
           total={classes.length}
-          disciplines={disciplines}
-          active={discipline}
-          favorites={favoriteClasses}
-          statusCounts={statusCounts}
+          filtroStatus={filtroStatus}
+          filtroMateria={filtroMateria}
           comAudio={comAudio}
-          onSelectDiscipline={setDiscipline}
+          onFiltrar={() => setFiltrando(true)}
+          onLimparFiltros={() => {
+            setFiltroStatus(null);
+            setFiltroMateria(null);
+          }}
           onOpenClass={onOpenClass}
           onManage={() => setManaging(true)}
         />
@@ -342,6 +401,24 @@ export function GalleryPage({
         </>
       )}
 
+      {filtrando && (
+        <LessonFilterSheet
+          status={filtroStatus}
+          materia={filtroMateria}
+          disciplines={disciplines}
+          statusCounts={statusCounts}
+          favorites={favoriteClasses}
+          total={classes.length}
+          onStatus={setFiltroStatus}
+          onMateria={setFiltroMateria}
+          onLimpar={() => {
+            setFiltroStatus(null);
+            setFiltroMateria(null);
+          }}
+          onFechar={() => setFiltrando(false)}
+        />
+      )}
+
       <DisciplineManager
         open={managing}
         onClose={() => setManaging(false)}
@@ -352,14 +429,14 @@ export function GalleryPage({
           for (const record of classes) {
             if (record.discipline === from) await setClassDiscipline(record.id, to);
           }
-          if (discipline === from) setDiscipline(to);
+          if (filtroMateria === from) setFiltroMateria(to);
           reload();
         }}
         onRemoved={async (name) => {
           for (const record of classes) {
             if (record.discipline === name) await setClassDiscipline(record.id, null);
           }
-          if (discipline === name) setDiscipline("todas");
+          if (filtroMateria === name) setFiltroMateria(null);
           reload();
         }}
       />
@@ -431,43 +508,33 @@ function EmptyState({ view }: { view: View }) {
 function SlidView({
   classes,
   total,
-  disciplines,
-  active,
-  favorites,
-  statusCounts,
+  filtroStatus,
+  filtroMateria,
   comAudio,
-  onSelectDiscipline,
+  onFiltrar,
+  onLimparFiltros,
   onOpenClass,
   onManage,
 }: {
   classes: ClassRecord[];
   total: number;
-  disciplines: [string, number][];
-  active: string;
-  favorites: number;
-  statusCounts: Map<ClassStatus, number>;
+  filtroStatus: FiltroStatus;
+  filtroMateria: string | null;
   /** Ids das aulas que têm gravação. */
   comAudio: Set<string>;
-  onSelectDiscipline: (id: string) => void;
+  onFiltrar: () => void;
+  onLimparFiltros: () => void;
   onOpenClass: (id: string) => void;
   onManage: () => void;
 }) {
-  // Status antes de matéria: quem volta à galeria para estudar procura o que
-  // precisa revisar, não o que era de Física.
-  const chips: Chip[] = [
-    { id: "todas", label: "Todas as aulas", count: total },
-    ...CLASS_STATUSES.filter((status) => (statusCounts.get(status) ?? 0) > 0).map(
-      (status) => ({
-        id: `status:${status}`,
-        label: STATUS_STYLES[status].label,
-        count: statusCounts.get(status),
-      }),
-    ),
-    ...(favorites > 0
-      ? [{ id: "favoritas", label: "Favoritas", count: favorites }]
-      : []),
-    ...disciplines.map(([name, count]) => ({ id: name, label: name, count })),
-  ];
+  const filtrosAtivos = [
+    filtroStatus === "favoritas"
+      ? "Favoritas"
+      : filtroStatus
+        ? STATUS_STYLES[filtroStatus].label
+        : null,
+    filtroMateria,
+  ].filter((f): f is string => Boolean(f));
 
   if (total === 0) {
     return (
@@ -491,49 +558,68 @@ function SlidView({
 
   return (
     <>
-      {/* Filing lives with the class; the list of names is a different job, and
-          it needs somewhere to be. Beside the filters it feeds is the one place
-          a student looks for it. */}
-      <div className="flex items-center gap-2 px-5 pb-3 pt-1">
-        {/* `overflow-hidden` porque o trilho de chips sangra 24 px para os
-            dois lados, e do lado direito ele passava por baixo do botão de
-            matérias — o chip sumia atrás dele em vez de parar antes. */}
-        <div className="min-w-0 flex-1 overflow-hidden">
-          <FilterChips
-            chips={chips}
-            active={active}
-            onSelect={onSelectDiscipline}
-            label="Filtrar por matéria"
-          />
-        </div>
+      {/*
+       * O rótulo de seção e o botão de filtrar na MESMA linha — era uma
+       * fileira inteira de chips, e antes dela outra. Duas linhas de controle
+       * antes da primeira aula faziam a tela ler como painel de filtros, não
+       * como a estante de alguém. O estado padrão (sem filtro) não gasta nada
+       * explicando que está mostrando tudo: a própria lista já diz.
+       */}
+      <div className="flex items-center justify-between gap-2 px-6 pb-2.5 pt-1">
+        <h2 className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
+          Álbuns de aula
+        </h2>
         <button
           type="button"
-          onClick={onManage}
-          aria-label="Gerenciar matérias"
-          className="flex min-h-9 shrink-0 items-center gap-1 rounded-full bg-surface-2 px-3 text-[12.5px] font-medium text-ink transition-transform active:scale-95 active:opacity-70"
+          onClick={onFiltrar}
+          aria-label="Filtrar aulas"
+          className={`flex min-h-9 shrink-0 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-medium transition-transform active:scale-95 ${
+            filtrosAtivos.length > 0
+              ? "bg-accent-soft text-accent"
+              : "bg-surface-2 text-ink-muted"
+          }`}
         >
-          <span aria-hidden="true">⚙</span>
-          Matérias
+          <span aria-hidden="true">☰</span>
+          Filtrar
+          {filtrosAtivos.length > 0 && (
+            <span className="font-mono text-[11px] tabular-nums">
+              ({filtrosAtivos.length})
+            </span>
+          )}
         </button>
       </div>
+
+      {/*
+       * O que está filtrando, nomeado e removível — e só quando há algo. Sem
+       * esta linha, uma galeria filtrada e uma galeria vazia são a mesma tela,
+       * e a pessoa conclui que perdeu as aulas.
+       */}
+      {filtrosAtivos.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 px-6 pb-3">
+          {filtrosAtivos.map((f) => (
+            <span
+              key={f}
+              className="flex min-h-7 items-center rounded-full bg-accent-soft px-2.5 text-[12px] font-medium text-accent"
+            >
+              {f}
+            </span>
+          ))}
+          <button
+            type="button"
+            onClick={onLimparFiltros}
+            className="min-h-7 rounded-full px-2 text-[12px] font-medium text-ink-muted underline underline-offset-2 transition-opacity active:opacity-60"
+          >
+            Limpar
+          </button>
+        </div>
+      )}
+
       {classes.length === 0 ? (
         <p className="px-8 py-10 text-center text-sm text-ink-muted">
-          {active.startsWith("status:")
-            ? "Nenhuma aula com esse status."
-            : active === "favoritas"
-              ? "Nenhuma aula favoritada."
-              : "Nenhuma aula nesta matéria."}
+          Nenhuma aula com esse filtro.
         </p>
       ) : (
         <>
-          {/*
-           * O rótulo de seção do Figma. Ele não é enfeite: com a aula virando
-           * card de imagem, sem um título a grade fica indistinguível do rolo
-           * de fotos que vem logo abaixo na mesma tela.
-           */}
-          <h2 className="px-6 pb-2.5 pt-1 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
-            Álbuns de aula
-          </h2>
           {/* Grade de 2 colunas, como no `339:540`: cards de 175×131 com 9 px
               entre colunas. `gap-y-5`, um pouco além dos 28px do wireframe: o
               card ganhou aro claro (`ClassAlbumCard.tsx`) e precisava de mais

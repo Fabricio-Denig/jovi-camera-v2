@@ -73,6 +73,16 @@ export interface CapturedMedia {
      * depend on reading the board again.
      */
     label?: string;
+    /**
+     * O título deste momento foi escrito PELO ESTUDANTE.
+     *
+     * O SliD captura o momento; quem decide como ele se chama é quem assistiu
+     * à aula. O título automático ("Conceito apresentado") é um ponto de
+     * partida, não um veredito — e uma vez que alguém escreveu o próprio, o
+     * app não pode passar por cima na próxima vez que reprocessar a aula.
+     * Existe para essa proteção e para mais nada.
+     */
+    labelManual?: boolean;
     detail?: string | null;
     /**
      * As linhas que a câmera conseguiu ler neste momento, já peneiradas.
@@ -112,5 +122,41 @@ export interface CapturedMedia {
      * tranquilo, revisado. Absent until they say.
      */
     status?: string;
+    /**
+     * O resumo REESCRITO pelo estudante, quando ele reescreveu.
+     *
+     * O SliD monta um resumo a partir do que ouviu e leu, e ele é bom o
+     * bastante para servir de rascunho — mas quem estudou a aula sabe coisas
+     * que o áudio não carrega. Presente, este resumo substitui inteiramente o
+     * automático na tela: a máquina propõe, a pessoa decide.
+     *
+     * Guardado junto da sessão, denormalizado em cada momento, como o nome e
+     * a matéria — a aula é uma consulta só, sem um segundo object store (ver
+     * o comentário dos campos de aula acima).
+     *
+     * Ausente é o estado normal: significa "ninguém mexeu, mostre o
+     * automático". `null` nunca é gravado; para voltar ao automático o campo
+     * é removido (ver `restaurarResumoAutomatico`).
+     */
+    summaryManual?: SummaryManual;
   };
+}
+
+/**
+ * As quatro seções da aba Resumo, do jeito que o estudante as deixou.
+ *
+ * Mesma forma do resumo automático (`LessonSummary`), de propósito: a tela
+ * renderiza os dois pelo mesmo caminho, e entrar em modo de edição é só
+ * copiar o automático para cá e deixar editar. `professorDestacou` guarda o
+ * horário junto do texto porque é ele que faz o "Ouvir deste ponto" funcionar
+ * — perder o horário ao editar transformaria um destaque navegável em texto
+ * morto.
+ */
+export interface SummaryManual {
+  overview: string;
+  pontosPrincipais: string[];
+  professorDestacou: { atMs: number; text: string }[];
+  paraRevisar: string[];
+  /** Quando foi salvo — a tela diz "editado por você" a partir disto. */
+  editedAt: number;
 }

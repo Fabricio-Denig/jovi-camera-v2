@@ -10,7 +10,7 @@ import {
 } from "../shared/lib/mediaStore";
 import { reopenOverview } from "./readContent";
 import { readStatus, type ClassStatus } from "./status";
-import type { CapturedMedia } from "../types/camera";
+import type { CapturedMedia, SummaryManual } from "../types/camera";
 
 /**
  * A followed class, reassembled from the moments it left behind.
@@ -28,6 +28,8 @@ export interface ClassMoment {
   spanMs: number;
   /** O que a câmera leu neste momento, peneirado. Vazio quando não leu nada. */
   lines: string[];
+  /** O título foi escrito pelo estudante — não pode ser sobrescrito. */
+  labelManual: boolean;
 }
 
 export interface ClassRecord {
@@ -47,10 +49,23 @@ export interface ClassRecord {
   kinds: [string, number][];
   overview: string;
   moments: ClassMoment[];
+  /** O resumo reescrito pelo estudante, quando existe. Ver `SummaryManual`. */
+  summaryManual: SummaryManual | null;
 }
 
 /** Classes saved before labels were stored still open — they just say less. */
 const LEGACY_LABEL = "Momento da aula";
+
+/**
+ * O que um momento se chama quando ninguém escreveu nada e a sessão também
+ * não achou título — e o que ele VOLTA a se chamar quando o estudante apaga o
+ * que tinha escrito.
+ *
+ * Neutro de propósito: o SliD captura o momento, o estudante decide o nome.
+ * Um título inventado aqui ("Introdução a banco de dados") seria o app
+ * afirmando sobre a aula algo que ele não leu em lugar nenhum.
+ */
+export const MOMENTO_SEM_TITULO = "Momento da aula";
 
 function toRecord(id: string, items: CapturedMedia[]): ClassRecord {
   const moments = items
@@ -62,6 +77,7 @@ function toRecord(id: string, items: CapturedMedia[]): ClassRecord {
       category: media.session?.category ?? null,
       spanMs: media.session?.spanMs ?? 0,
       lines: media.session?.lines ?? [],
+      labelManual: media.session?.labelManual ?? false,
     }))
     .sort((a, b) => a.atMs - b.atMs);
 
@@ -80,6 +96,7 @@ function toRecord(id: string, items: CapturedMedia[]): ClassRecord {
     kinds: first?.kinds ?? [],
     overview: first?.overview ?? "",
     moments,
+    summaryManual: first?.summaryManual ?? null,
   };
 }
 
@@ -182,6 +199,66 @@ export async function setClassFavorite(
   favorite: boolean,
 ): Promise<void> {
   await editClass(id, (session) => ({ ...session, favorite }));
+}
+
+/**
+ * O resumo que o estudante reescreveu.
+ *
+ * Substitui o automático por completo na tela — não é um "complemento" nem
+ * uma sugestão ao lado. Quem estudou a aula sabe coisas que o áudio não
+ * carrega, e o SliD para de opinar a partir daqui.
+ */
+export async function setClassSummary(
+  id: string,
+  manual: SummaryManual,
+): Promise<void> {
+  await editClass(id, (session) => ({ ...session, summaryManual: manual }));
+}
+
+/**
+ * Volta ao resumo montado pelo app — o campo é REMOVIDO, não zerado.
+ *
+ * A ausência é o estado "ninguém mexeu", e é ela que o resto do código testa.
+ * Guardar um objeto vazio no lugar faria a tela mostrar um resumo em branco e
+ * achar que foi o estudante quem quis isso.
+ */
+export async function restaurarResumoAutomatico(id: string): Promise<void> {
+  await editClass(id, (session) => {
+    const { summaryManual: _removido, ...resto } = session;
+    return resto;
+  });
+}
+
+/**
+ * O título de UM momento, escrito pelo estudante.
+ *
+ * Diferente de tudo mais neste arquivo: edita um único registro, não a aula
+ * inteira. O título do momento é do momento — só os fatos DA AULA (nome,
+ * matéria, status) são repetidos em todos.
+ *
+ * `labelManual` fica gravado junto para nenhum reprocessamento futuro passar
+ * por cima: o SliD captura o momento, o estudante decide como ele se chama.
+ * Um título apagado volta ao automático, que é a saída natural de quem se
+ * arrependeu — por isso a marca sai junto.
+ */
+export async function renomearMomento(
+  classId: string,
+  mediaId: string,
+  label: string,
+): Promise<void> {
+  const limpo = label.trim();
+  const captures = await getCapturesBySession(classId);
+  const alvo = captures.find((media) => media.id === mediaId);
+  if (!alvo?.session) return;
+  if (!limpo) {
+    const { labelManual: _removido, ...resto } = alvo.session;
+    await saveCapture({ ...alvo, session: { ...resto, label: "" } });
+    return;
+  }
+  await saveCapture({
+    ...alvo,
+    session: { ...alvo.session, label: limpo, labelManual: true },
+  });
 }
 
 /** A class goes to the trash whole, and comes back whole. */
