@@ -152,6 +152,11 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
                 transcriptStatus: achado.transcriptStatus,
                 transcriptJobStatus: achado.transcriptJobStatus,
                 transcriptJobStartedAt: achado.transcriptJobStartedAt,
+                // Sem estes dois, a aba Texto continuaria mostrando o estado
+                // vazio genérico depois de uma falha — o polling atualizaria
+                // só o status do job, e não COMO ele terminou.
+                transcriptOutcome: achado.transcriptOutcome,
+                transcriptFailure: achado.transcriptFailure,
               }
             : achado,
         );
@@ -454,6 +459,7 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
             record={record}
             transcript={transcript}
             transcriptStatus={audio?.transcriptStatus}
+            transcriptOutcome={audio?.transcriptOutcome}
             // O player recebe o ms da sessão direto — o mesmo eixo de
             // `capture.atMs` — e resolve sozinho em qual trecho isso cai.
             onOuvir={audio ? (atMs) => setSeekTo(atMs) : undefined}

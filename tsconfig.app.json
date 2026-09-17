@@ -6,6 +6,11 @@
     "module": "esnext",
     "types": ["vite/client"],
     "allowArbitraryExtensions": true,
+    // `src/listen/whisperModels.json` é a fonte única de quais pesos do Whisper
+    // existem — lida por `whisperEngine.ts` (TypeScript) E por
+    // `scripts/fetch-whisper-model.mjs` (Node puro). JSON é o único formato
+    // que os dois leem sem build intermediário.
+    "resolveJsonModule": true,
     "skipLibCheck": true,
 
     /* Bundler mode */

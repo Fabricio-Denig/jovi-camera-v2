@@ -87,6 +87,18 @@ export async function transcreverAula(sessionId: string): Promise<void> {
       transcript: blocos,
       transcriptStatus: blocos.length > 0 ? "ok" : atual.transcriptStatus,
       transcriptJobStatus: "pronto",
+      /*
+       * O motor rodou inteiro sem lançar. Zero blocos aqui só pode ser uma
+       * coisa: não havia fala reconhecível no áudio (silêncio, microfone
+       * abafado, ruído). É um final DIFERENTE de uma falha técnica, e a
+       * distinção é o que impede a tela de dizer "não havia conteúdo" quando
+       * na verdade o modelo nem chegou a carregar — ver `transcriptOutcome`
+       * em `mediaStore.ts`.
+       */
+      transcriptOutcome: blocos.length > 0 ? "texto" : "sem_fala",
+      // Uma tentativa que terminou bem apaga a falha da anterior: manter o
+      // erro antigo faria a tela avisar sobre um problema já resolvido.
+      transcriptFailure: undefined,
     });
   } catch (erro) {
     // O erro de verdade — não só "falhou" — fica registrado para
@@ -98,6 +110,21 @@ export async function transcreverAula(sessionId: string): Promise<void> {
     await saveLessonAudio({
       ...atual,
       transcriptJobStatus: "falhou",
+      transcriptOutcome: "falhou",
+      /*
+       * A mensagem real, guardada junto da aula — não só no `localStorage` do
+       * diagnóstico, que some e é de uma tentativa só. Um erro técnico que
+       * vira "não havia conteúdo" na tela é o defeito que esta rodada
+       * encontrou: a transcrição falhava porque os pesos do modelo
+       * respondiam 404, e a aba Texto falava sobre a câmera não ter lido o
+       * quadro. `stage` diz em que etapa parou (engine, decode, inference,
+       * job) — a primeira pergunta de qualquer investigação.
+       */
+      transcriptFailure: {
+        stage: erro instanceof Error ? erro.name : "job",
+        message: erro instanceof Error ? erro.message : String(erro),
+        at: Date.now(),
+      },
     }).catch(() => {});
     // Uma falha real (rede fora do ar, WASM sem memória) não deixa o motor
     // confiável para a próxima aula — mesma lógica do Scanner.

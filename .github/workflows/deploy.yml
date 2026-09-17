@@ -27,15 +27,23 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      # Os pesos do Whisper self-hospedado: só o runner do GitHub Actions
-      # alcança huggingface.co (o ambiente onde este projeto é trabalhado
-      # bloqueia o host por política de rede — ver scripts/fetch-whisper-model.mjs
-      # e o comentário em src/listen/whisperEngine.ts). Cacheado entre builds
-      # pela chave abaixo: só baixa de novo se o script mudar.
+      # Os pesos do Whisper self-hospedado, baixados aqui e publicados junto
+      # do site (ver scripts/fetch-whisper-model.mjs).
+      #
+      # A CHAVE DO CACHE inclui whisperModels.json, e isso não é detalhe: o
+      # defeito que travou a transcrição em aparelho real foi exatamente uma
+      # divergência entre "qual modelo o app pede" e "qual modelo o CI baixou".
+      # Com a lista de modelos fora da chave, trocar de modelo restauraria o
+      # cache antigo e publicaria um site sem os pesos que o app pede — de
+      # novo. As duas entradas que decidem o que é baixado entram na chave.
       - uses: actions/cache@v4
         with:
           path: public/models
-          key: whisper-model-${{ hashFiles('scripts/fetch-whisper-model.mjs') }}
+          key: whisper-model-${{ hashFiles('scripts/fetch-whisper-model.mjs', 'src/listen/whisperModels.json') }}
+      # O script confere, no fim, que TODO arquivo de TODO modelo existe com
+      # bytes dentro — e falha o build se não existir. Um site publicado sem
+      # os pesos só aparece no celular, na frente da banca; um build vermelho
+      # aparece aqui.
       - run: node scripts/fetch-whisper-model.mjs
       # Artifact separado (não é o que vai para o Pages) só para inspeção:
       # confirmar em CI exatamente quais bytes foram baixados, sem precisar

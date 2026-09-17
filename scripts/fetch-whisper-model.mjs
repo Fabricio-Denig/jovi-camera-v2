@@ -6,45 +6,48 @@
  * suposto): `<localModelPath>/<model_id>/<arquivo>`, com os dois arquivos
  * ONNX dentro de `onnx/`.
  *
- * Por que este passo existe, e por que só roda em CI. O ambiente de
- * desenvolvimento onde este projeto é trabalhado bloqueia huggingface.co por
- * política de rede (ver o comentário em `whisperEngine.ts`) — só o runner do
- * GitHub Actions tem acesso real. Rodar isto ali, uma vez, e publicar os
- * bytes junto do site resolve dois problemas ao mesmo tempo: o celular da
- * banca nunca depende de alcançar o Hugging Face Hub (só o próprio domínio
- * do site, que já precisa alcançar para tudo o mais), e o download não
- * concorre com a inferência pelo tempo do usuário — ele já aconteceu antes
- * do deploy.
+ * **QUAIS modelos não se decide aqui.** `src/listen/whisperModels.json` é a
+ * fonte única, lida também por `src/listen/whisperEngine.ts` — quem carrega e
+ * quem baixa nunca mais podem discordar. Este arquivo já teve uma constante
+ * `MODEL_ID` própria, e foi exatamente isso que quebrou a transcrição em
+ * aparelho real: o motor passou a pedir `whisper-base`, este script continuou
+ * baixando `whisper-tiny`, e como o motor roda com `allowRemoteModels=false`
+ * (nada de CDN durante a aula, de propósito), TODOS os pesos responderam 404
+ * no GitHub Pages. Resultado no celular: zero transcrição, duas vezes.
  *
- * Por que não faz parte de `predev`/`prebuild`. Rodar isto localmente, neste
- * mesmo ambiente restrito, quebraria `npm run build`/`npm run dev` para
- * qualquer pessoa sem acesso a huggingface.co. `public/models` é gerado e
- * gitignored, do mesmo jeito que `public/ort` — sem ele, o build ainda
- * funciona; só a transcrição em si não teria onde buscar os pesos
- * localmente (o motor cairia para a URL remota, ver `whisperEngine.ts`).
+ * **Os dois modelos, não só o primário.** O fallback existe para o celular da
+ * banca: se o `base` não criar a sessão ONNX naquele aparelho (memória, uma
+ * versão de WebAssembly diferente), o motor cai sozinho para o `tiny`, que já
+ * rodou em aparelho real. Uma transcrição imperfeita vale mais que nenhuma, e
+ * os ~42MB a mais só custam espaço no artefato do Pages — o navegador baixa
+ * um modelo só, o que de fato carregar.
+ *
+ * Por que este passo existe. Publicar os bytes junto do site resolve dois
+ * problemas de uma vez: o celular da banca nunca depende de alcançar o
+ * Hugging Face Hub (só o próprio domínio do site, que já precisa alcançar
+ * para tudo o mais), e o download não concorre com a inferência pelo tempo do
+ * usuário — ele já aconteceu antes do deploy.
+ *
+ * Por que não faz parte de `predev`/`prebuild`. São ~119MB somados; ninguém
+ * precisa disso para mexer no front. `public/models` é gerado e gitignored,
+ * do mesmo jeito que `public/ort` — sem ele o build ainda funciona, só a
+ * transcrição não teria onde buscar os pesos (e o motor diz isso em voz alta
+ * agora, ver a checagem de pesos em `whisperEngine.ts`, em vez de falhar com
+ * um erro de biblioteca sem pista nenhuma).
  */
 
-import { mkdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-/**
- * `whisper-tiny` — testado de ponta a ponta num navegador real (Playwright,
- * Chromium, backend "wasm") com um fixture de áudio real: os três conceitos
- * do fixture de aceitação ("física", "prova", "atenção") saíram certos.
- * `whisper-base` foi tentado primeiro por ter saído melhor num teste em
- * Node — mas falhava ao CARREGAR no navegador real (ver o comentário grande
- * em `whisperEngine.ts`). Mesma constante que `whisperEngine.ts` usa;
- * ajustar aqui também se trocar de novo. */
-const MODEL_ID = "Xenova/whisper-tiny";
+const RAIZ = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-/**
- * "main" por enquanto: o repositório não tem um commit conhecido fixado
- * ainda porque baixar a árvore de arquivos para descobrir o SHA exato
- * também exige a mesma rede bloqueada nesta bancada. O primeiro run real
- * (em CI) imprime a revisão resolvida no log — trocar aqui por esse commit
- * depois de observado é o próximo passo para um pin de verdade.
- */
-const REVISION = "main";
+const manifesto = JSON.parse(
+  await readFile(path.join(RAIZ, "src", "listen", "whisperModels.json"), "utf8"),
+);
+
+/** Primário e fallback, sem repetir se algum dia forem o mesmo. */
+const MODELOS = [...new Set([manifesto.primario, manifesto.fallback])];
 
 /**
  * Exatamente os arquivos que `pipeline("automatic-speech-recognition",
@@ -63,17 +66,14 @@ const REVISION = "main";
  * - `MODEL_TYPES.Seq2Seq.optional_configs` → `generation_config.json`.
  * - `FEATURE_EXTRACTOR_NAME` → `preprocessor_config.json`, sempre.
  */
-const FILES = [
-  "config.json",
-  "generation_config.json",
-  "preprocessor_config.json",
-  "tokenizer.json",
-  "tokenizer_config.json",
-  "onnx/encoder_model_quantized.onnx",
-  "onnx/decoder_model_merged_quantized.onnx",
-];
+const FILES = manifesto.arquivos;
 
-const OUT_DIR = path.join(process.cwd(), "public", "models", MODEL_ID);
+/**
+ * "main" por enquanto: o repositório não tem um commit conhecido fixado
+ * ainda. O run de CI imprime a revisão resolvida no log — trocar aqui por
+ * esse commit depois de observado é o próximo passo para um pin de verdade.
+ */
+const REVISION = "main";
 
 async function jaExiste(dest) {
   try {
@@ -84,19 +84,19 @@ async function jaExiste(dest) {
   }
 }
 
-async function baixar(file) {
-  const dest = path.join(OUT_DIR, file);
+async function baixar(modelo, file) {
+  const dest = path.join(RAIZ, "public", "models", modelo, file);
   await mkdir(path.dirname(dest), { recursive: true });
 
   // O cache do GitHub Actions (ver o workflow) restaura `public/models`
   // entre builds — não baixar de novo o que já está aqui.
   if (await jaExiste(dest)) {
     const info = await stat(dest);
-    console.log(`[modelo] já em cache: ${file} (${info.size} bytes)`);
+    console.log(`[modelo] já em cache: ${modelo}/${file} (${info.size} bytes)`);
     return;
   }
 
-  const url = `https://huggingface.co/${MODEL_ID}/resolve/${REVISION}/${file}`;
+  const url = `https://huggingface.co/${modelo}/resolve/${REVISION}/${file}`;
   console.log(`[modelo] baixando ${url}`);
   const res = await fetch(url);
   if (!res.ok) {
@@ -109,11 +109,41 @@ async function baixar(file) {
     throw new Error(`Arquivo vazio: ${file} (${url})`);
   }
   await writeFile(dest, buf);
-  console.log(`[modelo] ok: ${file} (${buf.byteLength} bytes)`);
+  console.log(`[modelo] ok: ${modelo}/${file} (${buf.byteLength} bytes)`);
 }
 
-for (const file of FILES) {
-  await baixar(file);
+for (const modelo of MODELOS) {
+  for (const file of FILES) {
+    await baixar(modelo, file);
+  }
 }
 
-console.log(`[modelo] pronto em ${OUT_DIR}`);
+/*
+ * A conferência final, e não é cerimônia: este script rodou "com sucesso" no
+ * CI que publicou o defeito desta rodada — ele baixou tudo que sabia baixar,
+ * e o que faltava era o modelo que nem estava na lista dele. Agora a lista
+ * vem do mesmo JSON que o motor lê, e esta checagem exige que cada arquivo
+ * exista de fato com bytes dentro antes de o build seguir. O cache do
+ * GitHub Actions restaurando uma pasta pela metade cai aqui também.
+ *
+ * Falhar o build é de propósito. Um site publicado sem os pesos é pior que
+ * um deploy que não acontece: o primeiro só aparece no celular, na frente da
+ * banca; o segundo aparece no log, agora.
+ */
+const faltando = [];
+for (const modelo of MODELOS) {
+  for (const file of FILES) {
+    const dest = path.join(RAIZ, "public", "models", modelo, file);
+    if (!(await jaExiste(dest))) faltando.push(`${modelo}/${file}`);
+  }
+}
+if (faltando.length > 0) {
+  console.error(
+    `[modelo] FALTANDO depois do download (o site não pode ser publicado assim):\n  ${faltando.join("\n  ")}`,
+  );
+  process.exit(1);
+}
+
+console.log(
+  `[modelo] pronto e conferido: ${MODELOS.join(", ")} em ${path.join(RAIZ, "public", "models")}`,
+);

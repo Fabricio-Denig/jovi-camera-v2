@@ -14,6 +14,10 @@ import {
   registrarErro,
 } from "./listenDiag";
 import { sanitizarTrecho, MENSAGEM_TRECHO_DEGENERADO } from "./transcriptSanitizer";
+// A fonte única de QUAIS pesos existem — o mesmo arquivo que
+// `scripts/fetch-whisper-model.mjs` lê para decidir o que baixar em CI. Ver o
+// comentário de `MODELO_PRIMARIO` para o defeito real que isto corrige.
+import MODELOS from "./whisperModels.json";
 
 /**
  * O motor de transcrição local, num lugar só — o mesmo desenho de
@@ -33,9 +37,7 @@ import { sanitizarTrecho, MENSAGEM_TRECHO_DEGENERADO } from "./transcriptSanitiz
  * motivo. Sem conseguir reproduzir a rede exata daquele aparelho, a resposta
  * correta é eliminar a dependência de rede em tempo real por completo, não
  * adivinhar a causa: `scripts/fetch-whisper-model.mjs` baixa os pesos
- * pinados em CI (o runner do GitHub Actions tem internet real; este
- * ambiente de desenvolvimento bloqueia huggingface.co por política — ver o
- * status do proxy) e publica os bytes junto do site. `env.allowRemoteModels
+ * em CI e publica os bytes junto do site. `env.allowRemoteModels
  * = false` abaixo não é só documentação: é o que torna a transcrição
  * genuinamente independente de alcançar qualquer CDN durante a aula — o
  * mesmo domínio que já serve o app serve o modelo.
@@ -159,8 +161,37 @@ import { sanitizarTrecho, MENSAGEM_TRECHO_DEGENERADO } from "./transcriptSanitiz
  * chegou a ser necessária. Este projeto não tem backend nem credenciais de
  * nenhum serviço de STT pago, e este achado (local já funciona bem, sem
  * precisar de rede durante a aula) tornou desnecessário inventar uma
- * infraestrutura nova só para a demonstração. */
-const MODELO = "Xenova/whisper-base";
+ * infraestrutura nova só para a demonstração.
+ *
+ * ---
+ *
+ * **O que a troca para `base` quebrou, e por que este arquivo não escolhe
+ * mais o modelo sozinho.** A troca acima foi publicada mudando a constante
+ * DAQUI e só daqui. Quem BAIXA os pesos é outro arquivo
+ * (`scripts/fetch-whisper-model.mjs`, rodando em CI), e ele continuou com a
+ * própria constante apontando para `whisper-tiny`. O site publicado passou a
+ * ter `models/Xenova/whisper-tiny/*` e nada em `models/Xenova/whisper-base/*`
+ * — confirmado com HTTP contra o site de produção: `whisper-tiny/config.json`
+ * responde 200, `whisper-base/config.json` responde 404. Com
+ * `allowRemoteModels = false` (abaixo, de propósito: nada de CDN durante a
+ * aula), não existe plano B dentro da biblioteca — todo arquivo do modelo
+ * falha, o `pipeline(...)` rejeita, o job vira "falhou", e o celular mostra
+ * zero transcrição. Foi exatamente o que dois testes físicos mostraram.
+ *
+ * Duas correções, porque uma só não bastaria:
+ *
+ * 1. `src/listen/whisperModels.json` é a FONTE ÚNICA — este arquivo e o
+ *    script de download leem o mesmo JSON. Divergir virou impossível, não
+ *    "improvável".
+ * 2. `conferirPesos()` (abaixo) pergunta ao servidor se os pesos existem
+ *    ANTES de mandar a biblioteca carregá-los, e o motor cai para o modelo
+ *    de reserva quando não existem — ou quando o primário falha por qualquer
+ *    outro motivo (memória do aparelho, sessão ONNX que não cria). Um
+ *    `tiny` transcrevendo mal vale mais, na banca, que um `base` ausente
+ *    transcrevendo nada. */
+const MODELO_PRIMARIO: string = MODELOS.primario;
+/** O reserva: só carrega se o primário não carregar. Ver `motorCompartilhado`. */
+const MODELO_RESERVA: string = MODELOS.fallback;
 
 // A biblioteca inteira (onnxruntime-web incluso) fica fora do caminho de
 // abertura da câmera: a importação só acontece quando alguém de fato pede uma
@@ -192,6 +223,15 @@ let motorRef: Promise<Transcritor> | null = null;
     diferencia "baixando pela primeira vez" de "carregando do cache" no
     diagnóstico e na mensagem que a UI mostra (ver `ClassPage.tsx`). */
 let motorJaCarregouNestaAba = false;
+/** Qual modelo de fato carregou — pode ser o reserva. Só o diagnóstico lê:
+    numa banca, "o texto veio do `tiny` porque o `base` não carregou" é a
+    primeira coisa a saber, e supor que foi o primário seria supor errado. */
+let modeloEmUso: string | null = null;
+
+/** Para `?debug=listen`: o modelo que está de fato servindo, não o pedido. */
+export function modeloAtivo(): string | null {
+  return modeloEmUso;
+}
 
 function baseAbsoluta(caminho: string): string {
   return new URL(
@@ -200,136 +240,265 @@ function baseAbsoluta(caminho: string): string {
   ).href;
 }
 
+function mensagemDe(erro: unknown): string {
+  return erro instanceof Error ? erro.message : String(erro);
+}
+
+/**
+ * Os pesos deste modelo estão MESMO no servidor?
+ *
+ * Duas requisições pequenas, antes de mandar a biblioteca carregar 77MB. Não
+ * é otimização — é a diferença entre um diagnóstico que diz
+ * "`whisper-base/config.json` respondeu HTTP 404" e o que acontecia antes:
+ * a biblioteca tentava, falhava por dentro em algum arquivo, e o erro que
+ * sobrava não dizia nem qual modelo nem qual arquivo. Com
+ * `allowRemoteModels = false`, um peso ausente não tem plano B DENTRO da
+ * biblioteca — então o plano B tem que ser aqui fora, e para escolhê-lo é
+ * preciso saber, de fato, que o peso não está lá.
+ *
+ * `config.json` vai por GET e é conferido como JSON de verdade: um servidor
+ * que responde a arquivo inexistente com a página do app (200 + HTML)
+ * passaria por um HEAD e quebraria depois, lá dentro, sem pista. O arquivo
+ * grande vai por HEAD — só a existência e o tamanho interessam, baixá-lo é
+ * trabalho do `pipeline(...)`.
+ */
+async function conferirPesos(modelo: string): Promise<void> {
+  const urlConfig = baseAbsoluta(`models/${modelo}/config.json`);
+  let resposta: Response;
+  try {
+    resposta = await fetch(urlConfig, { cache: "no-store" });
+  } catch (erro) {
+    registrarDownload({ arquivo: `${modelo}/config.json`, url: urlConfig, erro: mensagemDe(erro) });
+    throw new Error(
+      `Não foi possível alcançar os pesos de ${modelo}: ${mensagemDe(erro)}`,
+    );
+  }
+  registrarDownload({
+    arquivo: `${modelo}/config.json`,
+    url: urlConfig,
+    status: resposta.status,
+  });
+  if (!resposta.ok) {
+    throw new Error(
+      `Pesos de ${modelo} não estão publicados: config.json respondeu HTTP ${resposta.status}`,
+    );
+  }
+  try {
+    const config = (await resposta.json()) as { model_type?: string };
+    if (!config.model_type) throw new Error("sem `model_type`");
+  } catch (erro) {
+    throw new Error(
+      `Pesos de ${modelo}: config.json não é o JSON do modelo (${mensagemDe(erro)})`,
+    );
+  }
+
+  const arquivoGrande = `onnx/encoder_model_quantized.onnx`;
+  const urlPeso = baseAbsoluta(`models/${modelo}/${arquivoGrande}`);
+  let cabecalho: Response;
+  try {
+    cabecalho = await fetch(urlPeso, { method: "HEAD", cache: "no-store" });
+  } catch (erro) {
+    registrarDownload({ arquivo: `${modelo}/${arquivoGrande}`, url: urlPeso, erro: mensagemDe(erro) });
+    throw new Error(
+      `Não foi possível alcançar ${arquivoGrande} de ${modelo}: ${mensagemDe(erro)}`,
+    );
+  }
+  const bytes = Number(cabecalho.headers.get("content-length")) || undefined;
+  registrarDownload({
+    arquivo: `${modelo}/${arquivoGrande}`,
+    url: urlPeso,
+    status: cabecalho.status,
+    bytes,
+  });
+  if (!cabecalho.ok) {
+    throw new Error(
+      `Pesos de ${modelo} incompletos: ${arquivoGrande} respondeu HTTP ${cabecalho.status}`,
+    );
+  }
+}
+
+/**
+ * Carrega UM modelo, do começo ao fim. Quem decide qual (e o que fazer quando
+ * este não carrega) é `motorCompartilhado`.
+ */
+async function carregarModelo(modelo: string): Promise<Transcritor> {
+  registrarEngine({
+    modelId: modelo,
+    multilingual: true,
+    backend: "onnxruntime-web",
+    device: "wasm",
+    numThreads: 1,
+    estado: "carregando",
+    cache: motorJaCarregouNestaAba ? "quente" : "frio",
+  });
+
+  await conferirPesos(modelo);
+  const { env, pipeline } = await import("@huggingface/transformers");
+
+  /*
+   * Precisa vir ANTES do `pipeline(...)`: a biblioteca só faz a própria
+   * escolha (CDN externo, variante "asyncify") quando `wasmPaths` ainda
+   * está vazio. Uma vez setado aqui, o caminho automático nem roda.
+   *
+   * `numThreads: 1` porque este site não manda os cabeçalhos de
+   * isolamento de origem (COOP/COEP) que o WebAssembly com threads de
+   * verdade exige — o GitHub Pages não deixa configurar isso. O mesmo
+   * arquivo .wasm funciona sem threads; só precisa saber que não pode
+   * abrir nenhuma. `crossOriginIsolated`/`SharedArrayBuffer` (ver
+   * `listenDiag.lerDeviceDiag`) confirmam isso a cada carregamento, em
+   * vez de supor.
+   */
+  const wasm = env.backends.onnx.wasm;
+  if (!wasm) {
+    throw new Error("onnxruntime-web sem backend wasm neste navegador");
+  }
+  wasm.wasmPaths = {
+    wasm: baseAbsoluta("ort/ort-wasm-simd-threaded.wasm"),
+    mjs: baseAbsoluta("ort/ort-wasm-simd-threaded.mjs"),
+  };
+  wasm.numThreads = 1;
+  /*
+   * `wasm.proxy` (mover a sessão ONNX para um Worker dedicado, liberando
+   * a thread principal durante a inferência) foi TENTADO e DESCARTADO —
+   * com evidência, não por suposição. Sem ele, um teste de ponta a
+   * ponta real mostrou a inferência (8s+ neste fixture) travando a aba
+   * inteira: nenhum toque respondia enquanto rodava. `env.backends.
+   * onnx.wasm.proxy = true` (a biblioteca desliga isto por padrão —
+   * `ONNX_ENV.wasm.proxy = false`, lido em `transformers.web.js`)
+   * pareceu a correção óbvia, mas quebra de um jeito pior: o loader do
+   * WASM dentro do Worker desta versão do onnxruntime-web referencia
+   * `document` — que não existe em um Worker — e a sessão nunca chega a
+   * criar (`no available backend found. ERR: [wasm] [object
+   * ErrorEvent]`, medido num segundo teste de ponta a ponta). A thread
+   * principal travar por alguns segundos DEPOIS da aula já salva (nunca
+   * durante a gravação) é um custo real e medido, não escondido — mas é
+   * a opção que efetivamente transcreve. Mover a inferência para um
+   * Worker de verdade exigiria reescrever o carregamento do modelo à
+   * mão (sem depender do proxy embutido da biblioteca), fora do escopo
+   * desta rodada.
+   */
+
+  /*
+   * Os pesos do modelo, do mesmo domínio do site — nunca do Hugging
+   * Face Hub em tempo real. `allowLocalModels` é `false` por padrão no
+   * navegador (só é `true` automaticamente em Node/Deno) — sem ligar
+   * isto explicitamente, `localModelPath` abaixo nunca seria consultado.
+   * `localModelPath` termina em `/models/` — a biblioteca completa com
+   * `<localModelPath>/<model_id>/<arquivo>` sozinha (confirmado lendo
+   * `buildResourcePaths` em `transformers.web.js`), e o `id` de
+   * `Xenova/whisper-tiny` já contém a barra que vira a subpasta.
+   *
+   * **De propósito, um caminho RELATIVO — não `baseAbsoluta()`.** Uma
+   * URL completa (`http://.../models/`) quebra `get_tokenizer_files()`/
+   * `get_processor_files()`: as duas decidem se existe tokenizer/
+   * processor chamando `get_file_metadata()`, que só verifica
+   * localmente quando `isValidUrl(localPath, ...)` é `false` — e
+   * `localPath` é `pathJoin(localModelPath, model_id, arquivo)`. Com
+   * `localModelPath` absoluto, `localPath` vira uma URL válida, a
+   * checagem local é pulada inteira, `allowRemoteModels=false` faz o
+   * resto falhar em silêncio, e `hasProcessor`/`hasTokenizer` saem
+   * `false` — o pipeline carrega sem processor nenhum, e quebra depois
+   * com `Cannot read properties of null (reading 'feature_extractor')`
+   * na primeira transcrição (achado com um teste real, não suposto).
+   * Um caminho relativo faz `isValidUrl` lançar (sem `base`) e devolver
+   * `false` — a checagem local roda de verdade, via `fetch` relativo
+   * (o navegador resolve contra a própria página, sem precisar de URL
+   * absoluta nenhuma).
+   */
+  env.allowLocalModels = true;
+  env.localModelPath = `${import.meta.env.BASE_URL}models/`;
+  env.allowRemoteModels = false;
+
+  const progresso = new Map<string, number>();
+  const inicioDownload = new Map<string, number>();
+
+  const transcritor = await pipeline("automatic-speech-recognition", modelo, {
+    dtype: "q8",
+    device: "wasm",
+    // Desliga a otimização de grafo do ONNX Runtime — não é experimento: é o
+    // que evita o bug QDQ/MatMulNBits que impedia a sessão de sequer criar
+    // (ver o comentário grande acima). Sem isto o modelo não carrega.
+    session_options: { graphOptimizationLevel: "disabled" },
+    progress_callback: (
+      dado: {
+        status: string;
+        file?: string;
+        progress?: number;
+        loaded?: number;
+        total?: number;
+      },
+    ) => {
+      if (!dado.file) return;
+      if (dado.status === "initiate") {
+        inicioDownload.set(dado.file, Date.now());
+      }
+      if (dado.status === "progress" && typeof dado.progress === "number") {
+        progresso.set(dado.file, dado.progress);
+      }
+      if (dado.status === "done") {
+        const inicio = inicioDownload.get(dado.file);
+        registrarDownload({
+          arquivo: dado.file,
+          url: baseAbsoluta(`models/${modelo}/${dado.file}`),
+          status: 200,
+          bytes: dado.total,
+          duracaoMs: inicio ? Date.now() - inicio : undefined,
+        });
+      }
+    },
+  } as Parameters<typeof pipeline>[2]);
+
+  motorJaCarregouNestaAba = true;
+  return transcritor as unknown as Transcritor;
+}
+
+/**
+ * O motor, um por aba — agora com um plano B de verdade.
+ *
+ * **Por que a cadeia existe.** O modelo primário pode não carregar por
+ * motivos que esta bancada não consegue reproduzir: os pesos não publicados
+ * (o defeito real que motivou esta rodada), o aparelho sem memória para
+ * 77MB, uma versão de WebAssembly que recusa a sessão ONNX. Nenhum desses é
+ * consertável na hora da apresentação. O que é consertável AGORA é a
+ * consequência: em vez de a aula terminar sem texto nenhum, o motor tenta o
+ * `tiny` — pior de qualidade, medido, mas já rodou em aparelho real. A
+ * decisão é deliberada e tem ordem: qualidade primeiro, alguma transcrição
+ * sempre.
+ *
+ * **Cada falha fica registrada, nenhuma é engolida.** `?debug=listen` mostra
+ * a lista inteira de tentativas (`registrarErro("engine:<modelo>")`), e se
+ * NENHUM modelo carregar, o erro que sobe carrega os dois motivos no texto —
+ * o oposto do que acontecia antes, quando um erro de dentro da biblioteca
+ * não dizia nem qual modelo tinha falhado.
+ */
 async function motorCompartilhado(): Promise<Transcritor> {
   if (!motorRef) {
-    registrarEngine({
-      modelId: MODELO,
-      multilingual: true,
-      backend: "onnxruntime-web",
-      device: "wasm",
-      numThreads: 1,
-      estado: "carregando",
-      cache: motorJaCarregouNestaAba ? "quente" : "frio",
-    });
-
     motorRef = (async () => {
-      const { env, pipeline } = await import("@huggingface/transformers");
+      // `filter` remove a duplicata se algum dia primário e reserva forem o
+      // mesmo — tentar duas vezes o mesmo modelo só faria a pessoa esperar o
+      // dobro pelo mesmo erro.
+      const candidatos = [MODELO_PRIMARIO, MODELO_RESERVA].filter(
+        (m, i, todos) => todos.indexOf(m) === i,
+      );
+      const falhas: string[] = [];
 
-      /*
-       * Precisa vir ANTES do `pipeline(...)`: a biblioteca só faz a própria
-       * escolha (CDN externo, variante "asyncify") quando `wasmPaths` ainda
-       * está vazio. Uma vez setado aqui, o caminho automático nem roda.
-       *
-       * `numThreads: 1` porque este site não manda os cabeçalhos de
-       * isolamento de origem (COOP/COEP) que o WebAssembly com threads de
-       * verdade exige — o GitHub Pages não deixa configurar isso. O mesmo
-       * arquivo .wasm funciona sem threads; só precisa saber que não pode
-       * abrir nenhuma. `crossOriginIsolated`/`SharedArrayBuffer` (ver
-       * `listenDiag.lerDeviceDiag`) confirmam isso a cada carregamento, em
-       * vez de supor.
-       */
-      const wasm = env.backends.onnx.wasm;
-      if (!wasm) {
-        throw new Error("onnxruntime-web sem backend wasm neste navegador");
+      for (const modelo of candidatos) {
+        try {
+          const transcritor = await carregarModelo(modelo);
+          modeloEmUso = modelo;
+          registrarEngine({ modelId: modelo, estado: "pronto" });
+          return transcritor;
+        } catch (erro) {
+          // O estágio nomeia o modelo: numa cadeia de duas tentativas, "qual
+          // delas falhou, e por quê" é a única pergunta que importa depois.
+          registrarErro(`engine:${modelo}`, erro);
+          falhas.push(`${modelo} → ${mensagemDe(erro)}`);
+        }
       }
-      wasm.wasmPaths = {
-        wasm: baseAbsoluta("ort/ort-wasm-simd-threaded.wasm"),
-        mjs: baseAbsoluta("ort/ort-wasm-simd-threaded.mjs"),
-      };
-      wasm.numThreads = 1;
-      /*
-       * `wasm.proxy` (mover a sessão ONNX para um Worker dedicado, liberando
-       * a thread principal durante a inferência) foi TENTADO e DESCARTADO —
-       * com evidência, não por suposição. Sem ele, um teste de ponta a
-       * ponta real mostrou a inferência (8s+ neste fixture) travando a aba
-       * inteira: nenhum toque respondia enquanto rodava. `env.backends.
-       * onnx.wasm.proxy = true` (a biblioteca desliga isto por padrão —
-       * `ONNX_ENV.wasm.proxy = false`, lido em `transformers.web.js`)
-       * pareceu a correção óbvia, mas quebra de um jeito pior: o loader do
-       * WASM dentro do Worker desta versão do onnxruntime-web referencia
-       * `document` — que não existe em um Worker — e a sessão nunca chega a
-       * criar (`no available backend found. ERR: [wasm] [object
-       * ErrorEvent]`, medido num segundo teste de ponta a ponta). A thread
-       * principal travar por alguns segundos DEPOIS da aula já salva (nunca
-       * durante a gravação) é um custo real e medido, não escondido — mas é
-       * a opção que efetivamente transcreve. Mover a inferência para um
-       * Worker de verdade exigiria reescrever o carregamento do modelo à
-       * mão (sem depender do proxy embutido da biblioteca), fora do escopo
-       * desta rodada.
-       */
 
-      /*
-       * Os pesos do modelo, do mesmo domínio do site — nunca do Hugging
-       * Face Hub em tempo real. `allowLocalModels` é `false` por padrão no
-       * navegador (só é `true` automaticamente em Node/Deno) — sem ligar
-       * isto explicitamente, `localModelPath` abaixo nunca seria consultado.
-       * `localModelPath` termina em `/models/` — a biblioteca completa com
-       * `<localModelPath>/<model_id>/<arquivo>` sozinha (confirmado lendo
-       * `buildResourcePaths` em `transformers.web.js`), e o `id` de
-       * `Xenova/whisper-tiny` já contém a barra que vira a subpasta.
-       *
-       * **De propósito, um caminho RELATIVO — não `baseAbsoluta()`.** Uma
-       * URL completa (`http://.../models/`) quebra `get_tokenizer_files()`/
-       * `get_processor_files()`: as duas decidem se existe tokenizer/
-       * processor chamando `get_file_metadata()`, que só verifica
-       * localmente quando `isValidUrl(localPath, ...)` é `false` — e
-       * `localPath` é `pathJoin(localModelPath, model_id, arquivo)`. Com
-       * `localModelPath` absoluto, `localPath` vira uma URL válida, a
-       * checagem local é pulada inteira, `allowRemoteModels=false` faz o
-       * resto falhar em silêncio, e `hasProcessor`/`hasTokenizer` saem
-       * `false` — o pipeline carrega sem processor nenhum, e quebra depois
-       * com `Cannot read properties of null (reading 'feature_extractor')`
-       * na primeira transcrição (achado com um teste real, não suposto).
-       * Um caminho relativo faz `isValidUrl` lançar (sem `base`) e devolver
-       * `false` — a checagem local roda de verdade, via `fetch` relativo
-       * (o navegador resolve contra a própria página, sem precisar de URL
-       * absoluta nenhuma).
-       */
-      env.allowLocalModels = true;
-      env.localModelPath = `${import.meta.env.BASE_URL}models/`;
-      env.allowRemoteModels = false;
-
-      const progresso = new Map<string, number>();
-      const inicioDownload = new Map<string, number>();
-
-      const transcritor = await pipeline("automatic-speech-recognition", MODELO, {
-        dtype: "q8",
-        device: "wasm",
-        // TESTE: desligar a otimização de grafo do ONNX Runtime para ver se
-        // evita o bug QDQ/MatMulNBits (ver o comentário grande acima).
-        session_options: { graphOptimizationLevel: "disabled" },
-        progress_callback: (
-          dado: {
-            status: string;
-            file?: string;
-            progress?: number;
-            loaded?: number;
-            total?: number;
-          },
-        ) => {
-          if (!dado.file) return;
-          if (dado.status === "initiate") {
-            inicioDownload.set(dado.file, Date.now());
-          }
-          if (dado.status === "progress" && typeof dado.progress === "number") {
-            progresso.set(dado.file, dado.progress);
-          }
-          if (dado.status === "done") {
-            const inicio = inicioDownload.get(dado.file);
-            registrarDownload({
-              arquivo: dado.file,
-              url: baseAbsoluta(`models/${MODELO}/${dado.file}`),
-              status: 200,
-              bytes: dado.total,
-              duracaoMs: inicio ? Date.now() - inicio : undefined,
-            });
-          }
-        },
-      } as Parameters<typeof pipeline>[2]);
-
-      motorJaCarregouNestaAba = true;
-      registrarEngine({ estado: "pronto" });
-      return transcritor as unknown as Transcritor;
+      throw new Error(
+        `Nenhum modelo de transcrição carregou neste aparelho. ${falhas.join(" | ")}`,
+      );
     })().catch((erro) => {
       // Um motor que nunca terminou de carregar não pode ficar "reservado"
       // para sempre — a próxima tentativa merece tentar de novo do zero

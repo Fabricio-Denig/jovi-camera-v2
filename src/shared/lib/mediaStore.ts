@@ -316,6 +316,34 @@ export interface LessonAudio {
   /** Quando o reprocessamento começou — só para detectar um job abandonado
       (aba fechada no meio) depois de um teto de tempo generoso. */
   transcriptJobStartedAt?: number;
+  /**
+   * COMO o reprocessamento terminou — três finais diferentes que
+   * `transcriptJobStatus` sozinho confundia num só.
+   *
+   * O defeito que isto corrige é de comunicação, e foi real: com os pesos do
+   * modelo ausentes no servidor, o motor falhava por um erro técnico e a aba
+   * Texto mostrava "A câmera não conseguiu ler texto nesta aula" — uma frase
+   * sobre OCR, sobre uma coisa que não aconteceu, para um problema de
+   * software que ninguém conseguia nomear. As três respostas pedem três
+   * condutas diferentes, e só a primeira é culpa da aula:
+   *
+   * - `sem_fala`: o motor rodou inteiro e o áudio não tinha fala (RMS ~0,
+   *   microfone abafado, silêncio). Gravar mais perto resolve.
+   * - `falhou`: erro técnico — modelo, memória, decodificação. Nada que a
+   *   pessoa tenha feito; "Tentar de novo" é o caminho.
+   * - `texto`: saiu transcrição de verdade.
+   */
+  transcriptOutcome?: "texto" | "sem_fala" | "falhou";
+  /**
+   * A última falha técnica, legível — o estágio e a mensagem.
+   *
+   * `listenDiag` já guarda isto com stack para `?debug=listen`, mas some
+   * quando o `localStorage` é limpo e é de uma tentativa só. Aqui fica junto
+   * da aula, sobrevive a tudo que a aula sobrevive, e é o que permite
+   * responder "por que esta aula não tem texto?" meses depois, sem ter o
+   * aparelho na mão.
+   */
+  transcriptFailure?: { stage: string; message: string; at: number };
 }
 
 /**

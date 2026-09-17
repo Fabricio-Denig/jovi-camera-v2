@@ -1,0 +1,14 @@
+{
+  "_leia": "FONTE ÚNICA de quais pesos existem. src/listen/whisperEngine.ts (quem carrega) e scripts/fetch-whisper-model.mjs (quem baixa em CI) leem ESTE arquivo — nunca uma constante própria. Existe porque os dois divergiram uma vez: o motor pediu whisper-base e o script continuou baixando whisper-tiny, o servidor respondeu 404 em todos os pesos, e com allowRemoteModels=false a transcrição virou zero no celular. Ver o comentário em whisperEngine.ts.",
+  "primario": "Xenova/whisper-base",
+  "fallback": "Xenova/whisper-tiny",
+  "arquivos": [
+    "config.json",
+    "generation_config.json",
+    "preprocessor_config.json",
+    "tokenizer.json",
+    "tokenizer_config.json",
+    "onnx/encoder_model_quantized.onnx",
+    "onnx/decoder_model_merged_quantized.onnx"
+  ]
+}

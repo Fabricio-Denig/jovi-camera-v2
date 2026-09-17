@@ -1,6 +1,7 @@
 import type { TranscriptSegment } from "../shared/lib/mediaStore";
 import {
   MARCAS_DE_ENFASE,
+  PALAVRAS_DE_MARCA,
   semAcento,
   VAZIAS,
   JANELA_DEPOIS_MS,
@@ -43,23 +44,6 @@ const PALAVRAS_GENERICAS_DEMAIS = new Set(
   ).split(/\s+/),
 );
 
-/**
- * As palavras que compõem as próprias expressões de ênfase (`MARCAS_DE_ENFASE`)
- * — "prestem", "atenção", "prova", "importante", "anotem"... — derivadas
- * automaticamente da lista, não escritas à mão.
- *
- * Servem só para UMA pergunta: uma frase marcada como destaque ("Prestem
- * atenção porque isso cai na prova.") tem ALGUM assunto próprio, além de
- * avisar que algo importa? Sem excluir estas palavras, "prova" sozinha conta
- * como conteúdo e a frase parece ter assunto — quando na verdade ela só
- * aponta para um assunto que está em outra frase (achado com um teste real:
- * "Professor destacou" mostrava a frase de aviso em vez do que foi avisado).
- */
-const PALAVRAS_DE_MARCA = new Set(
-  MARCAS_DE_ENFASE.flatMap((m) => semAcento(m).split(/[^\p{L}\p{N}]+/u)).filter(
-    (w) => w.length >= 3,
-  ),
-);
 
 /**
  * As marcas de `MARCAS_DE_ENFASE` que sinalizam SÍNTESE ("resumindo", "em
@@ -222,6 +206,9 @@ function contarTermosLocal(
         chave.length < 3 ||
         VAZIAS.has(chave) ||
         PALAVRAS_GENERICAS_DEMAIS.has(chave) ||
+        // "prova", "cair", "atenção", "anotem"... avisam que algo importa —
+        // não SÃO o algo. Ver o comentário de `PALAVRAS_DE_MARCA`.
+        PALAVRAS_DE_MARCA.has(chave) ||
         /^\d+$/.test(chave)
       )
         continue;
@@ -431,7 +418,24 @@ const DENSIDADE_MINIMA_FALA = 0.4;
  * `termoDominante` sozinho e virou ponto principal.
  */
 function densidadeDeConteudo(texto: string, peso: Map<string, number>): number {
-  const tokens = semAcento(texto).split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  /*
+   * As palavras de ênfase saem do DENOMINADOR — não contam nem como conteúdo
+   * nem contra ele.
+   *
+   * Desde que `PALAVRAS_DE_MARCA` deixou de pesar como termo (ver lá o
+   * porquê), uma frase como "Programação orientada a objetos é importante e
+   * pode cair na prova" passou a ser punida duas vezes pela mesma coisa:
+   * "importante", "cair" e "prova" não contam como conteúdo E ainda incham o
+   * total, derrubando a densidade abaixo do mínimo. Medido com áudio real:
+   * essa frase — a mais explícita da aula sobre o assunto — saía da lista de
+   * pontos principais. A pergunta certa é "entre as palavras que PODERIAM
+   * carregar assunto, quantas carregam?", e uma marca de ênfase nunca
+   * poderia. Só pode aumentar a densidade de quem tem marca; nenhuma outra
+   * frase muda.
+   */
+  const tokens = semAcento(texto)
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((t) => t && !PALAVRAS_DE_MARCA.has(t));
   if (tokens.length === 0) return 0;
   const vistas = new Set<string>();
   let reais = 0;
@@ -732,7 +736,27 @@ function montarVisaoGeral(
    * texto correto vale mais que mais texto quebrado.
    */
   const comConceito = principais.map((c) => ({ texto: conceito(c) }));
-  const paraConectores = comConceito.filter(({ texto }) => !pareceClausula(texto));
+
+  /*
+   * O conceito MAIS FORTE da aula, quando tem verbo próprio, não cabe como
+   * complemento de "A aula abordou ..." — mas simplesmente descartá-lo, que
+   * era o que acontecia, sai pior. Medido com áudio real: numa aula sobre
+   * matrizes, a frase mais forte era "Matrizes são estruturas organizadas"
+   * (verbo próprio, "são"), o filtro a tirava dos conectores, e o resumo
+   * abria com "A aula abordou atriz identidade" — deixando de fora
+   * justamente a palavra que a aula repetiu mais vezes.
+   *
+   * Agora ela abre o resumo como SENTENÇA PRÓPRIA (que é o que ela é), e os
+   * conectores seguem com o resto. Continua sem inventar nada: é a mesma
+   * frase literal, só não empurrada para dentro de outra oração.
+   */
+  const abrePorClausula =
+    comConceito.length > 0 && pareceClausula(comConceito[0].texto);
+  if (abrePorClausula) frases.push(pontuar(comConceito[0].texto));
+
+  const paraConectores = comConceito
+    .slice(abrePorClausula ? 1 : 0)
+    .filter(({ texto }) => !pareceClausula(texto));
   const [primeiro, segundo, ...resto] = paraConectores;
 
   if (primeiro) {
@@ -750,12 +774,13 @@ function montarVisaoGeral(
         `Também foram mencionados ${maisDois[0].texto} e ${maisDois[1].texto}.`,
       );
     }
-  } else {
+  } else if (!abrePorClausula) {
     // Nenhum conceito sem verbo próprio sobrou — a única evidência que
     // existe tem verbo próprio, então vira UMA sentença curta por conta
     // própria, nunca o complemento de outra: "Matrizes são estruturas
     // organizadas.", não "A aula abordou matrizes são estruturas
-    // organizadas.".
+    // organizadas.". (`abrePorClausula` já empurrou essa mesma frase acima —
+    // sem esta guarda ela sairia duas vezes no mesmo resumo.)
     frases.push(pontuar(comConceito[0].texto));
   }
 

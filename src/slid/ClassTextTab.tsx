@@ -44,6 +44,7 @@ export function ClassTextTab({
   onOuvir,
   transcript = [],
   transcriptStatus,
+  transcriptOutcome,
 }: {
   record: ClassRecord;
   /** Presente só quando a aula tem gravação. */
@@ -52,6 +53,9 @@ export function ClassTextTab({
   transcript?: TranscriptSegment[];
   /** Como a transcrição terminou, para a tela poder dizer a verdade. */
   transcriptStatus?: "ok" | "indisponivel" | "desligada";
+  /** Como o motor local terminou. Um erro técnico (`falhou`) nunca pode ser
+      apresentado como ausência de conteúdo — ver o bloco vazio abaixo. */
+  transcriptOutcome?: "texto" | "sem_fala" | "falhou";
 }) {
   const comConteudo = record.moments.filter(
     (m) => linesWithoutTitle(m).length > 0,
@@ -65,6 +69,30 @@ export function ClassTextTab({
   const atual: Fonte = fonte === "quadro" && !temQuadro ? "fala" : fonte;
 
   if (!temQuadro && !temFala) {
+    /*
+     * Uma tela vazia por DOIS motivos diferentes precisa de duas frases
+     * diferentes — e antes tinha uma só, a do OCR. Com os pesos do modelo
+     * respondendo 404 no servidor, a transcrição falhava por erro técnico e
+     * esta tela dizia "A câmera não conseguiu ler texto nesta aula": uma
+     * afirmação sobre a câmera, que não errou nada, para um problema de
+     * software. Quando o motor falhou, isto diz isso — e o botão "Tentar de
+     * novo" já está logo acima, fora das abas.
+     */
+    if (transcriptOutcome === "falhou") {
+      return (
+        <div className="pt-8 text-center">
+          <p className="text-sm text-ink-muted">
+            Não foi possível transcrever o áudio desta aula.
+          </p>
+          <p className="mx-auto mt-2 max-w-[34ch] text-[13px] leading-snug text-ink-muted/75">
+            Não é um problema da gravação: o áudio continua salvo e pode ser
+            ouvido no player acima. Use “Tentar de novo” para processar
+            outra vez.
+          </p>
+        </div>
+      );
+    }
+
     return (
       <div className="pt-8 text-center">
         <p className="text-sm text-ink-muted">
@@ -79,11 +107,18 @@ export function ClassTextTab({
         {/* E, quando dá, dizer o que aconteceu com a outra fonte: uma aula
             sem texto por dois motivos diferentes pede duas respostas
             diferentes. */}
-        {transcriptStatus === "indisponivel" && (
+        {transcriptOutcome === "sem_fala" ? (
           <p className="mx-auto mt-2 max-w-[34ch] text-[13px] leading-snug text-ink-muted/75">
-            A transcrição da fala não funcionou neste navegador. O áudio da aula
-            continua salvo.
+            O áudio foi processado, mas não havia fala reconhecível nele. O
+            microfone pode ter ficado longe ou abafado.
           </p>
+        ) : (
+          transcriptStatus === "indisponivel" && (
+            <p className="mx-auto mt-2 max-w-[34ch] text-[13px] leading-snug text-ink-muted/75">
+              A transcrição da fala não funcionou neste navegador. O áudio da
+              aula continua salvo.
+            </p>
+          )
         )}
       </div>
     );

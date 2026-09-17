@@ -90,6 +90,39 @@ export const semAcento = (t: string) =>
 const NEGACOES = new Set(["nao", "nunca", "jamais"]);
 
 /**
+ * As palavras que compõem as próprias expressões de ênfase
+ * (`MARCAS_DE_ENFASE`) — "prestem", "atenção", "prova", "importante",
+ * "anotem"... — derivadas automaticamente da lista, nunca escritas à mão.
+ *
+ * **Elas avisam que algo importa; não SÃO o algo.** É a distinção inteira, e
+ * ela resolve dois defeitos diferentes:
+ *
+ * 1. Uma frase de aviso ("Prestem atenção porque isso cai na prova.") parece
+ *    ter assunto próprio quando "atenção" e "prova" contam como conteúdo —
+ *    e "Professor destacou" mostrava o aviso em vez do que foi avisado.
+ * 2. Elas não podem contar como TERMO da aula. Numa aula real sobre
+ *    matrizes, transcrita pelo motor de verdade, o resumo saiu "A aula
+ *    abordou cair na prova, com destaque para atriz identidade": "matrizes",
+ *    dita quatro vezes, perdeu a disputa para "prova", dita uma — porque a
+ *    frase marcada ganha bônus de pontuação e "prova" pesava como assunto.
+ *
+ * Por isso `contarTermos` (abaixo) e `contarTermosLocal`
+ * (`lessonSummary.ts`) descartam estas palavras — e com um corte só elas
+ * somem de tudo que lê peso: resumo, pontos principais, "Para revisar",
+ * tópicos e título.
+ *
+ * Custo conhecido e aceito: "prova" no sentido de demonstração matemática, e
+ * "atenção" no sentido de mecanismo de atenção, deixam de poder ser o
+ * assunto. É um preço pequeno perto de "cair na prova" virar o tema de toda
+ * aula em que o professor avisa o que cai na prova.
+ */
+export const PALAVRAS_DE_MARCA = new Set(
+  MARCAS_DE_ENFASE.flatMap((m) => semAcento(m).split(/[^\p{L}\p{N}]+/u)).filter(
+    (w) => w.length >= 3,
+  ),
+);
+
+/**
  * Se há uma negação nas poucas palavras logo ANTES da posição `indice` (um
  * índice de caractere dentro de `normal`, já sem acento) — sem cruzar para a
  * frase anterior, que negaria algo que a marca nem alcança.
@@ -193,6 +226,10 @@ export function contarTermos(
       if (palavra.length < 3) continue;
       const chave = semAcento(palavra);
       if (VAZIAS.has(chave)) continue;
+      // "prova", "cair", "atenção", "anotem"... nunca são o assunto da aula —
+      // ver `PALAVRAS_DE_MARCA`. Sem este corte, um professor que avisa três
+      // vezes o que cai na prova faz "prova" virar tópico da aula.
+      if (PALAVRAS_DE_MARCA.has(chave)) continue;
       if (/^\d+$/.test(chave)) continue;
       const atual = contagem.get(chave);
       if (atual) atual.n += 1;
