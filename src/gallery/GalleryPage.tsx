@@ -8,9 +8,8 @@ import { LessonFilterSheet, type FiltroStatus } from "./LessonFilterSheet";
 import { DisciplineManager } from "../slid/DisciplineManager";
 import { STATUS_STYLES, type ClassStatus } from "../slid/status";
 import {
+  agruparEmAulas,
   deleteClassForever,
-  getClasses,
-  getTrashedClasses,
   restoreClass,
   setClassDiscipline,
   type ClassRecord,
@@ -18,9 +17,8 @@ import {
 import {
   deleteCapturesForever,
   limparAudiosOrfaos,
-  getAllCaptures,
+  getCapturasParaGaleria,
   getSessionsWithAudio,
-  getTrashedCaptures,
   restoreCaptures,
   setFavorite,
   trashCaptures,
@@ -99,17 +97,37 @@ export function GalleryPage({
 
   useEffect(() => {
     let active = true;
+    /*
+     * UMA leitura do armazém, quatro recortes dela.
+     *
+     * Antes eram quatro chamadas — `getAllCaptures()`, `getClasses()`,
+     * `getTrashedCaptures()` e `getTrashedClasses()` — e as quatro varrem o
+     * armazém INTEIRO por dentro, cada uma abrindo a própria conexão e
+     * desserializando todos os registros com seus Blobs. Quatro vezes os
+     * mesmos bytes, ao mesmo tempo, para montar quatro vistas da mesma
+     * lista.
+     *
+     * Isso é cobrado exatamente no pior instante: ao salvar uma aula o app
+     * navega para cá, e a transcrição acabou de começar na mesma thread.
+     * Os filtros abaixo reproduzem exatamente o que cada função fazia —
+     * inclusive a ordem — lendo uma vez só. Ver `getCapturasParaGaleria`.
+     */
     void Promise.all([
-      getAllCaptures(),
-      getClasses(),
-      getTrashedCaptures(),
-      getTrashedClasses(),
+      getCapturasParaGaleria(),
       // Falha sozinho: uma galeria sem o selo de áudio é muito melhor que uma
       // galeria que não abre porque o armazém de áudio não existe ainda.
       getSessionsWithAudio().catch(() => new Set<string>()),
     ])
-      .then(([items, records, trashed, trashedRecords, audios]) => {
+      .then(([todas, audios]) => {
         if (!active) return;
+        const items = todas.filter((item) => !item.deletedAt);
+        const trashed = todas
+          .filter((item) => item.deletedAt)
+          .sort((a, b) => (b.deletedAt ?? 0) - (a.deletedAt ?? 0));
+        const records = agruparEmAulas(items);
+        const trashedRecords = agruparEmAulas(trashed).sort(
+          (a, b) => (b.deletedAt ?? 0) - (a.deletedAt ?? 0),
+        );
         setSemArmazenamento(false);
         setComAudio(audios);
         setMedia(items);

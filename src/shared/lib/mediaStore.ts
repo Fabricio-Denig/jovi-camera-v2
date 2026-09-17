@@ -145,6 +145,30 @@ export async function getAllCaptures(): Promise<CapturedMedia[]> {
 }
 
 /**
+ * TODAS as capturas — guardadas e na lixeira — numa leitura só.
+ *
+ * **Por que existe.** A Galeria precisa de quatro recortes da mesma lista
+ * (o rolo, as aulas, a lixeira de fotos e a lixeira de aulas), e pedia cada
+ * um por uma função diferente: `getAllCaptures()`, `getClasses()` — que
+ * chama `getAllCaptures()` por dentro —, `getTrashedCaptures()` e
+ * `getTrashedClasses()` — que chama `getTrashedCaptures()`. São **quatro
+ * varreduras completas do armazém**, cada uma abrindo a própria conexão e
+ * desserializando TODOS os registros, Blobs inclusos, no mesmo instante,
+ * para produzir quatro vistas dos mesmos bytes.
+ *
+ * O custo cresce com o tamanho do rolo, não com o que a tela mostra — e ele
+ * é cobrado exatamente no pior momento: ao voltar de uma aula salva, quando
+ * a transcrição acabou de começar e disputa a mesma thread. Uma leitura e
+ * quatro filtros em memória dão o mesmo resultado.
+ *
+ * Quem chama filtra: `deletedAt` separa o que está guardado do que está na
+ * lixeira, exatamente como as funções acima fazem.
+ */
+export async function getCapturasParaGaleria(): Promise<CapturedMedia[]> {
+  return readAll();
+}
+
+/**
  * Tudo de UMA aula, direto pelo índice — sem tocar nas outras.
  *
  * Inclui itens na lixeira: quem chama decide se filtra `deletedAt`, o mesmo

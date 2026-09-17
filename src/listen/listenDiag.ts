@@ -56,6 +56,12 @@ export interface EngineDiag {
   backend: string | null;
   device: string | null;
   numThreads: number | null;
+  /** O nível de otimização de grafo do ONNX Runtime que ESTA sessão usou.
+      Registrado porque é a suspeita principal para a lentidão medida em
+      aparelho, e porque `?listen-graph=` pode trocá-lo num benchmark — sem
+      isto no relatório, não haveria como saber qual dos dois produziu o
+      número que se está lendo. */
+  graphOptimizationLevel: string | null;
   estado: "ocioso" | "carregando" | "pronto" | "falhou";
   cache: "desconhecido" | "frio" | "quente";
 }
@@ -223,6 +229,7 @@ function vazio(): ListenDiagSnapshot {
       backend: null,
       device: null,
       numThreads: null,
+      graphOptimizationLevel: null,
       estado: "ocioso",
       cache: "desconhecido",
     },
@@ -321,6 +328,14 @@ export function iniciarTentativa(): number {
     ...vazio(),
     attempt: estado.attempt + 1,
     downloads: estado.downloads,
+    /*
+     * O motor também sobrevive à tentativa, e por um motivo medido: quando
+     * ele já está carregado, `carregarModelo` não roda de novo (a promessa é
+     * memoizada) e nada reescreve estas informações. Zerá-las fazia um
+     * relatório de segunda execução dizer "modelo: —", justamente na
+     * execução em que a pergunta é "qual modelo produziu este tempo".
+     */
+    engine: estado.engine,
   };
   // O PCM guardado para tocar é da tentativa anterior — e é a maior coisa
   // que este módulo segura. Uma tentativa nova não pode herdar o que a

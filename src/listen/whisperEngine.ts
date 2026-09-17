@@ -226,6 +226,51 @@ function modeloPedido(): string {
   return MODELO_PRIMARIO;
 }
 
+/**
+ * O nível de otimização de grafo do ONNX Runtime — e por que ele é
+ * `"disabled"` por padrão até que uma medição diga o contrário.
+ *
+ * **O que está em jogo.** Desligar a otimização de grafo não é uma escolha
+ * de desempenho qualquer: ela é a passagem que funde operadores e prepara
+ * os pesos quantizados para serem multiplicados de forma eficiente. Sem
+ * ela, um modelo QDQ como estes `_quantized` pode acabar refazendo trabalho
+ * de dequantização a cada passada do decodificador — e um decodificador
+ * autorregressivo faz uma passada POR TOKEN. Se a lentidão medida em
+ * aparelho (dezenas de vezes a duração do áudio) tiver uma causa única,
+ * esta é a candidata mais forte.
+ *
+ * **Por que não basta mudar.** `"disabled"` está aqui por um motivo real e
+ * documentado: com a otimização ligada, a sessão ONNX do `whisper-base`
+ * falhava ao ser CRIADA no backend wasm (`TransposeDQWeightsForMatMulNBits
+ * Missing required scale`). Trocar o padrão às cegas troca lentidão por
+ * transcrição nenhuma, que é estritamente pior.
+ *
+ * **Então o parâmetro.** `?listen-graph=basic` (ou `extended`, `all`) muda
+ * o nível SÓ naquele carregamento, para o benchmark poder responder três
+ * perguntas na ordem certa: a sessão ainda cria? o texto continua correto?
+ * quanto tempo cai? Sem o parâmetro, absolutamente nada muda — o padrão
+ * continua sendo o que está em produção hoje.
+ */
+type NivelDeGrafo = "disabled" | "basic" | "extended" | "all";
+const NIVEL_PADRAO: NivelDeGrafo = "disabled";
+
+function nivelDeGrafoPedido(): NivelDeGrafo {
+  try {
+    const pedido = new URLSearchParams(window.location.search).get("listen-graph");
+    if (
+      pedido === "basic" ||
+      pedido === "extended" ||
+      pedido === "all" ||
+      pedido === "disabled"
+    ) {
+      return pedido;
+    }
+  } catch {
+    // Sem `location`: segue o padrão.
+  }
+  return NIVEL_PADRAO;
+}
+
 // A biblioteca inteira (onnxruntime-web incluso) fica fora do caminho de
 // abertura da câmera: a importação só acontece quando alguém de fato pede uma
 // transcrição, o mesmo desenho do `criarLeitor` do Scanner.
@@ -451,7 +496,7 @@ async function carregarModelo(modelo: string): Promise<Transcritor> {
     // Desliga a otimização de grafo do ONNX Runtime — não é experimento: é o
     // que evita o bug QDQ/MatMulNBits que impedia a sessão de sequer criar
     // (ver o comentário grande acima). Sem isto o modelo não carrega.
-    session_options: { graphOptimizationLevel: "disabled" },
+    session_options: { graphOptimizationLevel: nivelDeGrafoPedido() },
     progress_callback: (
       dado: {
         status: string;

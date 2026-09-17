@@ -100,6 +100,18 @@ function toRecord(id: string, items: CapturedMedia[]): ClassRecord {
   };
 }
 
+/**
+ * As aulas de uma lista de capturas JÁ LIDA — sem tocar no banco.
+ *
+ * `getClasses()`/`getTrashedClasses()` continuam existindo e continuam
+ * sendo o caminho normal. Isto é para quem já tem as capturas na mão e
+ * precisaria ler o armazém de novo só para agrupá-las: a Galeria lê tudo
+ * uma vez e monta seus quatro recortes daí (ver `getCapturasParaGaleria`).
+ */
+export function agruparEmAulas(captures: CapturedMedia[]): ClassRecord[] {
+  return group(captures);
+}
+
 function group(captures: CapturedMedia[]): ClassRecord[] {
   const bySession = new Map<string, CapturedMedia[]>();
   for (const media of captures) {
