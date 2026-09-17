@@ -301,7 +301,7 @@ function distancia(a: string, b: string): number {
  * radical de quatro letras muda a palavra ("passo"/"posso"), e num de nove
  * quase nunca ("orientada"/"orientado").
  */
-export function mesmaPalavra(a: string, b: string): boolean {
+function mesmaPalavra(a: string, b: string): boolean {
   if (a === b) return true;
   // Plural puro, em qualquer tamanho: "api"/"apis" são a mesma palavra, e as
   // regras por comprimento abaixo não alcançam palavras de três letras.
@@ -412,7 +412,7 @@ export interface FraseAnalise {
  *
  * Só para análise. A aba Texto continua mostrando o que o modelo devolveu.
  */
-export function normalizarFrase(texto: string): string {
+function normalizarFrase(texto: string): string {
   const palavras = texto.trim().split(/\s+/).filter(Boolean);
   if (palavras.length < 4) return texto.trim();
   const normal = palavras.map((p) => semAcento(p.replace(/[^\p{L}\p{N}]/gu, "")));
@@ -477,7 +477,7 @@ interface Sintagma {
  * nunca começa nem termina nelas: é o que impede "Necessários para resolver
  * um problema." e "Programação orientada objetos é importante." de existirem.
  */
-export function extrairSintagmas(texto: string, indiceFrase: number): Sintagma[] {
+function extrairSintagmas(texto: string, indiceFrase: number): Sintagma[] {
   const achados: Sintagma[] = [];
   // Vírgula, ponto e travessão fecham um sintagma tanto quanto uma cópula.
   for (const parte of texto.split(/[,;:.!?…—–(){}[\]"]+/)) {
