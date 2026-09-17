@@ -64,14 +64,50 @@ export function LessonPrintSheet({
           .join("  ·  ")}
       </p>
 
-      {record.overview && (
-        <p className="folha-resumo">
-          {overviewWithStatus(
-            record.overview,
-            record.status,
-            record.status ? STATUS_STYLES[record.status].label : null,
+      {/*
+        O resumo REESCRITO à mão manda também aqui.
+
+        Sem isto, a folha era a única superfície do app que ignorava a edição:
+        alguém corrigia o resumo, mandava imprimir, e levava para a prova a
+        versão da máquina — justamente a que tinha acabado de descartar. O que
+        se leva impresso tem de ser o que se leu na tela.
+      */}
+      {record.summaryManual ? (
+        <>
+          {record.summaryManual.overview && (
+            <p className="folha-resumo">{record.summaryManual.overview}</p>
           )}
-        </p>
+          {record.summaryManual.pontosPrincipais.length > 0 && (
+            <>
+              <h2>Pontos principais</h2>
+              <ul>
+                {record.summaryManual.pontosPrincipais.map((p) => (
+                  <li key={p}>{p}</li>
+                ))}
+              </ul>
+            </>
+          )}
+          {record.summaryManual.paraRevisar.length > 0 && (
+            <>
+              <h2>Para revisar</h2>
+              <ul>
+                {record.summaryManual.paraRevisar.map((p) => (
+                  <li key={p}>{p}</li>
+                ))}
+              </ul>
+            </>
+          )}
+        </>
+      ) : (
+        record.overview && (
+          <p className="folha-resumo">
+            {overviewWithStatus(
+              record.overview,
+              record.status,
+              record.status ? STATUS_STYLES[record.status].label : null,
+            )}
+          </p>
+        )
       )}
 
       {record.topics.length > 0 && (

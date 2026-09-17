@@ -240,8 +240,11 @@ export function ClassSummaryTab({
                 Professor destacou
               </h2>
               <ul className="mt-2.5 flex flex-col gap-2.5">
-                {resumo.professorDestacou.map((d) => (
-                  <li key={`${d.atMs}-${d.marca}`} className="flex flex-col gap-1">
+                {/* O índice entra na chave porque um resumo MANUAL não tem
+                    marca de ênfase — todos os destaques carregam a mesma — e
+                    dois no mesmo segundo colidiriam com `atMs + marca`. */}
+                {resumo.professorDestacou.map((d, i) => (
+                  <li key={`${d.atMs}-${i}`} className="flex flex-col gap-1">
                     <span className="text-[13.5px] leading-snug text-ink">
                       {d.text}
                     </span>

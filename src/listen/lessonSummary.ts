@@ -182,10 +182,22 @@ export interface LessonSummary {
   temConteudo: boolean;
 }
 
-const TETO_PALAVRAS = 180;
-const MAX_PONTOS = 7;
-const MAX_DESTAQUES = 4;
-const MAX_REVISAR = 4;
+/*
+ * Os tetos do resumo, apertados de propósito depois que ele passou a
+ * trabalhar em CONCEITOS.
+ *
+ * Com a camada antiga, que escolhia frases, sete pontos eram sete frases
+ * longas e o teto alto tinha alguma função. Agora cada ponto é uma expressão
+ * de duas a quatro palavras, e sete deles não é um resumo — é um índice.
+ * Menos itens, cada um significando algo, é o que se lê na véspera da prova.
+ * As listas ficam abaixo do máximo sempre que a evidência não sustentar mais
+ * (ver o filtro `sustentados`): o teto é um limite, nunca uma cota a
+ * preencher.
+ */
+const TETO_PALAVRAS = 160;
+const MAX_PONTOS = 6;
+const MAX_DESTAQUES = 3;
+const MAX_REVISAR = 3;
 /** Uma frase mais curta que isto não carrega assunto — "tá.", "então.". */
 const MIN_PALAVRAS_FRASE = 4;
 
