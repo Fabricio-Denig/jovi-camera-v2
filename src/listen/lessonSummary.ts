@@ -4,11 +4,16 @@ import {
   PALAVRAS_DE_MARCA,
   semAcento,
   VAZIAS,
-  JANELA_DEPOIS_MS,
   marcaDeEnfaseValida,
   negadoAntes,
 } from "./speechInsights";
 import { MENSAGEM_TRECHO_DEGENERADO } from "./transcriptSanitizer";
+import {
+  comoTitulo,
+  extrairConceitos,
+  type Conceito,
+  type FraseAnalise,
+} from "./conceitos";
 
 /**
  * Palavras genéricas demais para virar assunto ou título — mesmo sendo
@@ -63,6 +68,63 @@ const MARCAS_DE_SINTESE = new Set(
     semAcento,
   ),
 );
+
+/**
+ * A frase contém uma marca de síntese ("resumindo", "em resumo", "os
+ * principais...")?
+ *
+ * Diferente de `ehApenasMarcaDeSintese`: aqui basta CONTER. É o que faz
+ * "Programação orientada objetos é importante e pode cair na prova Resumindo
+ * os principais assuntos são lógicas de programação E programação orientado à
+ * objeto" — uma frase só, porque o reconhecimento não pôs ponto final —
+ * ainda reforçar os conceitos que ela recapitula, mesmo carregando junto uma
+ * marca de ênfase de verdade.
+ */
+function temMarcaDeSintese(texto: string): boolean {
+  const normal = semAcento(texto);
+  for (const m of MARCAS_DE_SINTESE) {
+    const idx = normal.indexOf(m);
+    if (idx !== -1 && !negadoAntes(normal, idx)) return true;
+  }
+  return false;
+}
+
+/**
+ * Corta a frase onde a recapitulação começa.
+ *
+ * O reconhecimento nem sempre põe ponto final, e no teste físico três
+ * sentenças viraram uma linha só: "Programação orientada objetos é importante
+ * e pode cair na prova Resumindo os principais assuntos são lógicas de
+ * programação E programação orientado à objeto". Tratada como uma frase,
+ * TUDO nela herdava a marca de ênfase — e "lógica de programação", que o
+ * professor só recapitulou, aparecia em "Professor destacou" ao lado do
+ * conceito que ele de fato destacou.
+ *
+ * O corte na marca de síntese separa as duas metades pelo que elas são: o que
+ * vem antes é ênfase de verdade; o que vem depois é recapitulação, que dá
+ * PESO aos conceitos citados sem transformá-los em destaques.
+ */
+function partirNaSintese(texto: string): { texto: string; sintese: boolean }[] {
+  const normal = semAcento(texto);
+  let corte = -1;
+  for (const m of MARCAS_DE_SINTESE) {
+    const idx = normal.indexOf(m);
+    if (idx > 0 && !negadoAntes(normal, idx) && (corte === -1 || idx < corte)) {
+      corte = idx;
+    }
+  }
+  if (corte === -1) {
+    return [{ texto, sintese: temMarcaDeSintese(texto) }];
+  }
+  // `semAcento` preserva o comprimento (troca letra por letra), então o
+  // índice achado no normalizado vale no original.
+  const antes = texto.slice(0, corte).trim();
+  const depois = texto.slice(corte).trim();
+  const partes: { texto: string; sintese: boolean }[] = [];
+  if (antes) partes.push({ texto: antes, sintese: false });
+  if (depois) partes.push({ texto: depois, sintese: true });
+  return partes;
+}
 
 /** Uma frase cuja ÚNICA marca de ênfase é uma marca de síntese — não deve
     virar uma linha isolada em "Professor destacou". */
@@ -122,23 +184,17 @@ function palavras(t: string): number {
   return t.trim().split(/\s+/).filter(Boolean).length;
 }
 
+/**
+ * Fecha a linha com ponto final. A caixa da primeira letra é decidida por
+ * `comoTitulo` (`conceitos.ts`), que sabe preservar `useState` e `PIB` — por
+ * isso este daqui não mexe mais nela.
+ */
 function pontuar(t: string): string {
-  let s = t.trim().replace(/\s+/g, " ");
+  const s = t.trim().replace(/\s+/g, " ");
   if (!s) return s;
-  s = s.charAt(0).toUpperCase() + s.slice(1);
-  if (!/[.!?…]$/.test(s)) s += ".";
-  return s;
+  return /[.!?…]$/.test(s) ? s : s + ".";
 }
 
-/** Uma frase, curta o bastante para entrar dentro de outra oração. */
-function comoTopico(texto: string, maxPalavras = 14): string {
-  const t = texto.trim().replace(/[.!?…]+$/, "");
-  const palavras = t.split(/\s+/);
-  const curta = palavras.length > maxPalavras
-    ? palavras.slice(0, maxPalavras).join(" ") + "…"
-    : t;
-  return curta.charAt(0).toLowerCase() + curta.slice(1);
-}
 
 interface Frase {
   texto: string;
@@ -224,415 +280,19 @@ function contarTermosLocal(
   return contagem;
 }
 
-/**
- * Os termos com peso real numa frase, do mais forte ao mais fraco — mas
- * primeiro descartando os que aparecem em METADE OU MAIS das frases
- * candidatas.
- *
- * `peso` aqui já é, na prática, uma contagem por-frase (cada candidata soma
- * no máximo 1 a cada termo — ver `contarTermosLocal`), então um termo com
- * peso alto não é "muito repetido dentro de uma frase", é "aparece em muitas
- * frases diferentes" — o assunto da AULA INTEIRA, não de um ponto específico
- * dela. Numa aula curta sobre futebol, "Corinthians" e "time" aparecem em
- * quase toda frase; sem este corte, TODA frase tem esses dois como os mais
- * fortes, e a deduplicação por conceito colapsa a saudação inicial com a
- * notícia real da escalação só porque as duas mencionam o time. Cortar o que
- * é comum demais deixa emergir o que cada frase tem de ESPECÍFICO.
- *
- * Cai para a lista sem corte quando o corte zeraria tudo — uma frase que só
- * fala do assunto geral da aula ainda precisa de uma assinatura.
- */
-function termosFortes(
-  texto: string,
-  peso: Map<string, number>,
-  totalCandidatos: number,
-  extraExcluir?: Set<string>,
-): string[] {
-  const vistos = new Map<string, number>();
-  for (const bruto of semAcento(texto).split(/[^\p{L}\p{N}]+/u)) {
-    if (
-      bruto.length < 3 ||
-      VAZIAS.has(bruto) ||
-      (extraExcluir && extraExcluir.has(bruto)) ||
-      vistos.has(bruto)
-    )
-      continue;
-    const w = peso.get(bruto) ?? 0;
-    if (w > 0) vistos.set(bruto, w);
-  }
-  const todos = [...vistos.entries()].sort((a, b) => b[1] - a[1]);
-  const limite = totalCandidatos * 0.5;
-  const especificos = todos.filter(([, w]) => w < limite || totalCandidatos <= 2);
-  return (especificos.length > 0 ? especificos : todos).map(([t]) => t);
-}
 
-function termoDominante(
-  texto: string,
-  peso: Map<string, number>,
-  totalCandidatos: number,
-  extraExcluir?: Set<string>,
-): string | null {
-  return termosFortes(texto, peso, totalCandidatos, extraExcluir)[0] ?? null;
-}
 
 /** Uma frase mais curta que isto já É um conceito — comprimi-la mais perderia
     naturalidade ("Multiplicação de matrizes" lê melhor que "multiplicação
     matrizes"). Acima disto, só os termos mais fortes valem a pena mostrar. */
-const MAX_PALAVRAS_CONCEITO_CURTO = 6;
 
-/**
- * O CONCEITO de uma frase — não a frase inteira.
- *
- * Achado com um teste físico real: o resumo estava embutindo frases INTEIRAS
- * (às vezes quebradas pelo reconhecimento — "Matriz são estruturas
- * organizadas em igrejas e colunas") direto no texto final. Um resumo lido
- * como estudo precisa de CONCEITOS ("Organização em linhas e colunas"), não
- * da transcrição bruta reaproveitada.
- *
- * Duas saídas, conforme o tamanho: uma frase já curta (<=6 palavras, como
- * "Multiplicação de matrizes.") é o próprio conceito — mostrar como está
- * lê melhor que picar em termos soltos. Uma frase mais longa vira os DOIS
- * termos mais fortes que ela carrega, na ordem em que aparecem no texto
- * (não por peso) — "matriz identidade" lê melhor que "identidade matriz". Os
- * pesos já favorecem termos repetidos em VÁRIAS frases da aula (`peso` é uma
- * contagem por-frase agregada), então um erro isolado do reconhecimento
- * ("igrejas" por "linhas", dito uma vez só) tende a perder para o termo
- * certo, dito várias vezes — sem precisar de um corretor ortográfico.
- */
-/** A janela, em palavras, ao redor da palavra mais forte de uma frase longa —
-    menor que `MAX_PALAVRAS_CONCEITO_CURTO` de propósito: uma janela grande
-    o bastante para alcançar um erro do reconhecimento perto da palavra forte
-    ("Matrizes são estruturas organizadas em IGREJAS e colunas" — o erro é a
-    sexta palavra) reintroduziria exatamente o problema que isto existe para
-    evitar. */
-const LARGURA_JANELA_CONCEITO = 5;
 
-/**
- * O CONCEITO de uma frase — um TRECHO LITERAL dela, nunca palavras soltas
- * remontadas.
- *
- * Achado com um teste real (`qa-fala.mjs`, a verificação anti-alucinação já
- * existente): uma primeira versão desta função pegava as duas palavras mais
- * fortes da frase e as juntava por conta própria ("React" de uma frase,
- * "componente" de outra) — o resultado não existia em lugar nenhum da
- * transcrição. Este produto inteiro existe para nunca inventar uma frase
- * plausível que ninguém disse (`gerarResumoGlobal`, no topo do arquivo); um
- * "conceito" mais legível que viola essa regra é pior que a frase quebrada
- * que substituiu.
- *
- * Duas saídas, sempre um TRECHO CONTÍGUO da frase original: já curta e
- * majoritariamente conteúdo real (<=6 palavras, densidade >= 0.6, como
- * "Multiplicação de matrizes.") sai como está — picar mais só pioraria a
- * leitura. Mais longa, ou rala (uma saudação como "Hoje falaremos sobre
- * matrizes."), vira uma JANELA de até `LARGURA_JANELA_CONCEITO` palavras
- * começando na palavra mais forte da frase — sem o corte de "comum demais"
- * de `termosFortes` (aqui o objetivo é o oposto: o termo mais repetido na
- * aula, "matrizes" numa aula sobre matrizes, é exatamente o que deve
- * aparecer), e sem olhar para trás — a palavra forte quase sempre abre o que
- * vale a pena mostrar, e olhar para trás só arriscaria pegar um preenchimento
- * ("hoje", "então") sem necessidade.
- */
-function fraseDeConceito(
-  texto: string,
-  peso: Map<string, number>,
-  _totalCandidatos: number,
-  extraExcluir?: Set<string>,
-): string | null {
-  const semPontuacao = texto.trim().replace(/[.!?…]+$/, "");
-  const palavras = semPontuacao.split(/\s+/);
-  const curta = palavras.length <= MAX_PALAVRAS_CONCEITO_CURTO;
-  if (curta && densidadeDeConteudo(texto, peso) >= 0.6) {
-    return semPontuacao;
-  }
 
-  const normalizadas = palavras.map(semAcento);
-  let melhorIndice = -1;
-  let melhorPeso = 0;
-  for (let i = 0; i < normalizadas.length; i++) {
-    const p = normalizadas[i];
-    if (p.length < 3 || VAZIAS.has(p) || (extraExcluir && extraExcluir.has(p))) continue;
-    const w = peso.get(p) ?? 0;
-    if (w > melhorPeso) {
-      melhorPeso = w;
-      melhorIndice = i;
-    }
-  }
-  // Nenhuma palavra com peso real. Com `extraExcluir` (o caso de uma frase
-  // de destaque): a frase inteira é só a marca de ênfase e preenchimento —
-  // não sobra conceito nenhum, e mostrar um prefixo cheio de "prestem
-  // atenção..." seria o mesmo defeito que `extraExcluir` existe para evitar.
-  // Sem `extraExcluir` (o caso geral): mantém o prefixo curto — o mesmo
-  // corte que `comoTopico` já usa em outro lugar do arquivo.
-  if (melhorIndice === -1) {
-    if (extraExcluir) return null;
-    return curta
-      ? semPontuacao
-      : palavras.slice(0, MAX_PALAVRAS_CONCEITO_CURTO).join(" ") + "…";
-  }
 
-  /*
-   * A janela pode olhar até DUAS palavras para TRÁS do âncora — o bastante
-   * para recuperar um modificador logo antes dele ("multiplicação DE
-   * matrizes", com "matrizes" como âncora) sem arriscar puxar a saudação
-   * inteira. Em qualquer direção, uma palavra de `extraExcluir` (a própria
-   * expressão de ênfase, nos destaques) para a janela ali — o que vem depois
-   * dela normalmente já não é sobre o conceito, é o resto do aviso.
-   */
-  let inicio = melhorIndice;
-  while (inicio > 0 && melhorIndice - inicio < 2) {
-    if (extraExcluir && extraExcluir.has(normalizadas[inicio - 1])) break;
-    inicio--;
-  }
-  let fim = melhorIndice + 1;
-  while (fim < palavras.length && fim - inicio < LARGURA_JANELA_CONCEITO) {
-    if (extraExcluir && extraExcluir.has(normalizadas[fim])) break;
-    fim++;
-  }
 
-  const janela = [...palavras.slice(inicio, fim)];
-  // Não começa nem termina numa palavra vazia solta ("de matrizes são" /
-  // "organizados em") — apara as pontas até sobrar conteúdo de verdade, sem
-  // nunca adicionar nada que não estivesse lá.
-  while (janela.length > 1 && VAZIAS.has(semAcento(janela[0]))) {
-    janela.shift();
-  }
-  while (janela.length > 1 && VAZIAS.has(semAcento(janela[janela.length - 1]))) {
-    janela.pop();
-  }
-  return janela.join(" ");
-}
 
-/** Abaixo disto, uma frase falada tem palavra(s) reais demais espalhadas em
- * ruído demais para valer como ponto principal por conta própria. */
-const DENSIDADE_MINIMA_FALA = 0.4;
 
-/**
- * Quanto da frase é palavra com peso real — não só "tem alguma palavra
- * forte" (`termoDominante`), mas "a MAIORIA da frase é sobre isso".
- *
- * Existe para o caso do reconhecimento quebrado que ainda acerta uma ou duas
- * palavras reais no meio do ruído — "Carregar na prova e necessário do
- * Tudo." tem "prova" (uma palavra real), mas é ruído demais em volta para
- * merecer virar um ponto principal com essas palavras exatas. Achado com um
- * teste físico real: essa frase quebrada sobreviveu ao corte de
- * `termoDominante` sozinho e virou ponto principal.
- */
-function densidadeDeConteudo(texto: string, peso: Map<string, number>): number {
-  /*
-   * As palavras de ênfase saem do DENOMINADOR — não contam nem como conteúdo
-   * nem contra ele.
-   *
-   * Desde que `PALAVRAS_DE_MARCA` deixou de pesar como termo (ver lá o
-   * porquê), uma frase como "Programação orientada a objetos é importante e
-   * pode cair na prova" passou a ser punida duas vezes pela mesma coisa:
-   * "importante", "cair" e "prova" não contam como conteúdo E ainda incham o
-   * total, derrubando a densidade abaixo do mínimo. Medido com áudio real:
-   * essa frase — a mais explícita da aula sobre o assunto — saía da lista de
-   * pontos principais. A pergunta certa é "entre as palavras que PODERIAM
-   * carregar assunto, quantas carregam?", e uma marca de ênfase nunca
-   * poderia. Só pode aumentar a densidade de quem tem marca; nenhuma outra
-   * frase muda.
-   */
-  const tokens = semAcento(texto)
-    .split(/[^\p{L}\p{N}]+/u)
-    .filter((t) => t && !PALAVRAS_DE_MARCA.has(t));
-  if (tokens.length === 0) return 0;
-  const vistas = new Set<string>();
-  let reais = 0;
-  for (const t of tokens) {
-    if (t.length < 3 || VAZIAS.has(t) || vistas.has(t)) continue;
-    vistas.add(t);
-    if ((peso.get(t) ?? 0) > 0) reais += 1;
-  }
-  return reais / tokens.length;
-}
 
-/**
- * Uma frase de conteúdo perto o bastante de um destaque para explicar o que
- * foi destacado — a frase marcada em si não conta ("Prestem atenção porque
- * isso cai na prova." não é conteúdo, é um aviso), nem outra frase também
- * marcada (dois avisos seguidos não se explicam um ao outro).
- *
- * A mais PRÓXIMA no tempo vence, dentro da mesma janela usada para associar
- * fala a um momento visual (`JANELA_DEPOIS_MS`) — perto o bastante para ser
- * "sobre a mesma coisa", longe o bastante para cobrir "o professor fala do
- * assunto e só depois avisa que cai na prova".
- */
-function vizinhoDeConteudo(
-  destaque: Candidato,
-  candidatos: Candidato[],
-  janelaMs: number,
-  peso: Map<string, number>,
-): Candidato | null {
-  if (destaque.atMs === null) return null;
-  let melhor: Candidato | null = null;
-  let melhorDist = Infinity;
-  for (const c of candidatos) {
-    const ehOMesmo = c.atMs === destaque.atMs && c.texto === destaque.texto;
-    if (ehOMesmo || c.origem !== "fala" || c.marcado || c.termo === null) continue;
-    if (densidadeDeConteudo(c.texto, peso) < DENSIDADE_MINIMA_FALA) continue;
-    if (c.atMs === null) continue;
-    const dist = Math.abs(c.atMs - destaque.atMs);
-    if (dist > janelaMs || dist >= melhorDist) continue;
-    melhorDist = dist;
-    melhor = c;
-  }
-  return melhor;
-}
-
-/**
- * A chave de agrupamento para deduplicação — os DOIS termos mais fortes (e
- * mais específicos, ver `termosFortes`), não só um.
- *
- * Um único termo agrupa demais: mesmo já descartando os termos comuns
- * demais, uma segunda frase com o mesmo termo específico isolado ainda
- * colidiria à toa. Com dois termos, a chave vira um PAR
- * (`escalacao+time` vs `carregar+prova`), e só frases realmente equivalentes
- * colidem.
- */
-function assinaturaDoGrupo(
-  texto: string,
-  peso: Map<string, number>,
-  totalCandidatos: number,
-): string | null {
-  const fortes = termosFortes(texto, peso, totalCandidatos).slice(0, 2);
-  if (fortes.length === 0) return null;
-  return [...fortes].sort().join("+");
-}
-
-/**
- * O assunto AMPLO da frase — o termo de maior peso SEM o corte de "comum
- * demais" que `termosFortes` aplica.
- *
- * `termo`/`grupo` (acima) existem para não FUNDIR frases diferentes que só
- * compartilham o nome do assunto geral da aula — e para isso, precisam
- * ignorar esse nome. Mas por causa disso, eles não servem para perguntar "de
- * que assunto amplo esta frase é?": numa aula sobre fotossíntese,
- * "fotossíntese" é excluído de `termo` por aparecer demais, e cada frase
- * sobre fotossíntese acaba com um `termo` diferente (a palavra secundária
- * de cada uma) — nenhum sinal de que elas são todas do MESMO assunto amplo.
- * `topicoAmplo` é esse sinal, usado só para diversidade (`diversificarPorTermo`),
- * nunca para deduplicar.
- */
-function topicoAmplo(texto: string, peso: Map<string, number>): string | null {
-  const vistos = new Map<string, number>();
-  for (const bruto of semAcento(texto).split(/[^\p{L}\p{N}]+/u)) {
-    if (bruto.length < 3 || VAZIAS.has(bruto) || vistos.has(bruto)) continue;
-    const w = peso.get(bruto) ?? 0;
-    if (w > 0) vistos.set(bruto, w);
-  }
-  if (vistos.size === 0) return null;
-  const maiorPeso = Math.max(...vistos.values());
-  /*
-   * Empate resolvido em ordem alfabética, não pela ordem em que a palavra
-   * aparece na frase. Numa aula sobre uma coisa só ("escalação do time"),
-   * "escalação" e "time" repetem quase igualmente — um empate genuíno.
-   * Escolher "quem apareceu primeiro NA FRASE" faz o vencedor alternar
-   * conforme a ordem das palavras em cada paráfrase diferente, e "escalação"
-   * e "time" viravam DOIS assuntos amplos em vez de um — cada frase
-   * escapando do teto de diversidade por sua conta. Ordem alfabética é
-   * arbitrária, mas é a MESMA em toda frase, o que é o único requisito aqui.
-   */
-  return [...vistos.entries()]
-    .filter(([, w]) => w === maiorPeso)
-    .map(([t]) => t)
-    .sort()[0];
-}
-
-interface Candidato extends Frase {
-  pontos: number;
-  /** O termo mais forte sozinho — usado para "isto já apareceu nos pontos?". */
-  termo: string | null;
-  /** O par de termos mais fortes — usado para agrupar/deduplicar (mais preciso). */
-  grupo: string | null;
-  /** O assunto amplo, sem o corte de "comum demais" — usado só para diversidade. */
-  amplo: string | null;
-}
-
-function pontuarFrase(
-  f: Frase,
-  peso: Map<string, number>,
-  momentosMs: number[],
-  bonusSintese?: Map<string, number>,
-): number {
-  const palavras = semAcento(f.texto).split(/[^\p{L}\p{N}]+/u);
-  let pontos = 0;
-  const vistas = new Set<string>();
-  for (const p of palavras) {
-    if (p.length < 3 || vistas.has(p)) continue;
-    vistas.add(p);
-    pontos += peso.get(p) ?? 0;
-    // Só para frases FALADAS: o bônus de "resumindo, A, B e C" é sobre o
-    // professor recapitulando o que foi DITO — misturado no peso
-    // compartilhado, ele também empurrava uma linha do QUADRO que só por
-    // acaso compartilha uma palavra com a recapitulação (achado com a
-    // regressão `qa-fala.mjs`: um trecho de código do quadro, "const
-    // [valor, setValor] = useState(0)", virou "ponto principal" só porque
-    // "useState" também apareceu na frase "resumindo..." falada). Aplicado
-    // aqui, na pontuação da frase, e não no mapa de peso compartilhado.
-    if (f.origem === "fala") pontos += bonusSintese?.get(p) ?? 0;
-  }
-  pontos = pontos / Math.sqrt(Math.max(4, palavras.length));
-  if (f.atMs !== null && momentosMs.some((m) => Math.abs(m - f.atMs!) <= JANELA_DEPOIS_MS)) {
-    pontos *= 1.35;
-  }
-  if (f.marcado) pontos *= 1.6;
-  return pontos;
-}
-
-/** Agrupa pelo par de termos mais fortes, mantém só a de maior pontuação por grupo. */
-function deduplicarPorConceito(candidatos: Candidato[]): Candidato[] {
-  const porGrupo = new Map<string, Candidato>();
-  const semGrupo: Candidato[] = [];
-  for (const c of candidatos) {
-    if (!c.grupo) {
-      semGrupo.push(c);
-      continue;
-    }
-    const atual = porGrupo.get(c.grupo);
-    if (!atual || c.pontos > atual.pontos) porGrupo.set(c.grupo, c);
-  }
-  return [...porGrupo.values(), ...semGrupo];
-}
-
-/**
- * Limita quantos pontos podem vir do MESMO assunto amplo — proporção, não
- * só pontuação.
- *
- * Sem isto, o assunto que a aula mais repetiu (o que tem mais frases DIFERENTES
- * falando dele) preenche sozinho todos os sete espaços, e um assunto tratado
- * em só duas ou três frases nunca aparece — mesmo sendo um assunto genuíno
- * da aula, só que mais compacto. Uma aula sobre fotossíntese, respiração
- * celular e ciclo do carbono não pode virar um resumo só sobre fotossíntese
- * porque o professor falou mais tempo sobre ela. Usa `amplo` (não `termo`,
- * que já ignora o assunto comum demais de propósito — ver `topicoAmplo`),
- * porque aqui o objetivo é o oposto: reconhecer que várias frases são do
- * MESMO assunto amplo, não fingir que não são.
- */
-function diversificarPorTermo(candidatos: Candidato[], max: number): Candidato[] {
-  const maxPorTermo = Math.max(2, Math.ceil(max * 0.4));
-  const porTermo = new Map<string, number>();
-  const selecionados: Candidato[] = [];
-  for (const c of candidatos) {
-    if (selecionados.length >= max) break;
-    // Sem chave (nenhuma palavra com peso real): não compete por espaço nenhum
-    // — cada uma destas é seu próprio caso, e sempre passa se houver vaga.
-    const chave = c.amplo;
-    const usados = chave ? (porTermo.get(chave) ?? 0) : 0;
-    if (chave && usados >= maxPorTermo) continue;
-    selecionados.push(c);
-    if (chave) porTermo.set(chave, usados + 1);
-  }
-  /*
-   * De propósito, SEM completar as vagas que sobrarem com mais frases do
-   * mesmo assunto que já bateu o teto: uma aula sobre uma coisa só (o teste
-   * de repetição — quinze frases, todas "escalação") tem 7 vagas mas só 3
-   * usadas, e é isso mesmo — o assunto foi dito uma vez, não precisa de sete
-   * variações da mesma frase para preencher uma lista. Menos pontos, mas
-   * cada um significando algo, é melhor que uma lista cheia por número.
-   */
-  return selecionados;
-}
 
 function respeitarTeto(frases: string[], teto = TETO_PALAVRAS): string[] {
   const escolhidas: string[] = [];
@@ -646,169 +306,9 @@ function respeitarTeto(frases: string[], teto = TETO_PALAVRAS): string[] {
   return escolhidas;
 }
 
-/**
- * Reordena os pontos principais para servir de ABERTURA do resumo,
- * preferindo os mais curtos entre os bem pontuados.
- *
- * `pontosPrincipais` (a lista de bullets) usa a ordem por pontuação direto —
- * ali uma frase mais longa não é um problema, cada uma é sua própria linha.
- * Mas encaixada DENTRO de uma frase-modelo ("A aula abordou X, com destaque
- * para Y"), uma frase de vinte e quatro palavras (uma saudação cheia de
- * substantivos, por exemplo) lê mal — mesmo pontuando bem. Entre os quatro
- * primeiros por pontuação, prioriza os que cabem inteiros numa oração.
- */
-function ordenarParaAbertura(principais: Candidato[], maxPalavras = 14): Candidato[] {
-  const pool = principais.slice(0, 4);
-  const curtos = pool.filter((c) => c.texto.split(/\s+/).length <= maxPalavras);
-  if (curtos.length < 2) return principais;
-  const restoDoPool = pool.filter((c) => !curtos.includes(c));
-  const restoDaLista = principais.slice(4);
-  return [...curtos, ...restoDoPool, ...restoDaLista];
-}
 
-/**
- * A síntese da aula em 2-5 frases — o que a aula FOI, não fatos sobre o
- * sistema que a guardou. Templada: a estrutura da frase é escrita aqui, mas
- * todo substantivo dentro dela veio de uma frase real, dita ou lida.
- */
-/**
- * Palavras que só aparecem em português como verbo conjugado — nunca como
- * substantivo, pronome ou preposição comuns. `semAcento` embaralharia "é"
- * (verbo) com "e" (conjunção "e"), então "é" é comparado à parte, sem tirar
- * o acento.
- */
-const VERBOS_SEM_AMBIGUIDADE = new Set(
-  ["sao", "foi", "era", "eram", "seria", "seriam", "sera", "serao"].map(semAcento),
-);
 
-/**
- * Um conceito com VERBO PRÓPRIO — "matrizes são estruturas organizadas",
- * "falaremos sobre matrizes" — em vez de uma frase nominal — "multiplicação
- * de matrizes", "matriz identidade".
- *
- * Existe só para `montarVisaoGeral`: um conceito com verbo próprio QUEBRA a
- * gramática quando colado como complemento de outro verbo — "com destaque
- * para matrizes são estruturas organizadas" tem dois verbos disputando a
- * mesma oração. Achado com um teste real: `fraseDeConceito` (a janela em
- * torno do termo mais forte, ver o comentário lá) pode incluir um verbo que
- * estava no meio do caminho — ela nunca INVENTA palavra nenhuma, mas nem
- * toda janela literal vira uma frase nominal limpa. `pontosPrincipais` e
- * "Para revisar" não têm este problema (cada linha é a própria sentença,
- * nunca o complemento de outra), então não usam este corte.
- */
-function pareceClausula(texto: string): boolean {
-  for (const bruto of texto.split(/\s+/)) {
-    const semPontuacao = bruto.replace(/[.,!?;:…]+$/, "");
-    if (semPontuacao === "é" || semPontuacao === "É") return true;
-    const normal = semAcento(semPontuacao);
-    if (VERBOS_SEM_AMBIGUIDADE.has(normal)) return true;
-    // "-mos" é quase sempre 1ª pessoa do plural conjugada (falaremos,
-    // veremos, abordamos) — substantivo português raramente termina assim.
-    if (normal.length >= 5 && normal.endsWith("mos")) return true;
-  }
-  return false;
-}
 
-function montarVisaoGeral(
-  principaisPorPontos: Candidato[],
-  destaques: Candidato[],
-  temFala: boolean,
-  temQuadro: boolean,
-  teto: number,
-  peso: Map<string, number>,
-  totalCandidatos: number,
-): string {
-  if (principaisPorPontos.length === 0) return "";
-  const principais = ordenarParaAbertura(principaisPorPontos);
-  // O CONCEITO da frase, não a frase inteira — ver `fraseDeConceito`. Cai
-  // para a frase original só se nada sobrar (não deveria acontecer, já que
-  // estes candidatos exigem `termo !== null` — ver `candidatosComConteudo`).
-  const conceito = (c: Candidato) =>
-    comoTopico(fraseDeConceito(c.texto, peso, totalCandidatos) ?? c.texto);
-
-  const frases: string[] = [];
-
-  /*
-   * Só conceitos SEM verbo próprio entram nos conectores da abertura ("A
-   * aula abordou X, com destaque para Y" / "Também foi mencionado Z") — os
-   * dois esperam X/Y/Z como complemento nominal, e um conceito com verbo
-   * próprio quebra a frase ao ser colado ali (ver `pareceClausula`). Menos
-   * texto correto vale mais que mais texto quebrado.
-   */
-  const comConceito = principais.map((c) => ({ texto: conceito(c) }));
-
-  /*
-   * O conceito MAIS FORTE da aula, quando tem verbo próprio, não cabe como
-   * complemento de "A aula abordou ..." — mas simplesmente descartá-lo, que
-   * era o que acontecia, sai pior. Medido com áudio real: numa aula sobre
-   * matrizes, a frase mais forte era "Matrizes são estruturas organizadas"
-   * (verbo próprio, "são"), o filtro a tirava dos conectores, e o resumo
-   * abria com "A aula abordou atriz identidade" — deixando de fora
-   * justamente a palavra que a aula repetiu mais vezes.
-   *
-   * Agora ela abre o resumo como SENTENÇA PRÓPRIA (que é o que ela é), e os
-   * conectores seguem com o resto. Continua sem inventar nada: é a mesma
-   * frase literal, só não empurrada para dentro de outra oração.
-   */
-  const abrePorClausula =
-    comConceito.length > 0 && pareceClausula(comConceito[0].texto);
-  if (abrePorClausula) frases.push(pontuar(comConceito[0].texto));
-
-  const paraConectores = comConceito
-    .slice(abrePorClausula ? 1 : 0)
-    .filter(({ texto }) => !pareceClausula(texto));
-  const [primeiro, segundo, ...resto] = paraConectores;
-
-  if (primeiro) {
-    frases.push(
-      segundo
-        ? `A aula abordou ${primeiro.texto}, com destaque para ${segundo.texto}.`
-        : `A aula abordou ${primeiro.texto}.`,
-    );
-
-    const maisDois = resto.slice(0, 2);
-    if (maisDois.length === 1) {
-      frases.push(`Também foi mencionado ${maisDois[0].texto}.`);
-    } else if (maisDois.length === 2) {
-      frases.push(
-        `Também foram mencionados ${maisDois[0].texto} e ${maisDois[1].texto}.`,
-      );
-    }
-  } else if (!abrePorClausula) {
-    // Nenhum conceito sem verbo próprio sobrou — a única evidência que
-    // existe tem verbo próprio, então vira UMA sentença curta por conta
-    // própria, nunca o complemento de outra: "Matrizes são estruturas
-    // organizadas.", não "A aula abordou matrizes são estruturas
-    // organizadas.". (`abrePorClausula` já empurrou essa mesma frase acima —
-    // sem esta guarda ela sairia duas vezes no mesmo resumo.)
-    frases.push(pontuar(comConceito[0].texto));
-  }
-
-  if (destaques.length > 0) {
-    const falaDeProva = destaques.some((d) => /prova|avalia|teste/.test(semAcento(d.texto)));
-    frases.push(
-      falaDeProva
-        ? "Durante a explicação, o professor reforçou que parte do conteúdo pode ser cobrada em avaliação."
-        : destaques.length === 1
-          ? "O professor marcou um trecho como especialmente importante."
-          : `O professor marcou ${destaques.length} trechos como especialmente importantes.`,
-    );
-  }
-
-  // Reservado à parte, e SEMPRE incluído: é a frase mais honesta do resumo —
-  // dizer que uma das duas fontes falhou — e não pode ser a primeira coisa
-  // cortada só porque o teto de palavras já estava cheio com outras frases.
-  const disclaimer = !temQuadro && temFala
-    ? "O quadro não deu para ler direito, mas o que foi dito sustenta este resumo."
-    : !temFala && temQuadro
-      ? "O áudio não deu para entender direito, mas o quadro sustenta este resumo."
-      : null;
-  const tetoParaOResto = disclaimer ? Math.max(10, teto - palavras(disclaimer)) : teto;
-
-  const escolhidas = respeitarTeto(frases, tetoParaOResto);
-  if (disclaimer) escolhidas.push(disclaimer);
-  return escolhidas.join(" ");
-}
 
 export function gerarResumoGlobal({
   transcript,
@@ -820,24 +320,105 @@ export function gerarResumoGlobal({
   ocrLinhas: string[];
   momentosMs: number[];
 }): LessonSummary {
-  const frasesFalaTodas = frasesDaFala(transcript);
-  const frasesFala = frasesFalaTodas.filter(
-    (f) => f.texto.split(/\s+/).length >= MIN_PALAVRAS_FRASE,
-  );
-  const frasesOcr: Frase[] = [...new Set(ocrLinhas)]
-    .filter((l) => l.trim().split(/\s+/).length >= 2)
-    .map((texto) => ({ texto: texto.trim(), atMs: null, origem: "quadro" as const, marcado: false }));
-
-  const temFala = frasesFala.length > 0;
-  const temQuadro = frasesOcr.length > 0;
+  void momentosMs;
 
   /*
-   * O teto do resumo nunca pode passar do tamanho da FONTE — o resumo tem
-   * que ser mais curto que a transcrição, sempre, mesmo numa aula de menos
-   * de um minuto onde não sobra muito para comprimir. `TETO_PALAVRAS` (180)
-   * é o teto ABSOLUTO; para aulas curtas, o teto de verdade é o que garante
-   * compressão real.
+   * As frases da aula, das duas fontes, já marcadas com o que a camada de
+   * conceitos precisa saber de cada uma: se tem marca de ênfase válida
+   * (negação já descontada, ver `marcaDeEnfaseValida`) e se é uma frase de
+   * SÍNTESE ("resumindo, os principais assuntos são...").
+   *
+   * A distinção entre as duas conserta um defeito real do teste físico:
+   * "Resumindo os principais assuntos são lógicas de programação E
+   * programação orientado à objeto" virava um bullet inteiro em "Professor
+   * destacou". Ela não é um destaque — é o professor apontando para OUTROS
+   * conceitos. Entra como PESO neles, nunca como linha própria.
    */
+  const frasesFala: FraseAnalise[] = frasesDaFala(transcript).flatMap((f) =>
+    partirNaSintese(f.texto).map((parte) => ({
+      texto: parte.texto,
+      atMs: f.atMs,
+      origem: "fala" as const,
+      // A ênfase da frase só vale para o pedaço ANTES da recapitulação — ver
+      // `partirNaSintese`.
+      enfatizada:
+        !parte.sintese && f.marcado && !ehApenasMarcaDeSintese(parte.texto),
+      sintese: parte.sintese,
+    })),
+  );
+  const frasesQuadro: FraseAnalise[] = [...new Set(ocrLinhas)]
+    .filter((l) => l.trim().split(/\s+/).length >= 2)
+    .map((texto) => ({
+      texto: texto.trim(),
+      atMs: null,
+      origem: "quadro" as const,
+      enfatizada: false,
+      sintese: false,
+    }));
+
+  const temFala = frasesFala.length > 0;
+  const temQuadro = frasesQuadro.length > 0;
+  const vazio: LessonSummary = {
+    overview: "",
+    pontosPrincipais: [],
+    professorDestacou: [],
+    paraRevisar: [],
+    temConteudo: false,
+  };
+  if (!temFala && !temQuadro) return vazio;
+
+  const conceitos = extrairConceitos([...frasesFala, ...frasesQuadro]);
+  if (conceitos.length === 0) return vazio;
+
+  /*
+   * CONSERVADORISMO, como regra e não como exceção.
+   *
+   * Um conceito de UMA palavra dita UMA vez não é assunto de aula — é uma
+   * palavra que passou por ela. Exigir repetição, ou tamanho, ou uma marca do
+   * professor é o que troca "sete bullets ruins" por "três bons". Quando nada
+   * passa no filtro, o resumo fica com o melhor único em vez de encher a
+   * lista com o que sobrou.
+   */
+  const sustentados = conceitos.filter(
+    (c) => c.ocorrencias >= 2 || c.tamanho >= 2 || c.enfatizado || c.naSintese,
+  );
+  const base = sustentados.length > 0 ? sustentados : conceitos.slice(0, 1);
+
+  const pontosPrincipais = base
+    .slice(0, MAX_PONTOS)
+    .map((c) => pontuar(comoTitulo(c.canonico)));
+
+  /*
+   * "Professor destacou" mostra o CONCEITO, não a frase.
+   *
+   * No teste físico saía a sentença inteira ("Programação orientada objetos é
+   * importante e pode cair na prova"), que mistura o aviso com o assunto. O
+   * que o estudante precisa ver é o assunto — o aviso já está dito no nome da
+   * seção.
+   */
+  const professorDestacou = base
+    .filter((c) => c.enfatizado)
+    .slice(0, MAX_DESTAQUES)
+    .map((c) => ({
+      atMs: c.atMsEnfase ?? c.atMs ?? 0,
+      text: comoTitulo(c.canonico),
+      marca: c.chave,
+    }));
+
+  /*
+   * "Para revisar": o que o professor apontou — por ênfase OU por
+   * recapitulação — e que merece uma segunda passada antes da prova.
+   *
+   * Repetir aqui um conceito que já está em "Professor destacou" é de
+   * propósito: as duas seções respondem perguntas diferentes ("o que ele
+   * marcou na aula" e "o que eu estudo hoje à noite"), e um conceito
+   * destacado é justamente o primeiro candidato da segunda lista.
+   */
+  const paraRevisar = base
+    .filter((c) => c.enfatizado || c.naSintese)
+    .slice(0, MAX_REVISAR)
+    .map((c) => comoTitulo(c.canonico));
+
   const palavrasFonte =
     transcript
       .filter((s) => s.final)
@@ -845,194 +426,7 @@ export function gerarResumoGlobal({
     ocrLinhas.reduce((n, l) => n + l.trim().split(/\s+/).filter(Boolean).length, 0);
   const tetoResumo = Math.min(TETO_PALAVRAS, Math.max(10, palavrasFonte - 1));
 
-  if (!temFala && !temQuadro) {
-    return {
-      overview: "",
-      pontosPrincipais: [],
-      professorDestacou: [],
-      paraRevisar: [],
-      temConteudo: false,
-    };
-  }
-
-  // Todas as frases da fala contam para o peso das palavras, mesmo as curtas
-  // demais para virar ponto principal sozinhas ("Multiplicação de matrizes.",
-  // três palavras) — elas ainda são conteúdo real, só não têm corpo bastante
-  // para carregar um resumo por conta própria (ver `MIN_PALAVRAS_FRASE`).
-  const termosFala = contarTermosLocal(frasesFalaTodas.map((f) => f.texto));
-  const termosOcr = contarTermosLocal(frasesOcr.map((f) => f.texto));
-  const peso = new Map<string, number>();
-  const formas = new Map<string, string>();
-  for (const [chave, { forma, n }] of termosFala) {
-    peso.set(chave, (peso.get(chave) ?? 0) + n);
-    formas.set(chave, forma);
-  }
-  // O quadro já passou por um filtro de qualidade antes de chegar aqui
-  // (`summariseTopics`) — cada linha tende a ser mais informativa que uma
-  // frase falada solta, então pesa um pouco mais por ocorrência.
-  for (const [chave, { forma, n }] of termosOcr) {
-    peso.set(chave, (peso.get(chave) ?? 0) + n * 1.3);
-    if (!formas.has(chave)) formas.set(chave, forma);
-  }
-
-  /*
-   * Bônus de síntese: "Resumindo, os principais pontos são matrizes, matriz
-   * identidade e multiplicação de matrizes" é o professor dizendo, com todas
-   * as letras, "isto é o que importa" — a evidência mais forte que a fala
-   * pode dar, e ainda assim o peso não refletia isso.
-   *
-   * Num MAPA À PARTE, não no `peso` compartilhado — achado com a regressão
-   * `qa-fala.mjs`: a primeira versão somava o bônus direto no `peso`
-   * compartilhado (o mesmo mapa que também pontua o QUADRO), e um trecho de
-   * código do quadro ("const [valor, setValor] = useState(0)") virou "ponto
-   * principal" só porque "useState" também aparecia na recapitulação
-   * FALADA. O bônus de síntese é sobre o professor recapitulando o que foi
-   * DITO — só frases de origem "fala" o recebem (ver `pontuarFrase`), nunca
-   * o quadro. Ainda assim vale para qualquer frase falada que mencione o
-   * termo — a de síntese, ou a explicação anterior dita como frase própria
-   * ("Matrizes são estruturas organizadas...") —, porque é a PONTUAÇÃO da
-   * frase que soma o bônus, não a escolha de qual palavra é a âncora do
-   * conceito.
-   */
-  const BONUS_SINTESE = 3;
-  const bonusSintese = new Map<string, number>();
-  for (const f of frasesFalaTodas) {
-    const normal = semAcento(f.texto);
-    let temSintese = false;
-    for (const m of MARCAS_DE_SINTESE) {
-      const idx = normal.indexOf(m);
-      if (idx !== -1 && !negadoAntes(normal, idx)) {
-        temSintese = true;
-        break;
-      }
-    }
-    if (!temSintese) continue;
-    const vistos = new Set<string>();
-    for (const bruto of normal.split(/[^\p{L}\p{N}]+/u)) {
-      if (
-        bruto.length < 3 ||
-        VAZIAS.has(bruto) ||
-        PALAVRAS_GENERICAS_DEMAIS.has(bruto) ||
-        PALAVRAS_DE_MARCA.has(bruto) ||
-        vistos.has(bruto)
-      )
-        continue;
-      vistos.add(bruto);
-      bonusSintese.set(bruto, (bonusSintese.get(bruto) ?? 0) + BONUS_SINTESE);
-    }
-  }
-
-  const totalCandidatos = frasesFala.length + frasesOcr.length;
-  const candidatos: Candidato[] = [...frasesFala, ...frasesOcr].map((f) => ({
-    ...f,
-    pontos: pontuarFrase(f, peso, momentosMs, bonusSintese),
-    termo: termoDominante(f.texto, peso, totalCandidatos),
-    grupo: assinaturaDoGrupo(f.texto, peso, totalCandidatos),
-    amplo: topicoAmplo(f.texto, peso),
-  }));
-
-  // O mesmo cálculo, mas para TODA frase da fala, sem o corte de tamanho —
-  // usado só para achar o conteúdo vizinho de um destaque (`vizinhoDeConteudo`).
-  // Uma frase curta demais para ser um ponto principal ainda pode ser
-  // exatamente o que um destaque próximo estava apontando.
-  const candidatosVizinhos: Candidato[] = frasesFalaTodas.map((f) => ({
-    ...f,
-    pontos: pontuarFrase(f, peso, momentosMs, bonusSintese),
-    termo: termoDominante(f.texto, peso, totalCandidatos),
-    grupo: assinaturaDoGrupo(f.texto, peso, totalCandidatos),
-    amplo: topicoAmplo(f.texto, peso),
-  }));
-
-  /*
-   * Só frases com termo real disputam vaga de ponto principal / visão geral —
-   * uma frase sem NENHUMA palavra específica (saudação, transição, fragmento
-   * quebrado do reconhecimento) não é um conceito, é ruído. Sem este corte, ela
-   * ainda concorre e vence quando sobra vaga — foi assim que um teste real
-   * produziu "Agora eu vou preparar um pouco sobre o último." como "ponto
-   * principal": a frase não tinha assunto nenhum, só não tinha concorrência.
-   * `professorDestacou`, abaixo, usa `candidatos` sem este corte de propósito —
-   * uma frase de ênfase sem termo próprio ainda pode ser útil ali (herda o
-   * termo de uma frase vizinha, quando essa associação existir).
-   */
-  const candidatosComConteudo = candidatos.filter(
-    (c) =>
-      c.termo !== null &&
-      (c.origem !== "fala" || densidadeDeConteudo(c.texto, peso) >= DENSIDADE_MINIMA_FALA),
-  );
-
-  const deduplicados = deduplicarPorConceito(candidatosComConteudo).sort(
-    (a, b) => b.pontos - a.pontos,
-  );
-  const principais = diversificarPorTermo(deduplicados, MAX_PONTOS);
-  const principaisOrdenados = [...principais].sort((a, b) => {
-    if (a.atMs === null && b.atMs === null) return 0;
-    if (a.atMs === null) return 1;
-    if (b.atMs === null) return -1;
-    return a.atMs - b.atMs;
-  });
-  // O CONCEITO de cada ponto, não a frase inteira — ver `fraseDeConceito`.
-  const pontosPrincipais = principaisOrdenados.map((c) =>
-    pontuar(fraseDeConceito(c.texto, peso, totalCandidatos) ?? c.texto),
-  );
-
-  // "Professor destacou": frases marcadas por expressão de ênfase, também
-  // deduplicadas por conceito — quatro avisos sobre a MESMA prova não viram
-  // quatro linhas.
-  const destaquesCandidatos = candidatos.filter(
-    (c) => c.marcado && c.atMs !== null && !ehApenasMarcaDeSintese(c.texto),
-  );
-  const destaquesDedup = deduplicarPorConceito(destaquesCandidatos)
-    .sort((a, b) => a.atMs! - b.atMs!)
-    .slice(0, MAX_DESTAQUES);
-  /*
-   * O CONCEITO de cada destaque, resolvido UMA VEZ — "Professor destacou" e
-   * "Para revisar" precisam do MESMO conceito para a MESMA frase, não dois
-   * cálculos que podem discordar. A frase de aviso só vale como conteúdo se,
-   * TIRANDO as palavras da própria expressão de ênfase, ainda sobrar algo —
-   * "prova" não conta, "matrizes" conta. Sem conteúdo próprio (nem depois de
-   * tentar uma janela ao redor de alguma palavra real — ver
-   * `fraseDeConceito`), procura na frase de fala mais próxima o que foi de
-   * fato destacado; sem vizinho nenhum, o destaque não tem o que mostrar.
-   */
-  const conceitosDosDestaques = destaquesDedup.map((d) => {
-    const proprio = fraseDeConceito(d.texto, peso, totalCandidatos, PALAVRAS_DE_MARCA);
-    if (proprio) return { d, conceito: proprio };
-    const vizinho = vizinhoDeConteudo(d, candidatosVizinhos, JANELA_DEPOIS_MS, peso);
-    const doVizinho = vizinho ? fraseDeConceito(vizinho.texto, peso, totalCandidatos) : null;
-    return { d, conceito: doVizinho ?? vizinho?.texto ?? null };
-  });
-  const professorDestacou = conceitosDosDestaques
-    .filter((c): c is { d: Candidato; conceito: string } => c.conceito !== null)
-    .map(({ d, conceito }) => ({
-      atMs: d.atMs!,
-      text: pontuar(conceito),
-      marca: MARCAS_DE_ENFASE.find((m) => semAcento(d.texto).includes(semAcento(m))) ?? "",
-    }));
-
-  // "Para revisar": os termos do que o professor marcou, mas que ainda não
-  // apareceram como ponto principal — pista extra, não repetição.
-  const termosNosPontos = new Set(
-    principaisOrdenados.map((c) => c.termo).filter((t): t is string => !!t),
-  );
-  const paraRevisar: string[] = [];
-  const vistoRevisar = new Set<string>();
-  for (const { d, conceito } of conceitosDosDestaques) {
-    if (!conceito) continue;
-    if (!d.termo || termosNosPontos.has(d.termo) || vistoRevisar.has(d.termo)) continue;
-    vistoRevisar.add(d.termo);
-    paraRevisar.push(maiuscula(conceito));
-    if (paraRevisar.length >= MAX_REVISAR) break;
-  }
-
-  const overview = montarVisaoGeral(
-    principais,
-    destaquesDedup,
-    temFala,
-    temQuadro,
-    tetoResumo,
-    peso,
-    totalCandidatos,
-  );
+  const overview = montarVisaoGeral(base, temFala, temQuadro, tetoResumo);
 
   return {
     overview,
@@ -1041,6 +435,87 @@ export function gerarResumoGlobal({
     paraRevisar,
     temConteudo: pontosPrincipais.length > 0 || overview.length > 0,
   };
+}
+
+/**
+ * Os conceitos → 2-4 frases de português.
+ *
+ * Templada, e a estrutura é a única coisa escrita aqui: todo substantivo que
+ * entra veio de `extrairConceitos`, que só devolve expressões montadas com
+ * palavras realmente ditas. O que estas frases afirmam é o que a captura
+ * sustenta — "a aula abordou X" (X repetido), "ao falar de X, a aula tratou
+ * de Y" (X e Y na MESMA frase), "X foi apontada pelo professor" (X numa frase
+ * com marca de ênfase não negada). Nenhuma relação vem de conhecimento de
+ * mundo.
+ */
+function montarVisaoGeral(
+  conceitos: Conceito[],
+  temFala: boolean,
+  temQuadro: boolean,
+  teto: number,
+): string {
+  if (conceitos.length === 0) return "";
+  const frases: string[] = [];
+
+  // A abertura nomeia os assuntos na ordem em que a aula os introduziu — ler
+  // o resumo na ordem da aula é mais útil que na ordem do ranking.
+  const naOrdemDaAula = [...conceitos.slice(0, 3)].sort((a, b) => {
+    if (a.atMs === null && b.atMs === null) return 0;
+    if (a.atMs === null) return 1;
+    if (b.atMs === null) return -1;
+    return a.atMs - b.atMs;
+  });
+  const abertura = naOrdemDaAula.slice(0, 2);
+  frases.push(
+    abertura.length === 2
+      ? `A aula abordou ${abertura[0].canonico} e ${abertura[1].canonico}.`
+      : `A aula abordou ${abertura[0].canonico}.`,
+  );
+
+  /*
+   * A relação, quando o transcript a sustenta: dois conceitos na MESMA frase.
+   * É uma afirmação de co-ocorrência — a mais forte que dá para fazer sem
+   * interpretar semântica — e é o que transforma uma lista de assuntos em
+   * algo que se lê como explicação.
+   */
+  const jaDito = new Set(abertura.map((c) => c.chave));
+  const primario = abertura[0];
+  const relacionado = conceitos.find(
+    (c) => !jaDito.has(c.chave) && c.frases.some((i) => primario.frases.includes(i)),
+  );
+  if (relacionado) {
+    frases.push(
+      `Ao falar de ${primario.canonico}, a aula tratou de ${relacionado.canonico}.`,
+    );
+    jaDito.add(relacionado.chave);
+  }
+
+  const destacado = conceitos.find((c) => c.enfatizado);
+  if (destacado) {
+    frases.push(
+      `${comoTitulo(destacado.canonico)} foi apontada pelo professor como conteúdo importante.`,
+    );
+    jaDito.add(destacado.chave);
+  }
+
+  const sobraram = conceitos.filter((c) => !jaDito.has(c.chave)).slice(0, 2);
+  if (sobraram.length === 1) {
+    frases.push(`Também foi mencionado ${sobraram[0].canonico}.`);
+  } else if (sobraram.length === 2) {
+    frases.push(
+      `Também foram mencionados ${sobraram[0].canonico} e ${sobraram[1].canonico}.`,
+    );
+  }
+
+  const disclaimer = !temQuadro && temFala
+    ? "O quadro não deu para ler direito, mas o que foi dito sustenta este resumo."
+    : !temFala && temQuadro
+      ? "O áudio não deu para entender direito, mas o quadro sustenta este resumo."
+      : null;
+  const tetoParaOResto = disclaimer ? Math.max(10, teto - palavras(disclaimer)) : teto;
+  const escolhidas = respeitarTeto(frases, tetoParaOResto);
+  if (disclaimer) escolhidas.push(disclaimer);
+  return escolhidas.join(" ");
 }
 
 function maiuscula(t: string) {
