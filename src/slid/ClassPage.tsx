@@ -116,6 +116,25 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
          * chegar às aulas já guardadas, não só às novas.
          */
         if (achado.transcriptJobStatus === undefined) {
+          /*
+           * Otimista, e pelo mesmo motivo do "Tentar de novo" mais abaixo —
+           * mas este caminho ficava mudo.
+           *
+           * `transcreverAula` só escreve "processando" no IndexedDB. Sem
+           * refletir isso aqui, `audio.transcriptJobStatus` continua
+           * `undefined` no estado desta tela: o aviso "Organizando o que
+           * foi dito…" nunca aparece, e o intervalo que relê o armazém nem
+           * chega a ligar (ele só liga quando o status JÁ é "processando").
+           * Resultado medido: a aula abria, o trabalho começava, e a tela
+           * não dizia nada — a pessoa ficava olhando uma aula
+           * aparentemente parada enquanto o aparelho trabalhava. Depois de
+           * minutos, a única pista era o texto aparecendo do nada.
+           */
+          setAudio({
+            ...achado,
+            transcriptJobStatus: "processando",
+            transcriptJobStartedAt: Date.now(),
+          });
           void transcreverAula(classId);
         }
       })
