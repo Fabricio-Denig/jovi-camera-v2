@@ -147,10 +147,18 @@ function CartaoDeMomento({
         </span>
       </span>
       <span className="block px-2 pb-2 pt-1.5">
-        {/* `pr-7` reserva a coluna do lápis, que fica sobreposto no canto de
-            baixo à direita: sem ela, um título de duas linhas passava por
-            baixo do glifo e a segunda linha ficava ilegível. */}
-        <span className="line-clamp-2 block pr-7 text-[12.5px] font-medium leading-snug text-ink">
+        {/*
+          `pr-7` reserva a coluna do lápis, sobreposto no canto de baixo à
+          direita — sem ela, a segunda linha do título passava por baixo do
+          glifo.
+
+          E NADA de `block` aqui: `line-clamp-2` só funciona com
+          `display: -webkit-box`, e uma classe de display depois dela vence a
+          dela. Com `block`, um título manual longo ("Comunicação entre
+          sistemas distribuídos e integração via REST") se espalhou por quatro
+          linhas e desalinhou a grade inteira — visto na tela, não no CSS.
+        */}
+        <span className="line-clamp-2 pr-7 text-[12.5px] font-medium leading-snug text-ink">
           {momento.label}
         </span>
         {momento.category && (
