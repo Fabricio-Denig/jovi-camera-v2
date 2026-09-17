@@ -39,6 +39,7 @@ node tests/qa-modos-todos.mjs          # os dezesseis modos, um por um — nenhu
 node tests/qa-virar.mjs                # trocar de câmera, com um segundo dispositivo forjado
 node tests/qa-foco.mjs                 # foco: declarado ≠ confirmado, e o merge de constraints por track
 node tests/qa-foco-matematica.mjs      # a matemática do toque-para-focar, pura, sem navegador
+node tests/qa-transcricao-latencia.mjs  # a aula de 68s que levou 10min: aritmética e ciclo de vida, sem navegador
 node tests/qa-ciclo-vida.mjs           # reload em sessão, segundo plano e volta, girar o aparelho
 node tests/qa-volume.mjs               # 30 e 150 aulas na Galeria, aula de 25 momentos no Resumo
 node tests/perf-filtros.mjs             # relatório, não teste com veredito
@@ -70,6 +71,7 @@ semente (`ruido()` em `caminhos.mjs`). `SLID_CENAS`, `SLID_APP` e
 | `perf-app` | o custo do app inteiro: abertura, tamanho baixado, quadros por segundo com a detecção e o Listen rodando, memória, e o tempo de abrir uma aula. Relatório, não veredito. |
 | `perf-filtros` | quanto custam filtro e efeito no visor, no arraste da intensidade, na captura e na leitura do quadro pelo SliD. É relatório, não veredito. |
 | `qa-resumo` | a tela da aula: o cabeçalho-cartão responde as seis perguntas? As três abas existem, nenhuma se chama IA, e a aba Texto não repete o título? "Copiar texto" copia mesmo? E as ações rápidas somem onde o navegador não as oferece? |
+| `qa-transcricao-latencia` | a gravação de **68 segundos** que levou cerca de dez minutos no celular. Fixa a aritmética que derrubou a primeira hipótese (memória: ~4MB de PCM, não centenas), a desproporção que sobrou como P0 (~9× a duração do áudio) e a regra de ciclo de vida que fazia a tela anunciar falha de um trabalho ainda vivo. Roda sem navegador e sem modelo. |
 | `qa-slid-listen` | o **Listen**: grava áudio de verdade, mostra que está gravando, guarda o arquivo com a aula, e sobrevive a recarregar a página. E a pergunta que mais importa: **microfone negado, ausente ou quebrado deixa See e Identify inteiros?** |
 | `qa-demo-banca` | **a jornada inteira, na ordem em que uma pessoa a percorre.** Três caminhos: SliD com áudio do reconhecimento ao PDF; SliD sem microfone; e o Scanner do catálogo ao arquivo. Os outros testes provam que cada peça funciona; este prova que elas se encaixam — e é o único jeito de saber, antes da apresentação, que a demonstração roda. |
 | `qa-robustez` | os caminhos ruins, um a um: câmera negada, IndexedDB recusado, área de transferência bloqueada, uma câmera só, deitado, e 320 px. A pergunta de todos: **a tela diz o que aconteceu, ou só não funciona?** |

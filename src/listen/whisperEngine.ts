@@ -1,10 +1,13 @@
 import {
   decodificarParaWhisper,
   medirAmostras,
+  megabytesDePcm,
   capturaParecaSilenciosa,
   TAXA_WHISPER,
 } from "./audioPcm";
 import {
+  medirFase,
+  medirFaseSync,
   registrarEngine,
   registrarDownload,
   registrarAudioSegmento,
@@ -192,6 +195,36 @@ import MODELOS from "./whisperModels.json";
 const MODELO_PRIMARIO: string = MODELOS.primario;
 /** O reserva: só carrega se o primário não carregar. Ver `motorCompartilhado`. */
 const MODELO_RESERVA: string = MODELOS.fallback;
+
+/**
+ * `?listen-model=tiny` força o reserva — um instrumento de medição, não uma
+ * opção de produto.
+ *
+ * **Por que existe.** A escolha entre `base` e `tiny` foi feita com um
+ * benchmark de QUALIDADE (ver o comentário acima: `tiny` some com os
+ * conceitos da aula, `base` os preserva) medido em máquina de bancada. O
+ * teste físico seguinte levantou a outra metade da pergunta, que aquele
+ * benchmark não respondia: **quanto cada um custa de TEMPO no celular de
+ * verdade?** Sem um jeito de rodar o mesmo áudio com os dois no MESMO
+ * aparelho, a comparação continuaria sendo qualidade medida contra latência
+ * suposta — e trocar de modelo por suposição foi exatamente o erro que esta
+ * rodada não quer repetir.
+ *
+ * Com isto, a evidência sai de dois carregamentos da mesma aula:
+ * `?debug=listen` mostra `model_load` e `inference` de cada um, lado a lado,
+ * no aparelho que importa. Nenhum caminho da interface leva aqui, e sem o
+ * parâmetro nada muda.
+ */
+function modeloPedido(): string {
+  try {
+    const pedido = new URLSearchParams(window.location.search).get("listen-model");
+    if (pedido === "tiny") return MODELO_RESERVA;
+    if (pedido === "base") return MODELO_PRIMARIO;
+  } catch {
+    // Sem `location` (contexto sem janela): segue o padrão.
+  }
+  return MODELO_PRIMARIO;
+}
 
 // A biblioteca inteira (onnxruntime-web incluso) fica fora do caminho de
 // abertura da câmera: a importação só acontece quando alguém de fato pede uma
@@ -477,7 +510,9 @@ async function motorCompartilhado(): Promise<Transcritor> {
       // `filter` remove a duplicata se algum dia primário e reserva forem o
       // mesmo — tentar duas vezes o mesmo modelo só faria a pessoa esperar o
       // dobro pelo mesmo erro.
-      const candidatos = [MODELO_PRIMARIO, MODELO_RESERVA].filter(
+      // `modeloPedido()` é o primário, exceto quando `?listen-model=` pede
+      // outro para uma medição — a cadeia de reserva continua igual.
+      const candidatos = [modeloPedido(), MODELO_RESERVA].filter(
         (m, i, todos) => todos.indexOf(m) === i,
       );
       const falhas: string[] = [];
@@ -560,7 +595,23 @@ export async function transcreverTrecho(
 
   let decodificado;
   try {
-    decodificado = await decodificarParaWhisper(blob);
+    /*
+     * **Decodificação E reamostragem, numa medida só — porque são uma
+     * chamada só.** `decodeAudioData` num `AudioContext` criado já a 16 kHz
+     * faz as duas coisas por dentro do navegador, e não existe um gancho
+     * entre elas para cronometrar. Separá-las exigiria decodificar na taxa
+     * nativa e reamostrar à mão — mais lento, e mediria um caminho que o
+     * produto não usa. A medida honesta é esta: `decode` inclui o resample,
+     * e o rótulo diz de que taxa para qual.
+     */
+    decodificado = await medirFase(
+      "decode",
+      `segmento ${indice}`,
+      () => decodificarParaWhisper(blob),
+      (d) =>
+        `${d.durationS.toFixed(1)}s · ${d.sampleRateOriginal}Hz→${TAXA_WHISPER}Hz` +
+        ` · ${d.canaisOriginais}ch · ${megabytesDePcm(d.durationS)}MB de PCM`,
+    );
   } catch (erro) {
     registrarErro("decode", erro);
     throw erro;
@@ -603,7 +654,24 @@ export async function transcreverTrecho(
     return [];
   }
 
-  const transcritor = await motorCompartilhado();
+  /*
+   * Carregar o modelo é uma ETAPA, não o começo da inferência.
+   *
+   * Medida separada de propósito: na primeira transcrição de uma aba ela
+   * inclui ler (ou baixar) os pesos e criar a sessão ONNX; na segunda ela é
+   * quase nada, porque `motorCompartilhado()` memoiza a promessa. Somadas
+   * num número só — como estavam — não há como responder a pergunta que o
+   * teste físico deixou: **68 segundos de áudio levaram cerca de dez
+   * minutos; foram no carregamento ou na inferência?** São causas
+   * diferentes com correções diferentes.
+   */
+  const transcritor = await medirFase(
+    "model_load",
+    modeloEmUso ?? modeloPedido(),
+    () => motorCompartilhado(),
+    () => `cache ${motorJaCarregouNestaAba ? "quente" : "frio"} · modelo ${modeloEmUso}`,
+  );
+
   const inicio = Date.now();
   registrarInferencia({
     iniciouEm: inicio,
@@ -613,7 +681,11 @@ export async function transcreverTrecho(
 
   let resultado;
   try {
-    resultado = await transcritor(decodificado.amostras, {
+    resultado = await medirFase(
+      "inference",
+      `segmento ${indice}`,
+      () =>
+    transcritor(decodificado.amostras, {
       language: "portuguese",
       task: "transcribe",
       chunk_length_s: 30,
@@ -654,7 +726,11 @@ export async function transcreverTrecho(
        */
       repetition_penalty: 1.3,
       no_repeat_ngram_size: 3,
-    });
+    }),
+      (r) =>
+        `${medida.durationS.toFixed(1)}s de áudio → ${r.chunks?.length ?? 0} blocos` +
+        ` · ${(medida.durationS * 1000).toFixed(0)}ms de fala`,
+    );
   } catch (erro) {
     registrarErro("inference", erro);
     throw erro;
@@ -688,26 +764,43 @@ export async function transcreverTrecho(
     return r.text || MENSAGEM_TRECHO_DEGENERADO;
   };
 
-  // Sem blocos (áudio curto, sem `chunks` no retorno): o texto inteiro vira
-  // um trecho só, do início ao fim do arquivo — melhor que descartar uma
-  // transcrição que existe só porque não veio fatiada.
-  if (!resultado.chunks || resultado.chunks.length === 0) {
-    const bruto = resultado.text.trim();
-    if (!bruto) return [];
-    const texto = sanitizarELograr(0, bruto);
-    return [{ startMs: 0, endMs: 0, text: texto }];
-  }
+  /*
+   * A sanitização é medida à parte — e é, das etapas, a que mais se espera
+   * que seja barata.
+   *
+   * Está aqui justamente para isso: numa investigação de "por que 68
+   * segundos de áudio levaram dez minutos", uma etapa medida e desprezível
+   * é uma suspeita ELIMINADA, e eliminar suspeitas é metade do trabalho.
+   * Se algum dia ela aparecer com peso, a busca de repetição
+   * (`transcriptSanitizer`) passa a ser candidata em vez de inocente por
+   * suposição.
+   */
+  return medirFaseSync(
+    "sanitizer",
+    `segmento ${indice}`,
+    () => {
+      // Sem blocos (áudio curto, sem `chunks` no retorno): o texto inteiro vira
+      // um trecho só, do início ao fim do arquivo — melhor que descartar uma
+      // transcrição que existe só porque não veio fatiada.
+      if (!resultado.chunks || resultado.chunks.length === 0) {
+        const bruto = resultado.text.trim();
+        if (!bruto) return [];
+        const texto = sanitizarELograr(0, bruto);
+        return [{ startMs: 0, endMs: 0, text: texto }];
+      }
 
-  return resultado.chunks
-    .map((c, i) => ({
-      startMs: Math.round(c.timestamp[0] * 1000),
-      // `timestamp[1]` vem nulo quando o áudio acaba no meio de uma
-      // palavra que o modelo não fechou — o começo do bloco ainda é uma
-      // âncora válida, então o fim herda dele em vez de descartar o bloco.
-      endMs: Math.round((c.timestamp[1] ?? c.timestamp[0]) * 1000),
-      text: c.text.trim() ? sanitizarELograr(i, c.text.trim()) : "",
-    }))
-    .filter((c) => c.text.length > 0);
+      return resultado.chunks
+        .map((c, i) => ({
+          startMs: Math.round(c.timestamp[0] * 1000),
+          // `timestamp[1]` vem nulo quando o áudio acaba no meio de uma
+          // palavra que o modelo não fechou — o começo do bloco ainda é uma
+          // âncora válida, então o fim herda dele em vez de descartar o bloco.
+          endMs: Math.round((c.timestamp[1] ?? c.timestamp[0]) * 1000),
+          text: c.text.trim() ? sanitizarELograr(i, c.text.trim()) : "",
+        }))
+        .filter((c) => c.text.length > 0);
+    },
+  );
 }
 
 /**

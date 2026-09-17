@@ -479,6 +479,7 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
         {audio && (
           <TranscricaoEmAndamento
             audio={audio}
+            sessionId={classId}
             onTentarDeNovo={() => {
               /*
                * Otimista, e necessário: `transcreverAula` só escreve
@@ -584,9 +585,13 @@ export function ClassPage({ classId, onClose, onChanged }: ClassPageProps) {
  */
 function TranscricaoEmAndamento({
   audio,
+  sessionId,
   onTentarDeNovo,
 }: {
   audio: LessonAudio;
+  /** Para `jobParecaTravado` saber de QUAL trabalho se trata: ele consulta
+      se o job está rodando nesta aba e, se não, o batimento que ele deixou. */
+  sessionId: string;
   onTentarDeNovo: () => void;
 }) {
   /*
@@ -595,7 +600,10 @@ function TranscricaoEmAndamento({
    * um aviso transitório é peso de mais; o ponto pulsando e a cor já bastam
    * para distinguir isto do texto ao redor, sem embrulhar de novo.
    */
-  if (audio.transcriptJobStatus === "processando" && !jobParecaTravado(audio)) {
+  if (
+    audio.transcriptJobStatus === "processando" &&
+    !jobParecaTravado(audio, sessionId)
+  ) {
     return (
       <p className="mb-4 flex items-center gap-2 text-[12.5px] text-ink-muted">
         <span
@@ -607,7 +615,7 @@ function TranscricaoEmAndamento({
     );
   }
 
-  const travado = jobParecaTravado(audio);
+  const travado = jobParecaTravado(audio, sessionId);
   if (audio.transcriptJobStatus === "falhou" || travado) {
     return (
       <div className="mb-4 flex items-center justify-between gap-3">

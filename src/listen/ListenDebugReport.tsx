@@ -4,6 +4,7 @@ import {
   lerDeviceDiag,
   lerSnapshot,
   obterAudioReproduzivel,
+  totaisPorFase,
   type ListenDiagSnapshot,
 } from "./listenDiag";
 
@@ -182,7 +183,13 @@ export function ListenDebugReport({ onFechar }: { onFechar: () => void }) {
                       onClick={() => tocar(a.index)}
                       className="min-h-8 shrink-0 rounded-full bg-surface-2 px-3 text-[11.5px] font-medium text-ink active:opacity-70"
                     >
-                      {tocando === a.index ? "Tocando…" : "▶ Tocar o que o modelo recebe"}
+                      {tocando === a.index
+                        ? "Tocando…"
+                        : obterAudioReproduzivel(a.index)?.truncado
+                          ? // Dito, nunca escondido: o que toca é o começo, não
+                            // o segmento inteiro (ver `registrarAudioReproduzivel`).
+                            "▶ Tocar o início do que o modelo recebe"
+                          : "▶ Tocar o que o modelo recebe"}
                     </button>
                   )}
                 </div>
@@ -201,6 +208,68 @@ export function ListenDebugReport({ onFechar }: { onFechar: () => void }) {
             ))}
           </Secao>
         )}
+
+        {/*
+          As etapas, em primeiro lugar depois do erro — porque é a primeira
+          pergunta depois de um teste em aparelho: ONDE foi o tempo. Um
+          total por etapa (carregar o modelo, decodificar, inferir,
+          sanitizar, resumir, gravar) e, logo abaixo, cada uma na ordem em
+          que aconteceu, com o heap no fim dela. Ver `FaseDiag`.
+        */}
+        {snapshot.fases.length > 0 && (
+          <Secao titulo="Etapas — onde foi o tempo">
+            {totaisPorFase(snapshot).map((t) => (
+              <Linha
+                key={t.fase}
+                rotulo={`${t.fase} (${t.vezes}×)`}
+                valor={duracao(t.totalMs)}
+              />
+            ))}
+            <div className="mt-2 max-h-64 overflow-y-auto rounded-xl bg-surface-2 px-3 py-2">
+              {snapshot.fases.map((f, i) => (
+                <p
+                  key={`${f.fase}-${f.inicio}-${i}`}
+                  className="border-b border-line/40 py-1 font-mono text-[10.5px] leading-snug text-ink-muted last:border-0"
+                >
+                  <span className="text-ink">{f.fase}</span>
+                  {f.rotulo ? ` · ${f.rotulo}` : ""} · {duracao(f.duracaoMs)}
+                  {f.heapMb != null ? ` · heap ${f.heapMb}MB` : ""}
+                  {f.detalhe ? ` · ${f.detalhe}` : ""}
+                </p>
+              ))}
+            </div>
+          </Secao>
+        )}
+
+        {/*
+          As travas da thread principal, logo ao lado do tempo por etapa —
+          as duas juntas respondem a pergunta que o teste em aparelho
+          deixou em aberto: o trabalho demorou porque tem trabalho a fazer,
+          ou porque a interface e ele disputam a mesma thread? Ver
+          `LongTaskDiag`.
+        */}
+        <Secao titulo="Thread principal (travas ≥50ms)">
+          {snapshot.longTasks.disponivel ? (
+            <>
+              <Linha rotulo="Travas" valor={String(snapshot.longTasks.total)} />
+              <Linha
+                rotulo="Tempo travado"
+                valor={duracao(snapshot.longTasks.somaMs)}
+                tom={snapshot.longTasks.somaMs > 5000 ? "ruim" : undefined}
+              />
+              <Linha
+                rotulo="Pior trava"
+                valor={duracao(snapshot.longTasks.maiorMs)}
+                tom={snapshot.longTasks.maiorMs > 1000 ? "ruim" : undefined}
+              />
+            </>
+          ) : (
+            <Linha
+              rotulo="PerformanceObserver"
+              valor="longtask não suportado neste navegador"
+            />
+          )}
+        </Secao>
 
         {snapshot.inference.iniciouEm != null && (
           <Secao titulo="Inferência">
@@ -251,6 +320,16 @@ export function ListenDebugReport({ onFechar }: { onFechar: () => void }) {
       <audio ref={audioRef} hidden />
     </div>
   );
+}
+
+/** Milissegundos como alguém lê: `840ms`, `12,4s`, `9min42s`. Um job de dez
+    minutos em milissegundos é um número que ninguém compara de cabeça. */
+function duracao(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1).replace(".", ",")}s`;
+  const min = Math.floor(ms / 60_000);
+  const seg = Math.round((ms % 60_000) / 1000);
+  return `${min}min${String(seg).padStart(2, "0")}s`;
 }
 
 function Secao({ titulo, children }: { titulo: string; children: React.ReactNode }) {
@@ -327,6 +406,24 @@ function snapshotComoTexto(
     `  samples: ${s.inference.samples ?? "—"}`,
     `  duração inferência: ${s.inference.duracaoInferenciaMs ?? "—"}ms`,
     `  blocos: ${s.inference.chunks ?? "—"}`,
+    "",
+    "Thread principal:",
+    s.longTasks.disponivel
+      ? `  travas ≥50ms: ${s.longTasks.total}, somando ${duracao(s.longTasks.somaMs)}, pior ${duracao(s.longTasks.maiorMs)}`
+      : "  longtask não suportado neste navegador",
+    "",
+    "Etapas (total por etapa):",
+    ...totaisPorFase(s).map(
+      (t) => `  ${t.fase}: ${duracao(t.totalMs)} em ${t.vezes} vez(es)`,
+    ),
+    "",
+    "Etapas (na ordem):",
+    ...s.fases.map(
+      (f) =>
+        `  ${f.fase}${f.rotulo ? ` [${f.rotulo}]` : ""}: ${duracao(f.duracaoMs)}` +
+        `${f.heapMb != null ? `, heap ${f.heapMb}MB` : ""}` +
+        `${f.detalhe ? `, ${f.detalhe}` : ""}`,
+    ),
   ];
   if (s.error) {
     linhas.push(

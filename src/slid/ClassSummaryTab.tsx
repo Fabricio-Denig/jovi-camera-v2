@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { CopyButton } from "./CopyButton";
 import { EditPencil } from "../shared/ui/EditPencil";
 import { SummaryEditor } from "./SummaryEditor";
@@ -11,6 +11,7 @@ import { KIND_NAMES, type ContentKind } from "./readContent";
 import { formatClock } from "../shared/lib/time";
 import type { ClassRecord } from "./classes";
 import { gerarResumoGlobal } from "../listen/lessonSummary";
+import { medirFaseSync } from "../listen/listenDiag";
 import type { TranscriptSegment } from "../shared/lib/mediaStore";
 
 /**
@@ -70,15 +71,38 @@ export function ClassSummaryTab({
     setEditandoLocal(v);
     onEditandoChange?.(v);
   };
-  const momentosMs = record.moments.map((m) => m.atMs);
-  // As duas formas do quadro: os tópicos já curados (`summariseTopics`, um
-  // título por vez) e as linhas de cada momento (mais detalhe). As duas
-  // entram como evidência — `gerarResumoGlobal` decide o que usar.
-  const ocrLinhas = [
-    ...record.topics,
-    ...record.moments.flatMap((m) => linesWithoutTitle(m)),
-  ];
-  const automatico = gerarResumoGlobal({ transcript, ocrLinhas, momentosMs });
+  /*
+   * O resumo era recalculado a CADA render — e a hora em que esta tela mais
+   * re-renderiza é exatamente a pior.
+   *
+   * Enquanto a transcrição roda, o `ClassPage` relê o armazém a cada dois
+   * segundos para saber se o job terminou. Cada leitura reconstruía o resumo
+   * inteiro (`gerarResumoGlobal` percorre transcrição, conceitos, destaques
+   * e tópicos) na MESMA thread principal onde a inferência do Whisper está
+   * rodando. Não é a explicação do travamento medido no aparelho — mas é
+   * trabalho repetido sem nenhum resultado novo, no momento em que a thread
+   * é o recurso mais disputado, e `medirFaseSync` agora diz quanto ele
+   * custa em vez de deixar qualquer um supor.
+   *
+   * As dependências são exatamente o que o resumo lê: `record.moments` e
+   * `record.topics` mudam quando a pessoa edita a aula, e `transcript` muda
+   * quando a transcrição termina — que é quando o resumo DEVE ser refeito.
+   */
+  const automatico = useMemo(() => {
+    const momentosMs = record.moments.map((m) => m.atMs);
+    // As duas formas do quadro: os tópicos já curados (`summariseTopics`, um
+    // título por vez) e as linhas de cada momento (mais detalhe). As duas
+    // entram como evidência — `gerarResumoGlobal` decide o que usar.
+    const ocrLinhas = [
+      ...record.topics,
+      ...record.moments.flatMap((m) => linesWithoutTitle(m)),
+    ];
+    return medirFaseSync(
+      "summary",
+      `${transcript.length} blocos`,
+      () => gerarResumoGlobal({ transcript, ocrLinhas, momentosMs }),
+    );
+  }, [transcript, record.moments, record.topics]);
 
   /*
    * O manual tem prioridade, e é total: ele SUBSTITUI o automático, não

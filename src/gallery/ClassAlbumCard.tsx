@@ -51,6 +51,11 @@ export function ClassAlbumCard({
         <img
           src={url}
           alt=""
+          // Mesmo freio de memória das miniaturas da grade — ver
+          // `GalleryThumb` em `GalleryPage.tsx`. Uma estante com muitas
+          // aulas decodificava a capa de todas elas de uma vez.
+          loading="lazy"
+          decoding="async"
           className="absolute inset-0 size-full object-cover"
         />
       )}

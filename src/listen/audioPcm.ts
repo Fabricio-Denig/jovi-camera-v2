@@ -86,6 +86,21 @@ export async function decodificarParaWhisper(
   };
 }
 
+/**
+ * Quanto um trecho de áudio PESA depois de decodificado, em MB.
+ *
+ * Está aqui para o diagnóstico poder mostrar o número em vez de deixar
+ * qualquer um estimá-lo — e a primeira coisa que ele fez foi DERRUBAR uma
+ * hipótese: o teste físico que motivou esta rodada foi lido como uma aula
+ * de 1h08, quando o `01:08` da tela são 68 SEGUNDOS. A conta real é 64 KB
+ * por segundo de áudio, ou seja ~4,3 MB para essa gravação — nada que
+ * pressione a memória de um celular. Seja qual for a causa do travamento
+ * medido ali, ela não é o tamanho do PCM.
+ */
+export function megabytesDePcm(durationS: number, taxa = TAXA_WHISPER): number {
+  return Math.round(((durationS * taxa * 4) / (1024 * 1024)) * 10) / 10;
+}
+
 export interface MedidaAudio {
   durationS: number;
   sampleRate: number;

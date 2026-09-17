@@ -868,11 +868,23 @@ function TrashedThumb({
   const url = useObjectUrl(media.blob);
   return (
     <div className="relative aspect-square w-full overflow-hidden bg-surface-2">
+      {/* Mesmo freio de memória da grade principal — ver `GalleryThumb`. */}
       {url &&
         (media.kind === "photo" ? (
-          <img src={url} alt="" className="size-full object-cover opacity-50" />
+          <img
+            src={url}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            className="size-full object-cover opacity-50"
+          />
         ) : (
-          <video src={url} className="size-full object-cover opacity-50" muted />
+          <video
+            src={url}
+            preload="none"
+            className="size-full object-cover opacity-50"
+            muted
+          />
         ))}
       <div className="absolute inset-x-0 bottom-0 flex">
         <button
@@ -915,11 +927,49 @@ function GalleryThumb({
       // miniatura do fundo neste tema.
       className="relative block aspect-square w-full overflow-hidden rounded-lg bg-surface-2 ring-1 ring-white/[0.07] transition-transform duration-150 ease-out active:scale-95 active:opacity-80"
     >
+      {/*
+        `loading`/`decoding`/`preload` são o freio desta tela — e o que os
+        justifica é uma medida do próprio código, não do áudio.
+
+        **Não existe miniatura neste app.** `CapturedMedia.blob` é a foto
+        inteira, na resolução em que a câmera entregou, e é ELA que cada
+        azulejo de ~130px exibe. O navegador decodifica a imagem toda de
+        qualquer jeito: a 1920×1080 são ~8 MB de bitmap por foto, ~12 MB a
+        2560×1440. E a Galeria monta com TODAS as capturas de uma vez
+        (`getAllCaptures()` — sem paginação, sem virtualização), então um
+        rolo de trinta fotos pode pedir centenas de megabytes de bitmap num
+        quadro só. Um `video` sem `preload="none"` soma a isso uma busca por
+        vídeo, só para ter um quadro para mostrar.
+
+        `lazy` faz o navegador decodificar o que está perto da tela em vez
+        do rolo inteiro, `async` tira a decodificação do caminho de desenho,
+        e `preload="none"` faz o vídeo não buscar byte nenhum até alguém
+        abrir. Nada disso muda o que a tela mostra.
+
+        O que isto NÃO é: a explicação provada do travamento visto em
+        aparelho. Ali a gravação tinha 68 segundos (~4,3 MB de PCM), então a
+        transcrição não era o peso de memória que uma leitura apressada do
+        relógio da tela sugeriu. Este é um custo real e independente, lido no
+        próprio código; qual dos dois derrubou a aba — memória ou a thread
+        principal presa pela inferência — é o que `?debug=listen` passa a
+        responder, com `heapMb` e as travas de thread.
+      */}
       {url &&
         (media.kind === "photo" ? (
-          <img src={url} alt="" className="size-full object-cover" />
+          <img
+            src={url}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            className="size-full object-cover"
+          />
         ) : (
-          <video src={url} className="size-full object-cover" muted />
+          <video
+            src={url}
+            preload="none"
+            className="size-full object-cover"
+            muted
+          />
         ))}
       {media.favorite && (
         <span
