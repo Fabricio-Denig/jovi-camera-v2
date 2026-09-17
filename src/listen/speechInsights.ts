@@ -63,6 +63,30 @@ export const MARCAS_DE_ENFASE = [
   "guardem isso",
   "isso é fundamental",
   "isso e fundamental",
+  /*
+   * Variantes achadas com transcript REAL, não imaginadas. Num teste físico o
+   * professor disse "Prestem atenção porque APIs REST são importantes e podem
+   * cair na avaliação" e NENHUMA marca casou: a lista tinha "prestem atenção"
+   * mas o Whisper ouviu "Presta atenção"; tinha "é importante" mas a fala era
+   * "são importantes"; e tinha "prova" mas a fala era "avaliação". Resultado:
+   * "Professor destacou" vazio numa aula em que ele destacou com todas as
+   * letras. Avaliação é tão comum quanto prova no vocabulário de professor.
+   */
+  "presta atenção",
+  "presta atencao",
+  "são importantes",
+  "sao importantes",
+  "é importante",
+  "e importante",
+  "cai na avaliação",
+  "cai na avaliacao",
+  "cair na avaliação",
+  "cair na avaliacao",
+  "na avaliação",
+  "na avaliacao",
+  "os principais assuntos",
+  "os principais pontos",
+  "para resumir",
 ];
 
 /** Um trecho que o professor marcou como importante, pela própria fala. */

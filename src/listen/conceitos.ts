@@ -85,11 +85,32 @@ const MAX_CONTEUDO_SINTAGMA = 4;
  * é importante" de virar um "conceito" — o corte acontece no "é", e
  * "importante" (palavra de marca) nunca entra.
  */
-const COPULAS = new Set(
-  ["e", "sao", "foi", "eram", "era", "ser", "esta", "estao", "fica", "ficam"].map(
-    (p) => p,
-  ),
-);
+const COPULAS = new Set([
+  "sao",
+  "foi",
+  "eram",
+  "era",
+  "ser",
+  "esta",
+  "estao",
+  "fica",
+  "ficam",
+  /*
+   * Subordinadores. "que", "pois", "porque" abrem uma oração nova, e sem
+   * cortar neles um sintagma engolia a frase inteira: "about APIs Rest que
+   * permitem a comunicação entre diferentes sistemas" virava UM "conceito" de
+   * sete palavras de conteúdo — medido com transcript real. Cortando, saem
+   * dois conceitos legítimos: as APIs e a comunicação entre sistemas.
+   */
+  "que",
+  "pois",
+  "porque",
+  "porem",
+  "quando",
+  "onde",
+  "cujo",
+  "cuja",
+]);
 
 /** `é` precisa ser comparado COM acento: sem ele vira a conjunção "e", que
     tem papel oposto (liga em vez de cortar). */
@@ -121,7 +142,33 @@ const FRACAS = new Set(
     "ultimo ultima primeiro primeira proximo proxima outro outra outros " +
     "outras mesmo mesma varios varias diferente diferentes tudo algo alguma " +
     "algum alguns algumas coisa coisas jeito modo maneira geral gente " +
-    "pessoal bom boa agora entao depois antes aqui ali"
+    "pessoal bom boa agora entao depois antes aqui ali " +
+    /*
+     * Herdadas da lista que o resumo antigo mantinha (`PALAVRAS_GENERICAS_
+     * DEMAIS`), cada uma achada num teste real: "Último" e "Ficar" chegaram a
+     * virar título e item de "Para revisar" em aparelho de verdade.
+     */
+    "teste preparar possibilidade interessante coitado coitada coisarada " +
+    "tal tais momento momentos " +
+    /*
+     * Verbos APRESENTACIONAIS: eles introduzem o que a coisa faz, sem serem
+     * a coisa. "Um banco de dados é USADO PARA armazenar informações" — o
+     * conceito é o armazenamento, e "usado para armazenar" era o bullet que
+     * saía. "APIs REST que PERMITEM a comunicação" — o conceito é a
+     * comunicação entre sistemas. Como palavra fraca, o verbo continua no
+     * meio da expressão quando faz parte dela, mas nunca a encabeça.
+     */
+    "usado usada usados usadas usar permite permitem permitir serve servem " +
+    "possui possuem contem existe existem representa representam significa " +
+    "significam consiste trata tratam refere " +
+    /*
+     * Ruído em inglês. O Whisper multilíngue troca de idioma no meio de uma
+     * aula em português — "Agora, nós vamos falar ABOUT APIs Rest" é
+     * transcript real. Estas são palavras de função em inglês: não são
+     * assunto de aula nenhuma em PT-BR, e sem elas na lista "About APIs
+     * rest" virava um ponto principal.
+     */
+    "about the and for with that this these those from into what which"
   ).split(/\s+/),
 );
 
@@ -172,6 +219,11 @@ function distancia(a: string, b: string): number {
  */
 export function mesmaPalavra(a: string, b: string): boolean {
   if (a === b) return true;
+  // Plural puro, em qualquer tamanho: "api"/"apis" são a mesma palavra, e as
+  // regras por comprimento abaixo não alcançam palavras de três letras.
+  if (a + "s" === b || b + "s" === a || a + "es" === b || b + "es" === a) {
+    return true;
+  }
   const menor = Math.min(a.length, b.length);
   // Flexão: uma é prefixo da outra ("objeto"/"objetos", "logica"/"logicas").
   if (menor >= 4 && (a.startsWith(b) || b.startsWith(a))) return true;
@@ -191,10 +243,19 @@ export function mesmaPalavra(a: string, b: string): boolean {
   return false;
 }
 
-/** Tira só o plural — a flexão mais comum e a mais segura de desfazer. */
+/**
+ * Tira só o plural — a flexão mais comum e a mais segura de desfazer.
+ *
+ * O corte em 4 letras (não 5) existe por um caso real: "API" e "APIs" foram
+ * ditos duas vezes cada no mesmo teste, e com o limite anterior nenhum dos
+ * dois absorvia o outro (a absorção só alcança forma dita UMA vez). O
+ * resultado eram dois conceitos — "banco de dados e API rest" e "banco de
+ * dados e APIs rest" — lado a lado na mesma lista. Plural é plural em
+ * qualquer tamanho.
+ */
 function radical(p: string): string {
-  if (p.length > 5 && p.endsWith("es")) return p.slice(0, -2);
-  if (p.length > 4 && p.endsWith("s")) return p.slice(0, -1);
+  if (p.length >= 5 && p.endsWith("es")) return p.slice(0, -2);
+  if (p.length >= 4 && p.endsWith("s")) return p.slice(0, -1);
   return p;
 }
 
@@ -217,6 +278,18 @@ export interface Conceito {
   tamanho: number;
   /** Índices das frases em que apareceu — usado para achar co-ocorrência. */
   frases: number[];
+  /**
+   * Em que ponto da aula este conceito foi dito PELA PRIMEIRA VEZ, contado em
+   * sintagmas e não em milissegundos.
+   *
+   * `atMs` tem a granularidade do trecho de áudio, e dois conceitos
+   * introduzidos na mesma frase ("hoje vamos falar sobre banco de dados e
+   * APIs REST") carregam exatamente o mesmo horário. Sem um desempate mais
+   * fino, a abertura do resumo os listava na ordem do ranking e dizia "a aula
+   * abordou APIs REST e banco de dados" — invertendo a ordem em que o
+   * professor apresentou os dois.
+   */
+  ordem: number;
   pontos: number;
 }
 
@@ -319,25 +392,75 @@ export function extrairSintagmas(texto: string, indiceFrase: number): Sintagma[]
     fechar(palavras.length);
   }
 
-  // Um sintagma grande demais é, quase sempre, DOIS conceitos coordenados por
-  // "e" ("lógica de programação e programação orientada a objetos"). Quebrar
-  // no "e" só quando passa do teto preserva "linhas e colunas", que cabe.
+  /*
+   * "e" liga OU coordena, e a diferença decide dois casos reais.
+   *
+   * "linhas e colunas" é um conceito; "banco de dados e APIs rest" são dois.
+   * O que separa não é o tamanho total (esse par cabia folgado no teto e
+   * saía como um conceito só, medido com transcript real) — é o que há de
+   * cada LADO do "e". Quando os dois lados carregam duas ou mais palavras de
+   * conteúdo, são duas expressões inteiras sendo listadas. Quando um dos
+   * lados é uma palavra só, o "e" está dentro da expressão: "linhas e
+   * colunas", "armazenar e organizar informações".
+   */
   const finais: Sintagma[] = [];
   for (const s of achados) {
+    const pedacos = partirNaCoordenacao(s.texto, indiceFrase);
+    if (pedacos) {
+      finais.push(...pedacos);
+      continue;
+    }
     if (s.conteudo.length <= MAX_CONTEUDO_SINTAGMA) {
       finais.push(s);
       continue;
     }
-    const pedacos = s.texto.split(/\s+(?:e|E)\s+/);
-    if (pedacos.length < 2) {
-      finais.push(s);
-      continue;
-    }
-    for (const pedaco of pedacos) {
-      finais.push(...extrairSintagmas(pedaco, indiceFrase));
-    }
+    // Longo demais e sem coordenação para desfazer: fica com as primeiras
+    // palavras de conteúdo em vez de despejar a oração inteira como bullet.
+    finais.push(aparar(s, MAX_CONTEUDO_SINTAGMA));
   }
   return finais;
+}
+
+/**
+ * Divide "A e B" quando A e B são duas expressões, não uma. `null` quando o
+ * "e" é interno ao conceito. Ver o comentário em `extrairSintagmas`.
+ */
+function partirNaCoordenacao(texto: string, indiceFrase: number): Sintagma[] | null {
+  const palavras = texto.split(/\s+/);
+  const normal = palavras.map((p) => semAcento(p.replace(/[^\p{L}\p{N}]/gu, "")));
+  for (let i = 1; i < palavras.length - 1; i++) {
+    if (normal[i] !== "e") continue;
+    const esquerda = normal.slice(0, i).filter(ehConteudo).length;
+    const direita = normal.slice(i + 1).filter(ehConteudo).length;
+    if (esquerda < 2 || direita < 2) continue;
+    return [
+      ...extrairSintagmas(palavras.slice(0, i).join(" "), indiceFrase),
+      ...extrairSintagmas(palavras.slice(i + 1).join(" "), indiceFrase),
+    ];
+  }
+  return null;
+}
+
+/** Corta o sintagma nas primeiras `max` palavras de conteúdo, sem deixar
+    ponta solta (ligação ou palavra fraca no fim). */
+function aparar(s: Sintagma, max: number): Sintagma {
+  const palavras = s.texto.split(/\s+/);
+  const normal = palavras.map((p) => semAcento(p.replace(/[^\p{L}\p{N}]/gu, "")));
+  let vistos = 0;
+  let fim = palavras.length;
+  for (let k = 0; k < palavras.length; k++) {
+    if (!ehConteudo(normal[k])) continue;
+    vistos++;
+    if (vistos === max) {
+      fim = k + 1;
+      break;
+    }
+  }
+  return {
+    texto: palavras.slice(0, fim).join(" "),
+    conteudo: normal.slice(0, fim).filter(ehConteudo),
+    frase: s.frase,
+  };
 }
 
 /**
@@ -407,9 +530,16 @@ function melhoresGrafias(sintagmas: Sintagma[]): Map<string, string> {
   return melhor;
 }
 
-/** A identidade de um conceito: radicais, em ordem, já absorvidos. */
+/**
+ * A identidade de um conceito: radicais, em ordem, já absorvidos.
+ *
+ * O `radical` no fim é o que junta "banco de dados" e "bancos de dados" — e
+ * é imprescindível: diferente da absorção (que só alcança uma forma dita uma
+ * única vez), o plural pode ser tão frequente quanto o singular. Sem isto, a
+ * mesma aula mostrava os dois como conceitos distintos.
+ */
 function chaveDe(conteudo: string[], absorcao: Map<string, string>): string {
-  return conteudo.map((p) => absorcao.get(p) ?? p).join("+");
+  return conteudo.map((p) => radical(absorcao.get(p) ?? p)).join("+");
 }
 
 /**
@@ -465,7 +595,11 @@ function nomeCanonico(
         if (!ehConteudo(normal[k])) continue;
         vistos++;
         if (vistos === i) {
-          votos.set(palavras[k], (votos.get(palavras[k]) ?? 0) + 1);
+          // Sem a pontuação grudada: "API's" e "APIs" são a mesma grafia, e
+          // contá-las separado fazia as duas perderem para o singular "API"
+          // numa votação que elas venciam juntas.
+          const limpa = palavras[k].replace(/[^\p{L}\p{N}-]/gu, "");
+          if (limpa) votos.set(limpa, (votos.get(limpa) ?? 0) + 1);
           break;
         }
       }
@@ -579,6 +713,9 @@ export function extrairConceitos(frases: FraseAnalise[]): Conceito[] {
       naSintese,
       tamanho: variantes[0].conteudo.length,
       frases: indices,
+      // `sintagmas` está na ordem da aula, então o índice da primeira
+      // variante É a posição da primeira menção.
+      ordem: sintagmas.indexOf(variantes[0]),
       pontos: 0,
     });
   }
@@ -623,6 +760,7 @@ export function extrairConceitos(frases: FraseAnalise[]): Conceito[] {
       grande.atMsEnfase = grande.atMsEnfase ?? pequeno.atMsEnfase;
       grande.naSintese = grande.naSintese || pequeno.naSintese;
       grande.frases = [...new Set([...grande.frases, ...pequeno.frases])];
+      grande.ordem = Math.min(grande.ordem, pequeno.ordem);
       absorvidos.add(pequeno.chave);
     }
   }

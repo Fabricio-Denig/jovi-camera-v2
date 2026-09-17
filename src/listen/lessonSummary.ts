@@ -1,9 +1,7 @@
 import type { TranscriptSegment } from "../shared/lib/mediaStore";
 import {
   MARCAS_DE_ENFASE,
-  PALAVRAS_DE_MARCA,
   semAcento,
-  VAZIAS,
   marcaDeEnfaseValida,
   negadoAntes,
 } from "./speechInsights";
@@ -15,39 +13,6 @@ import {
   type FraseAnalise,
 } from "./conceitos";
 
-/**
- * Palavras genéricas demais para virar assunto ou título — mesmo sendo
- * "conteúdo" no sentido gramatical (substantivos, adjetivos), não carregam
- * assunto nenhum sozinhas.
- *
- * Diferente de `VAZIAS` (artigos, pronomes, verbos de ligação — a gramática
- * do português), esta lista é sobre o CONCEITO: "conteúdo", "assunto" e
- * "importante" são palavras reais, com sentido, mas um resumo que usa
- * qualquer uma delas como o tema da aula está mentindo por vagueza. Achada
- * com um teste físico real: "Aula sem título" virou "Último" porque a
- * palavra "último" (comum no jeito de falar de um professor, mas sem
- * assunto nenhum) tinha peso suficiente para vencer a disputa por título.
- *
- * Fica FORA da contagem de termos (`contarTermosLocal`), então o efeito é
- * automático em toda parte que lê o mapa de pesos: pontuação de frases
- * (`pontuarFrase`), agrupamento (`termosFortes`), assunto amplo
- * (`topicoAmplo`) e título (`sugerirTitulo`) — todos herdam o corte de um
- * lugar só.
- */
-const PALAVRAS_GENERICAS_DEMAIS = new Set(
-  (
-    "ultimo ultima primeiro primeira conteudo assunto momento teste " +
-    "importante proximo proxima preparar possibilidade necessario " +
-    "interessante geral outro outra outros outras mesmo mesma mesmos " +
-    "mesmas varios varias diferente diferentes tudo algo alguma algum " +
-    "alguns algumas coisa coisas coisinha jeito modo maneira coitado " +
-    "coitada tal tais coisarada " +
-    // Verbos genéricos demais para virar tópico sozinhos — achado com um
-    // segundo teste físico real: "Ficar" apareceu em "Para revisar" (de
-    // "...pode ficar na prova", um erro do reconhecimento por "cair").
-    "ficar fica ficam fazer faz fazem hoje"
-  ).split(/\s+/),
-);
 
 
 /**
@@ -64,9 +29,18 @@ const PALAVRAS_GENERICAS_DEMAIS = new Set(
  * no lugar de um destaque específico (achado com um teste físico real).
  */
 const MARCAS_DE_SINTESE = new Set(
-  ["resumindo", "em resumo", "o principal e", "o principal é", "vamos revisar"].map(
-    semAcento,
-  ),
+  [
+    "resumindo",
+    "em resumo",
+    "para resumir",
+    "o principal e",
+    "o principal é",
+    "vamos revisar",
+    // "os principais assuntos são X e Y" é recapitulação, não aviso — sem
+    // isto ela entrava em "Professor destacou" com a frase inteira.
+    "os principais assuntos",
+    "os principais pontos",
+  ].map(semAcento),
 );
 
 /**
@@ -104,25 +78,60 @@ function temMarcaDeSintese(texto: string): boolean {
  * vem antes é ênfase de verdade; o que vem depois é recapitulação, que dá
  * PESO aos conceitos citados sem transformá-los em destaques.
  */
-function partirNaSintese(texto: string): { texto: string; sintese: boolean }[] {
+function partirEmClausulas(texto: string): { texto: string; sintese: boolean }[] {
   const normal = semAcento(texto);
-  let corte = -1;
+
+  /*
+   * Onde a frase muda de assunto: uma recapitulação começando, ou uma
+   * NEGAÇÃO começando. Os dois casos vieram de transcript real, na mesma
+   * linha, porque o reconhecimento não pôs ponto final:
+   *
+   *   "Presta atenção, pois API reste são importantes e podem
+   *    Esta próxima parte não é importante para avaliação."
+   *
+   * São duas afirmações opostas grudadas. Tratadas como uma frase só, ou a
+   * negação contamina o destaque legítimo das APIs, ou o destaque legítimo
+   * faz a parte negada contar como ênfase. Cortar no "não" resolve os dois:
+   * o que vem antes mantém a ênfase que mereceu, e o que vem depois carrega
+   * a própria negação, que `marcaDeEnfaseValida` já sabe descontar.
+   */
+  const cortes: { at: number; sintese: boolean }[] = [];
   for (const m of MARCAS_DE_SINTESE) {
     const idx = normal.indexOf(m);
-    if (idx > 0 && !negadoAntes(normal, idx) && (corte === -1 || idx < corte)) {
-      corte = idx;
+    if (idx > 0 && !negadoAntes(normal, idx)) cortes.push({ at: idx, sintese: true });
+  }
+  for (const m of ["nao ", "nunca ", "jamais "]) {
+    let de = 0;
+    for (;;) {
+      const idx = normal.indexOf(m, de);
+      if (idx <= 0) break;
+      // Só quando é começo de palavra — "não" dentro de outra não corta nada.
+      if (idx === 0 || /[\s,;:]/.test(normal[idx - 1])) {
+        cortes.push({ at: idx, sintese: false });
+      }
+      de = idx + m.length;
     }
   }
-  if (corte === -1) {
+  if (cortes.length === 0) {
     return [{ texto, sintese: temMarcaDeSintese(texto) }];
   }
-  // `semAcento` preserva o comprimento (troca letra por letra), então o
-  // índice achado no normalizado vale no original.
-  const antes = texto.slice(0, corte).trim();
-  const depois = texto.slice(corte).trim();
+
+  // `semAcento` preserva o comprimento (troca letra por letra), então os
+  // índices achados no normalizado valem no original.
+  cortes.sort((a, b) => a.at - b.at);
   const partes: { texto: string; sintese: boolean }[] = [];
-  if (antes) partes.push({ texto: antes, sintese: false });
-  if (depois) partes.push({ texto: depois, sintese: true });
+  let inicio = 0;
+  let sinteseAtual = false;
+  for (const corte of cortes) {
+    if (corte.at <= inicio) continue;
+    const pedaco = texto.slice(inicio, corte.at).trim();
+    if (pedaco) partes.push({ texto: pedaco, sintese: sinteseAtual });
+    inicio = corte.at;
+    // Depois de uma marca de síntese, TUDO o que vem é recapitulação.
+    sinteseAtual = sinteseAtual || corte.sintese;
+  }
+  const resto = texto.slice(inicio).trim();
+  if (resto) partes.push({ texto: resto, sintese: sinteseAtual });
   return partes;
 }
 
@@ -239,46 +248,6 @@ function temMarcaDeEnfase(texto: string): boolean {
   return marcaDeEnfaseValida(semAcento(texto)) !== null;
 }
 
-/**
- * Quantas vezes cada termo aparece — sem piso de repetição: numa aula curta,
- * um conceito dito uma vez só ainda é o assunto da aula.
- *
- * A chave é normalizada (sem acento, minúscula) para agrupar "Função"/"função"
- * como o mesmo termo, mas `forma` guarda a grafia ORIGINAL da primeira vez
- * que apareceu — sem isso, todo termo mostrado na tela (título sugerido,
- * "Para revisar") sairia sem acento e sem maiúscula de nome próprio
- * ("corinthians" em vez de "Corinthians", achado com um teste real).
- */
-function contarTermosLocal(
-  textos: string[],
-): Map<string, { forma: string; n: number }> {
-  const contagem = new Map<string, { forma: string; n: number }>();
-  for (const texto of textos) {
-    const vistos = new Set<string>();
-    for (const bruto of texto.split(/[^\p{L}\p{N}]+/u)) {
-      const palavraOriginal = bruto.trim();
-      const chave = semAcento(palavraOriginal);
-      if (
-        chave.length < 3 ||
-        VAZIAS.has(chave) ||
-        PALAVRAS_GENERICAS_DEMAIS.has(chave) ||
-        // "prova", "cair", "atenção", "anotem"... avisam que algo importa —
-        // não SÃO o algo. Ver o comentário de `PALAVRAS_DE_MARCA`.
-        PALAVRAS_DE_MARCA.has(chave) ||
-        /^\d+$/.test(chave)
-      )
-        continue;
-      // Uma vez por frase: uma palavra repetida três vezes na MESMA frase não
-      // deve pesar como se tivesse aparecido em três frases diferentes.
-      if (vistos.has(chave)) continue;
-      vistos.add(chave);
-      const atual = contagem.get(chave);
-      if (atual) atual.n += 1;
-      else contagem.set(chave, { forma: palavraOriginal, n: 1 });
-    }
-  }
-  return contagem;
-}
 
 
 
@@ -335,14 +304,21 @@ export function gerarResumoGlobal({
    * conceitos. Entra como PESO neles, nunca como linha própria.
    */
   const frasesFala: FraseAnalise[] = frasesDaFala(transcript).flatMap((f) =>
-    partirNaSintese(f.texto).map((parte) => ({
+    partirEmClausulas(f.texto).map((parte) => ({
       texto: parte.texto,
       atMs: f.atMs,
       origem: "fala" as const,
-      // A ênfase da frase só vale para o pedaço ANTES da recapitulação — ver
-      // `partirNaSintese`.
+      /*
+       * A ênfase é avaliada NA CLÁUSULA, não na frase. É a diferença entre
+       * "as APIs são importantes" (destaque legítimo) e "esta próxima parte
+       * não é importante" (o oposto), que o reconhecimento entregou grudadas
+       * na mesma linha. `marcaDeEnfaseValida` já desconta a negação dentro
+       * da cláusula; o corte garante que ela veja uma cláusula por vez.
+       */
       enfatizada:
-        !parte.sintese && f.marcado && !ehApenasMarcaDeSintese(parte.texto),
+        !parte.sintese &&
+        marcaDeEnfaseValida(semAcento(parte.texto)) !== null &&
+        !ehApenasMarcaDeSintese(parte.texto),
       sintese: parte.sintese,
     })),
   );
@@ -379,8 +355,21 @@ export function gerarResumoGlobal({
    * passa no filtro, o resumo fica com o melhor único em vez de encher a
    * lista com o que sobrou.
    */
-  const sustentados = conceitos.filter(
-    (c) => c.ocorrencias >= 2 || c.tamanho >= 2 || c.enfatizado || c.naSintese,
+  const sustentados = conceitos.filter((c) =>
+    /*
+     * Uma palavra SOLTA precisa de repetição — nada mais a sustenta.
+     *
+     * "Assunstios" (o que o reconhecimento fez de "assuntos") apareceu uma
+     * vez, dentro da frase de recapitulação, e virou ponto principal E item
+     * de "Para revisar" — porque estar na síntese bastava. Uma palavra única
+     * dita uma única vez é ruído com sorte, não assunto de aula: se ela fosse
+     * mesmo o tema, o professor teria voltado nela. Expressões de duas ou
+     * mais palavras continuam passando com uma ocorrência — ali a própria
+     * composição já é evidência.
+     */
+    c.tamanho >= 2
+      ? c.ocorrencias >= 1 || c.enfatizado || c.naSintese
+      : c.ocorrencias >= 2,
   );
   const base = sustentados.length > 0 ? sustentados : conceitos.slice(0, 1);
 
@@ -457,13 +446,20 @@ function montarVisaoGeral(
   if (conceitos.length === 0) return "";
   const frases: string[] = [];
 
-  // A abertura nomeia os assuntos na ordem em que a aula os introduziu — ler
-  // o resumo na ordem da aula é mais útil que na ordem do ranking.
+  /*
+   * A abertura nomeia os assuntos na ordem em que a aula os INTRODUZIU, não
+   * na ordem do ranking — ler o resumo na ordem da aula é mais útil. Quando
+   * dois conceitos nascem no mesmo trecho de áudio ("hoje vamos falar sobre
+   * banco de dados e APIs REST"), `atMs` empata e quem desempata é a posição
+   * na fala (ver `Conceito.ordem`); sem isso o resumo invertia os dois.
+   */
   const naOrdemDaAula = [...conceitos.slice(0, 3)].sort((a, b) => {
-    if (a.atMs === null && b.atMs === null) return 0;
-    if (a.atMs === null) return 1;
-    if (b.atMs === null) return -1;
-    return a.atMs - b.atMs;
+    if (a.atMs !== null && b.atMs !== null && a.atMs !== b.atMs) {
+      return a.atMs - b.atMs;
+    }
+    if (a.atMs === null && b.atMs !== null) return 1;
+    if (b.atMs === null && a.atMs !== null) return -1;
+    return a.ordem - b.ordem;
   });
   const abertura = naOrdemDaAula.slice(0, 2);
   frases.push(
@@ -474,9 +470,8 @@ function montarVisaoGeral(
 
   /*
    * A relação, quando o transcript a sustenta: dois conceitos na MESMA frase.
-   * É uma afirmação de co-ocorrência — a mais forte que dá para fazer sem
-   * interpretar semântica — e é o que transforma uma lista de assuntos em
-   * algo que se lê como explicação.
+   * É a afirmação mais forte que dá para fazer sem interpretar semântica, e é
+   * o que transforma uma lista de assuntos em algo que se lê como explicação.
    */
   const jaDito = new Set(abertura.map((c) => c.chave));
   const primario = abertura[0];
@@ -518,9 +513,7 @@ function montarVisaoGeral(
   return escolhidas.join(" ");
 }
 
-function maiuscula(t: string) {
-  return t.charAt(0).toUpperCase() + t.slice(1);
-}
+
 
 /**
  * Um título curto sugerido para a aula, só quando há evidência forte.
@@ -540,20 +533,49 @@ export function sugerirTitulo(
   const doQuadro = ocrTopicos[0];
   if (doQuadro && doQuadro.length <= maxChars) return doQuadro;
 
-  // Sem isso, só resta a fala: exige repetição real (um termo dito 1 vez não
-  // é assunto da aula, é uma palavra que passou por ela). Só frases com
-  // conteúdo de verdade contam — sem isto, "Muito boa tarde." (curta demais
-  // para ser um ponto do resumo, mas ainda assim contada aqui antes) inflava
-  // termos de saudação o bastante para competir com o assunto real.
-  const frases = frasesDaFala(transcript).filter(
-    (f) => f.texto.split(/\s+/).length >= MIN_PALAVRAS_FRASE,
-  );
-  const termos = [...contarTermosLocal(frases.map((f) => f.texto)).values()]
-    .filter(({ n }) => n >= 2)
-    .sort((a, b) => b.n - a.n);
-  if (termos.length === 0) return null;
-  const principal = maiuscula(termos[0].forma);
-  const segundo = termos[1]?.forma;
-  const titulo = segundo ? `${principal} e ${segundo}` : principal;
-  return titulo.length <= maxChars ? titulo : principal.slice(0, maxChars);
+  /*
+   * Sem quadro, o título sai dos CONCEITOS — os mesmos que o resumo usa — e
+   * não mais de uma contagem de palavras soltas.
+   *
+   * A versão anterior somava termos independentes e colava os dois mais
+   * frequentes com um "e" no meio, o que produzia títulos que ninguém disse:
+   * numa aula sobre banco de dados e APIs, "Dados e API". Os conceitos já
+   * chegam aqui como expressões inteiras, agrupadas e nomeadas por evidência
+   * — usar o mais forte é ao mesmo tempo mais simples e mais fiel.
+   *
+   * A exigência de confiança continua alta: só entra conceito com repetição
+   * real, ênfase ou recapitulação do professor. Um título errado é pior que
+   * "Aula sem título", porque parece que o app entendeu algo que não
+   * entendeu.
+   */
+  const conceitos = extrairConceitos(
+    frasesDaFala(transcript)
+      .filter((f) => f.texto.split(/\s+/).length >= MIN_PALAVRAS_FRASE)
+      .map((f) => ({
+        texto: f.texto,
+        atMs: f.atMs,
+        origem: "fala" as const,
+        enfatizada: false,
+        sintese: false,
+      })),
+  )
+    .filter((c) => c.ocorrencias >= 2 || c.tamanho >= 2)
+    /*
+     * Para TÍTULO, o que manda é a REPETIÇÃO, não a pontuação.
+     *
+     * O resumo premia expressões longas e informativas, e é o que se quer
+     * dentro dele. Num título isso sai errado: numa aula que disse "matrizes"
+     * quatro vezes, o conceito mais bem pontuado era "estruturas organizadas
+     * em linhas e colunas" — verdadeiro, específico, e um péssimo nome de
+     * aula. O nome de uma aula é a palavra à qual o professor volta.
+     */
+    .sort((a, b) => b.ocorrencias - a.ocorrencias || b.pontos - a.pontos);
+  if (conceitos.length === 0) return null;
+
+  const principal = comoTitulo(conceitos[0].canonico);
+  if (principal.length > maxChars) return null;
+  const segundo = conceitos[1]?.canonico;
+  if (!segundo) return principal;
+  const juntos = `${principal} e ${segundo}`;
+  return juntos.length <= maxChars ? juntos : principal;
 }

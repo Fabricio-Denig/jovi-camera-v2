@@ -39,6 +39,23 @@ const POO = [
   "Programação orientada objetos é importante e pode cair na prova Resumindo os principais assuntos são lógicas de programação E programação orientado à objeto...",
 ];
 
+/**
+ * Transcript literal do teste físico (aula de banco de dados e APIs REST).
+ *
+ * O caso mais duro dos três: idioma trocado no meio ("falar about APIs Rest"),
+ * a mesma expressão em quatro grafias ("API's rest", "APIs Rest", "API reste",
+ * "API restes"), uma palavra irreconhecível ("assunstios" por "assuntos"), e
+ * duas afirmações OPOSTAS grudadas na mesma linha porque o reconhecimento não
+ * pôs ponto final — uma marcando ênfase, a outra negando-a.
+ */
+const BANCO = [
+  "Hoje vamos falar sobre banco de dados e API's rest.",
+  "Um Banco De dados é usado para armazenar e organizar informações",
+  "Agora, nós vamos falar about APIs Rest que permitem a comunicação entre diferentes sistemas",
+  "Presta atenção, pois API reste são importantes e podem Esta próxima parte não é importante para avaliação.",
+  "Resumindo, os principais assunstios hoje são bancos de dados e API restes",
+];
+
 /** Transcript literal do `whisper-base` no navegador (aula de matrizes). */
 const MATRIZES = [
   "Hoje vamos falar sobre matrizes.",
@@ -83,6 +100,69 @@ const tudo = (r) =>
     ...r.professorDestacou.map((d) => d.text),
     ...r.paraRevisar,
   ].join(" | ");
+
+// -------------------------------------------------------------- BANCO
+const banco = mostrar("BANCO DE DADOS / APIs REST — transcript do teste físico", BANCO);
+const textoBanco = tudo(banco).toLowerCase();
+const bulletsBanco = [...banco.pontosPrincipais, ...banco.paraRevisar];
+
+console.log("\n== conceitos obrigatórios ==");
+check(/banco de dados/.test(textoBanco), "conceito: banco de dados");
+check(/apis? rest/.test(textoBanco), "conceito: APIs REST");
+check(/armazenar|armazenamento/.test(textoBanco), "conceito: armazenamento");
+check(/comunicação entre/.test(textoBanco), "conceito: comunicação entre sistemas");
+
+console.log("\n== lixo do reconhecimento não vira conceito ==");
+check(!/assunstios/i.test(textoBanco), "'Assunstios' não aparece em lugar nenhum");
+check(!/\babout\b/i.test(textoBanco), "'About APIs rest' não vira conceito");
+check(
+  !bulletsBanco.some((b) => /^(usado|importante|esta próxima)/i.test(b)),
+  "nenhum ponto começa por fragmento",
+  bulletsBanco.join(" / "),
+);
+
+console.log("\n== sem conceito duplicado ==");
+{
+  // "banco de dados e API rest" + "banco de dados e APIs rest" era o defeito:
+  // a mesma dupla, duas grafias, dois bullets. Só DENTRO de "Pontos
+  // principais" — "Para revisar" repete itens de propósito, porque responde
+  // outra pergunta ("o que eu estudo hoje à noite").
+  const chaves = banco.pontosPrincipais.map((b) =>
+    b.toLowerCase().replace(/[^a-z\s]/g, "").replace(/s\b/g, "").trim(),
+  );
+  check(new Set(chaves).size === chaves.length, "nenhum bullet repetido por variante", chaves.join(" | "));
+  check(
+    !bulletsBanco.some((b) => /banco de dados e api/i.test(b)),
+    "os dois assuntos não ficaram colados num bullet só",
+  );
+}
+
+console.log("\n== ênfase liga ao conceito, negação não apaga ==");
+check(
+  banco.professorDestacou.length >= 1,
+  "o destaque existe (a fala marcou 'são importantes')",
+);
+check(
+  banco.professorDestacou.some((d) => /api/i.test(d.text)),
+  "o destaque é APIs REST",
+  banco.professorDestacou.map((d) => d.text).join(" / "),
+);
+check(
+  !banco.professorDestacou.some((d) => /próxima parte|proxima parte/i.test(d.text)),
+  "a cláusula negada não virou destaque",
+);
+check(
+  !/resumindo/i.test(textoBanco) && !/principais assunt/i.test(textoBanco),
+  "'Resumindo...' não virou conteúdo nem destaque",
+);
+check(
+  banco.pontosPrincipais.length >= 2 && banco.pontosPrincipais.length <= 6,
+  `pontos principais entre 2 e 6 (${banco.pontosPrincipais.length})`,
+);
+{
+  const n = banco.overview.split(/\s+/).filter(Boolean).length;
+  check(n > 0 && n <= 160, `resumo ≤160 palavras (${n})`);
+}
 
 // ---------------------------------------------------------------- POO
 const poo = mostrar("POO — transcript do teste físico", POO);
@@ -187,6 +267,34 @@ const neg = gerarResumoGlobal({
 console.log(`\n${"=".repeat(72)}\n### NEGAÇÃO`);
 console.log(`  destaques: ${neg.professorDestacou.length}`);
 check(neg.professorDestacou.length === 0, "negação não gera destaque");
+
+// ------------------------------------------------- TERMOS TÉCNICOS
+/**
+ * A aula de React, do seeder que o repositório já usa. Existe aqui por um
+ * motivo só: `useState` não pode voltar a virar "usestate". Foi uma regressão
+ * real — o nome canônico baixava a caixa da expressão inteira —, e numa aula
+ * de programação o nome do hook é exatamente o que o estudante vem conferir.
+ */
+const { FALA_REACT } = await import("./semear-fala.mjs");
+const react = gerarResumoGlobal({
+  transcript: FALA_REACT.map(([startMs, endMs, text]) => ({
+    startMs,
+    endMs,
+    text,
+    final: true,
+  })),
+  ocrLinhas: [],
+  momentosMs: [],
+});
+console.log(`\n${"=".repeat(72)}\n### REACT — caixa de termos técnicos`);
+react.pontosPrincipais.forEach((p) => console.log(`  • ${p}`));
+const textoReact = tudo(react);
+check(/useState/.test(textoReact), "useState preservado (não 'usestate')");
+check(!/\busestate\b/i.test(textoReact.replace(/useState/g, "")), "nenhum 'usestate' solto");
+check(
+  react.pontosPrincipais.length >= 2,
+  `a aula de React ainda produz pontos (${react.pontosPrincipais.length})`,
+);
 
 console.log(
   `\n${falhas === 0 ? "TUDO OK" : `${falhas} FALHA(S)`} — ${new Date().toISOString()}`,
