@@ -59,7 +59,16 @@ import { MENSAGEM_TRECHO_DEGENERADO } from "./transcriptSanitizer";
 const LIGACOES = new Set(
   (
     "de da do das dos a à ao aos as os o um uma uns umas em no na nos nas " +
-    "para por com entre sobre e"
+    "para por com entre sobre e " +
+    /*
+     * As contrações da fala. O Whisper transcreve o que foi DITO, e ninguém
+     * diz "para" numa aula — diz "pra". Sem elas aqui, "pra" contava como
+     * palavra de conteúdo: um roteiro real produziu o ponto principal
+     * "Estrutu de dado serve pra pra", em que duas das cinco palavras eram a
+     * mesma preposição colada.
+     */
+    "pra pro pras pros num numa nuns numas dum duma duns dumas pela pelo " +
+    "pelas pelos nesse nessa neste nesta desse dessa deste desta"
   ).split(/\s+/),
 );
 
@@ -110,7 +119,66 @@ const COPULAS = new Set([
   "onde",
   "cujo",
   "cuja",
+  /*
+   * Verbos que separam sujeito de predicado tão bem quanto uma cópula.
+   * "Célula vegetal TEM parede celular" são DOIS conceitos — a célula e a
+   * parede —, e sem o corte saía um bullet-oração de cinco palavras. Mesma
+   * coisa com "Revolução industrial MUDOU forma de produção" e "Máquina
+   * vapor TEVE papel importante". Achados atacando o resumo com aulas de
+   * biologia e história, matérias que nenhum fixture cobria.
+   */
+  "tem",
+  "tinha",
+  "tinham",
+  "teve",
+  "tiveram",
+  "ha",
+  "houve",
+  "havia",
+  /*
+   * Verbos APRESENTACIONAIS. Eles introduzem o que a coisa faz, e o que vem
+   * depois deles é outro conceito, não a continuação do primeiro: "Redes de
+   * computadores PERMITEM diferentes dispositivos se comunicar" são as redes
+   * E a comunicação. Eram palavras fracas — transparentes no meio da
+   * expressão —, o que produzia bullets-oração de quatro conteúdos que ainda
+   * por cima repetiam um conceito já listado sozinho. Cortando, cada lado
+   * vira o que é.
+   */
+  "usado",
+  "usada",
+  "usados",
+  "usadas",
+  "permite",
+  "permitem",
+  "serve",
+  "servem",
+  "possui",
+  "possuem",
+  "contem",
+  "guarda",
+  "guardam",
+  "representa",
+  "representam",
+  "significa",
+  "significam",
+  "consiste",
+  "consistem",
 ]);
+
+/**
+ * Terminação de pretérito perfeito na 3ª pessoa — "mudou", "chegou",
+ * "apresentou". Em português, substantivo terminado em "-ou" é raríssimo, e
+ * os poucos curtos que existem ("vou", "sou", "dou") já são palavras vazias.
+ * O piso de cinco letras é o que mantém esses fora.
+ *
+ * Deliberadamente NÃO se faz o mesmo com "-am"/"-em": "homem", "nuvem",
+ * "ordem", "imagem" e "linguagem" são substantivos comuns, e cortar neles
+ * quebraria conceitos legítimos. Uma heurística que erra para os dois lados
+ * não vale a pena.
+ */
+function pareceVerboPreterito(normal: string): boolean {
+  return normal.length >= 5 && normal.endsWith("ou");
+}
 
 /** `é` precisa ser comparado COM acento: sem ele vira a conjunção "e", que
     tem papel oposto (liga em vez de cortar). */
@@ -118,7 +186,7 @@ function ehCopula(palavraOriginal: string, normal: string): boolean {
   if (palavraOriginal === "é" || palavraOriginal === "É") return true;
   // "e" sem acento é conjunção, nunca cópula — e já está em LIGACOES.
   if (normal === "e") return false;
-  return COPULAS.has(normal);
+  return COPULAS.has(normal) || pareceVerboPreterito(normal);
 }
 
 /**
@@ -158,9 +226,7 @@ const FRACAS = new Set(
      * comunicação entre sistemas. Como palavra fraca, o verbo continua no
      * meio da expressão quando faz parte dela, mas nunca a encabeça.
      */
-    "usado usada usados usadas usar permite permitem permitir serve servem " +
-    "possui possuem contem existe existem representa representam significa " +
-    "significam consiste trata tratam refere " +
+    "usar permitir existe existem trata tratam refere " +
     /*
      * Ruído em inglês. O Whisper multilíngue troca de idioma no meio de uma
      * aula em português — "Agora, nós vamos falar ABOUT APIs Rest" é
@@ -168,7 +234,25 @@ const FRACAS = new Set(
      * assunto de aula nenhuma em PT-BR, e sem elas na lista "About APIs
      * rest" virava um ponto principal.
      */
-    "about the and for with that this these those from into what which"
+    "about the and for with that this these those from into what which " +
+    /*
+     * A fala real, e não a escrita. Achadas atacando o resumo com roteiros de
+     * sete matérias novas: "vamo" (sem o s) escapava de "vamos" e produzia o
+     * ponto "Vamo falar de HTTP"; "tema" produzia "Tema célula animal"; e os
+     * verbos de abertura de aula ("vamos começar", "vamos seguindo") faziam
+     * uma aula de quatro linhas de conversa fiada render o ponto principal
+     * "Começar."
+     */
+    "vamo vamô tá ta né aí ai tipo assim beleza ok entendeu certo daqui " +
+    /*
+     * As formas mal transcritas de "resumindo". A camada de síntese já as
+     * reconhece como marcador (ver `acharMarcaDeSintese`), mas quando a marca
+     * abre a frase não há o que cortar antes dela — e a palavra sobrava como
+     * conteúdo, produzindo o ponto "Resumino assunto banco de dado e SQL".
+     */
+    "resumindo resumino resuminho resumimos recapitulando sintetizando " +
+    "tema temas topico topicos comecar começar comeca começa comecamos " +
+    "começamos seguindo seguir segue seguimos terminar termina acabar acaba"
   ).split(/\s+/),
 );
 
@@ -274,6 +358,20 @@ export interface Conceito {
   atMsEnfase: number | null;
   /** Foi citado numa frase de síntese ("resumindo, os principais são..."). */
   naSintese: boolean;
+  /**
+   * TODAS as ocorrências vieram de recapitulação — o conceito não existe
+   * fora dela.
+   *
+   * A distinção decide quem manda. Numa recapitulação o professor lista
+   * assuntos sem pontuação ("Resumindo revolução industrial máquina vapor e
+   * urbanização"), e o que sai dali é uma ENUMERAÇÃO grudada, não um
+   * conceito. Tratada como conceito, ela engolia os assuntos de verdade: a
+   * enumeração "revolução industrial máquina vapor" absorvia "máquina
+   * vapor", que a aula tinha apresentado numa frase própria, e o resumo
+   * perdia um dos três temas. A recapitulação REFORÇA o que já existe; ela
+   * não cria.
+   */
+  soNaSintese: boolean;
   /** Quantas palavras de conteúdo — um conceito de 3 diz mais que um de 1. */
   tamanho: number;
   /** Índices das frases em que apareceu — usado para achar co-ocorrência. */
@@ -319,15 +417,33 @@ export function normalizarFrase(texto: string): string {
   if (palavras.length < 4) return texto.trim();
   const normal = palavras.map((p) => semAcento(p.replace(/[^\p{L}\p{N}]/gu, "")));
 
-  // N-gramas grandes primeiro: colapsar "resolver um problema" inteiro é
-  // melhor que colapsar só "um problema" e deixar um "resolver" solto.
-  for (let n = Math.min(8, Math.floor(palavras.length / 2)); n >= 2; n--) {
+  /*
+   * N-gramas grandes primeiro: colapsar "resolver um problema" inteiro é
+   * melhor que colapsar só "um problema" e deixar um "resolver" solto.
+   *
+   * O piso é 1, não 2, e isso importa: a gagueira de UMA palavra é o caso
+   * mais comum de todos na fala ("banco banco banco de dados", "vai vai
+   * falar", "sobre sobre", "pra pra", "passos passos") e era exatamente o
+   * que escapava — o ponto principal saía "Banco banco banco de dados".
+   */
+  for (let n = Math.min(8, Math.floor(palavras.length / 2)); n >= 1; n--) {
     for (let i = 0; i + n * 2 <= palavras.length; i++) {
       const alvo = normal.slice(i, i + n).join(" ");
       if (!alvo.trim()) continue;
-      // Até duas palavras de ligação entre as duas cópias ("... problema PARA
-      // resolver um problema") — mais que isso já é outra oração, não eco.
-      for (let lacuna = 0; lacuna <= 2; lacuna++) {
+      /*
+       * Até duas palavras de ligação entre as duas cópias ("... problema PARA
+       * resolver um problema") — mais que isso já é outra oração, não eco.
+       *
+       * Com UMA palavra, a folga tem de ser ZERO. "banco banco banco" é
+       * gagueira; "programação E programação" é coordenação — e tratar a
+       * segunda como eco fundiu dois conceitos num só, transformando "lógica
+       * de programação e programação orientada a objetos" no conceito único
+       * "lógica de programação orientada do objeto". Uma palavra repetida com
+       * algo no meio é a aula listando duas coisas parecidas, não o falante
+       * tropeçando.
+       */
+      const lacunaMax = n === 1 ? 0 : 2;
+      for (let lacuna = 0; lacuna <= lacunaMax; lacuna++) {
         const j = i + n + lacuna;
         if (j + n > palavras.length) break;
         const meio = normal.slice(i + n, j);
@@ -405,12 +521,13 @@ export function extrairSintagmas(texto: string, indiceFrase: number): Sintagma[]
    */
   const finais: Sintagma[] = [];
   for (const s of achados) {
-    const pedacos = partirNaCoordenacao(s.texto, indiceFrase);
+    const excedeu = s.conteudo.length > MAX_CONTEUDO_SINTAGMA;
+    const pedacos = partirNaCoordenacao(s.texto, indiceFrase, excedeu);
     if (pedacos) {
       finais.push(...pedacos);
       continue;
     }
-    if (s.conteudo.length <= MAX_CONTEUDO_SINTAGMA) {
+    if (!excedeu) {
       finais.push(s);
       continue;
     }
@@ -422,17 +539,63 @@ export function extrairSintagmas(texto: string, indiceFrase: number): Sintagma[]
 }
 
 /**
+ * As palavras que tornam um pedaço um sintagma COMPOSTO — "banco DE dados",
+ * "redes DE computadores". A presença de uma delas de um dos lados do "e" é o
+ * sinal de que ali há duas expressões, não uma só com um "e" no meio.
+ *
+ * Só as GENITIVAS. A lista chegou a incluir "em", e isso quebrou um conceito
+ * real: em "estruturas organizadas EM linhas e colunas", o "em" fazia o lado
+ * esquerdo parecer composto, o "e" era cortado, e "colunas" sumia do resumo
+ * de uma aula sobre matrizes. "de" liga um núcleo ao seu complemento e fecha
+ * a expressão; "em", "para" e "com" abrem circunstância e podem perfeitamente
+ * estar ANTES de uma coordenação interna.
+ */
+const CONECTORES_INTERNOS = new Set("de da do das dos".split(/\s+/));
+
+/**
  * Divide "A e B" quando A e B são duas expressões, não uma. `null` quando o
  * "e" é interno ao conceito. Ver o comentário em `extrairSintagmas`.
  */
-function partirNaCoordenacao(texto: string, indiceFrase: number): Sintagma[] | null {
+function partirNaCoordenacao(
+  texto: string,
+  indiceFrase: number,
+  /** O sintagma já passou do teto de conteúdo — ver o porquê abaixo. */
+  excedeuOTeto: boolean,
+): Sintagma[] | null {
   const palavras = texto.split(/\s+/);
   const normal = palavras.map((p) => semAcento(p.replace(/[^\p{L}\p{N}]/gu, "")));
   for (let i = 1; i < palavras.length - 1; i++) {
     if (normal[i] !== "e") continue;
-    const esquerda = normal.slice(0, i).filter(ehConteudo).length;
-    const direita = normal.slice(i + 1).filter(ehConteudo).length;
-    if (esquerda < 2 || direita < 2) continue;
+    const esq = normal.slice(0, i);
+    const dir = normal.slice(i + 1);
+    const nEsq = esq.filter(ehConteudo).length;
+    const nDir = dir.filter(ehConteudo).length;
+    if (nEsq === 0 || nDir === 0) continue;
+
+    /*
+     * Três situações em que o "e" coordena duas expressões, e não liga uma:
+     *
+     * 1. Os dois lados carregam duas ou mais palavras de conteúdo — duas
+     *    expressões inteiras sendo listadas.
+     * 2. Um dos lados é COMPOSTO ("estrutura DE dados e algoritmo"): a
+     *    presença do conector interno já diz que ali há uma expressão
+     *    fechada, mesmo que o outro lado seja uma palavra só.
+     * 3. O sintagma passou do teto. Uma enumeração longa é sempre uma
+     *    lista, e antes desta regra a cauda era simplesmente DESCARTADA:
+     *    "Resumindo revolução industrial máquina vapor e urbanização" era
+     *    aparado nas quatro primeiras palavras de conteúdo e "urbanização"
+     *    — um dos três assuntos da aula — desaparecia do resumo.
+     *
+     * O que continua sem partir: "linhas e colunas", "armazenar e organizar
+     * informações" — uma palavra de cada lado, sem conector interno, dentro
+     * do teto.
+     */
+    const doisLadosCheios = nEsq >= 2 && nDir >= 2;
+    const algumComposto =
+      esq.some((p) => CONECTORES_INTERNOS.has(p)) ||
+      dir.some((p) => CONECTORES_INTERNOS.has(p));
+    if (!doisLadosCheios && !algumComposto && !excedeuOTeto) continue;
+
     return [
       ...extrairSintagmas(palavras.slice(0, i).join(" "), indiceFrase),
       ...extrairSintagmas(palavras.slice(i + 1).join(" "), indiceFrase),
@@ -638,7 +801,22 @@ function nomeCanonico(
       saida.push(palavrasModelo[k]);
     }
   }
-  return minusculaInicial(saida.join(" "));
+  return minusculaInicial(semPalavraRepetida(saida).join(" "));
+}
+
+/**
+ * Tira a palavra colada nela mesma que a normalização de variantes CRIA.
+ *
+ * "algoritmo algoritimo" (a segunda mal transcrita) sobrevive a
+ * `normalizarFrase`, porque as duas grafias diferem — não é repetição
+ * literal. Depois `consertar` conserta a segunda para a grafia dominante, e
+ * o nome canônico sai "algoritmo algoritmo": uma duplicata que só passou a
+ * existir porque a corrigimos. O corte é aqui, no fim, onde ela aparece.
+ */
+function semPalavraRepetida(palavras: string[]): string[] {
+  return palavras.filter(
+    (p, i) => i === 0 || semAcento(p) !== semAcento(palavras[i - 1]),
+  );
 }
 
 /**
@@ -711,6 +889,7 @@ export function extrairConceitos(frases: FraseAnalise[]): Conceito[] {
       atMsEnfase:
         comEnfase.length > 0 ? (frases[comEnfase[0]].atMs ?? null) : null,
       naSintese,
+      soNaSintese: indices.every((i) => frases[i].sintese),
       tamanho: variantes[0].conteudo.length,
       frases: indices,
       // `sintagmas` está na ordem da aula, então o índice da primeira
@@ -733,6 +912,9 @@ export function extrairConceitos(frases: FraseAnalise[]): Conceito[] {
   const absorvidos = new Set<string>();
   for (const grande of porTamanho) {
     if (absorvidos.has(grande.chave)) continue;
+    // Uma enumeração de recapitulação nunca absorve ninguém — ver
+    // `soNaSintese`. Ela é uma lista de assuntos, não um assunto.
+    if (grande.soNaSintese) continue;
     const partesGrande = grande.chave.split("+");
     for (const pequeno of porTamanho) {
       if (pequeno === grande || absorvidos.has(pequeno.chave)) continue;
@@ -765,7 +947,39 @@ export function extrairConceitos(frases: FraseAnalise[]): Conceito[] {
     }
   }
 
-  const vivos = conceitos.filter((c) => !absorvidos.has(c.chave));
+  /*
+   * ENUMERAÇÕES saem da lista.
+   *
+   * Um "conceito" que contém outros conceitos inteiros não é um conceito — é
+   * a frase em que o professor listou vários. Dois casos, medidos em roteiros
+   * de história e biologia:
+   *
+   * - "revolução industrial máquina vapor", só da recapitulação, contendo
+   *   "revolução industrial" que a aula apresentou sozinha.
+   * - "banco dados SQL", da frase de abertura, contendo "banco de dados" E
+   *   "SQL", os dois assuntos reais da aula.
+   *
+   * Vindo da recapitulação, basta conter UM outro conceito para cair: ali a
+   * enumeração é a regra. Vindo do corpo da aula, exige conter DOIS — uma
+   * expressão composta legítima ("multiplicação de matrizes") contém um
+   * conceito menor ("matrizes") e tem de sobreviver.
+   */
+  const candidatos = conceitos.filter((c) => !absorvidos.has(c.chave));
+  const enumeracoes = new Set<string>();
+  for (const c of candidatos) {
+    if (c.tamanho < 2) continue;
+    const corpo = c.chave.split("+").join(" ");
+    const contidos = candidatos.filter(
+      (outro) =>
+        outro !== c &&
+        !enumeracoes.has(outro.chave) &&
+        outro.tamanho < c.tamanho &&
+        corpo.includes(outro.chave.split("+").join(" ")),
+    ).length;
+    if (contidos >= (c.soNaSintese ? 1 : 2)) enumeracoes.add(c.chave);
+  }
+
+  const vivos = candidatos.filter((c) => !enumeracoes.has(c.chave));
   for (const c of vivos) {
     /*
      * Uma frase de síntese ("resumindo, os principais assuntos são X e Y") é

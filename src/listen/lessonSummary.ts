@@ -55,12 +55,42 @@ const MARCAS_DE_SINTESE = new Set(
  * marca de ênfase de verdade.
  */
 function temMarcaDeSintese(texto: string): boolean {
-  const normal = semAcento(texto);
-  for (const m of MARCAS_DE_SINTESE) {
-    const idx = normal.indexOf(m);
-    if (idx !== -1 && !negadoAntes(normal, idx)) return true;
+  return acharMarcaDeSintese(semAcento(texto)) !== -1;
+}
+
+/**
+ * Onde a recapitulação começa — TOLERANTE à fala mal transcrita.
+ *
+ * Achado atacando o resumo com um roteiro telegráfico: o professor disse
+ * "Resumindo" e o reconhecimento entregou "Resumino". A comparação era por
+ * string exata, a marca não casou, e a frase de recapitulação inteira virou
+ * ponto principal, item de "Para revisar", "Professor destacou" E o título da
+ * aula — "Resumino assunto banco de dado e SQL". Um marcador de síntese que
+ * só funciona quando o STT acerta a palavra não serve para o STT que temos.
+ *
+ * A tolerância é deliberadamente estreita: a primeira palavra da marca tem de
+ * bater por RADICAL ("resumin" cobre resumindo/resumino/resumino), e só para
+ * marcas de uma palavra. Marcas compostas ("os principais assuntos")
+ * continuam exigindo a frase inteira — ali o risco de falso positivo é alto e
+ * a evidência, mais fraca.
+ */
+const RADICAIS_DE_SINTESE = ["resumin", "resumo", "recapitul", "sintetiz"];
+
+function acharMarcaDeSintese(normal: string): number {
+  let melhor = -1;
+  const registrar = (idx: number) => {
+    if (idx > -1 && !negadoAntes(normal, idx) && (melhor === -1 || idx < melhor)) {
+      melhor = idx;
+    }
+  };
+  for (const m of MARCAS_DE_SINTESE) registrar(normal.indexOf(m));
+  for (const radical of RADICAIS_DE_SINTESE) {
+    // Só no começo de uma palavra — "resumo" dentro de outra não marca nada.
+    const re = new RegExp(`(^|[^\\p{L}])${radical}`, "u");
+    const achado = re.exec(normal);
+    if (achado) registrar(achado.index + achado[1].length);
   }
-  return false;
+  return melhor;
 }
 
 /**
@@ -96,10 +126,8 @@ function partirEmClausulas(texto: string): { texto: string; sintese: boolean }[]
    * a própria negação, que `marcaDeEnfaseValida` já sabe descontar.
    */
   const cortes: { at: number; sintese: boolean }[] = [];
-  for (const m of MARCAS_DE_SINTESE) {
-    const idx = normal.indexOf(m);
-    if (idx > 0 && !negadoAntes(normal, idx)) cortes.push({ at: idx, sintese: true });
-  }
+  const sintese = acharMarcaDeSintese(normal);
+  if (sintese > 0) cortes.push({ at: sintese, sintese: true });
   for (const m of ["nao ", "nunca ", "jamais "]) {
     let de = 0;
     for (;;) {
@@ -133,6 +161,36 @@ function partirEmClausulas(texto: string): { texto: string; sintese: boolean }[]
   const resto = texto.slice(inicio).trim();
   if (resto) partes.push({ texto: resto, sintese: sinteseAtual });
   return partes;
+}
+
+/**
+ * A fala inteira → as CLÁUSULAS que a camada de conceitos analisa.
+ *
+ * Um lugar só, usado pelo resumo E pelo título. Eram dois caminhos: o título
+ * montava os conceitos a partir das frases cruas, sem marcar recapitulação
+ * nem ênfase, e por isso via uma aula diferente da que o resumo via. Duas
+ * leituras da mesma fala produzem duas verdades, e uma delas está errada.
+ */
+function clausulasDaFala(transcript: TranscriptSegment[]): FraseAnalise[] {
+  return frasesDaFala(transcript).flatMap((f) =>
+    partirEmClausulas(f.texto).map((parte) => ({
+      texto: parte.texto,
+      atMs: f.atMs,
+      origem: "fala" as const,
+      /*
+       * A ênfase é avaliada NA CLÁUSULA, não na frase. É a diferença entre
+       * "as APIs são importantes" (destaque legítimo) e "esta próxima parte
+       * não é importante" (o oposto), que o reconhecimento entregou grudadas
+       * na mesma linha. `marcaDeEnfaseValida` já desconta a negação dentro
+       * da cláusula; o corte garante que ela veja uma cláusula por vez.
+       */
+      enfatizada:
+        !parte.sintese &&
+        marcaDeEnfaseValida(semAcento(parte.texto)) !== null &&
+        !ehApenasMarcaDeSintese(parte.texto),
+      sintese: parte.sintese,
+    })),
+  );
 }
 
 /** Uma frase cuja ÚNICA marca de ênfase é uma marca de síntese — não deve
@@ -315,25 +373,7 @@ export function gerarResumoGlobal({
    * destacou". Ela não é um destaque — é o professor apontando para OUTROS
    * conceitos. Entra como PESO neles, nunca como linha própria.
    */
-  const frasesFala: FraseAnalise[] = frasesDaFala(transcript).flatMap((f) =>
-    partirEmClausulas(f.texto).map((parte) => ({
-      texto: parte.texto,
-      atMs: f.atMs,
-      origem: "fala" as const,
-      /*
-       * A ênfase é avaliada NA CLÁUSULA, não na frase. É a diferença entre
-       * "as APIs são importantes" (destaque legítimo) e "esta próxima parte
-       * não é importante" (o oposto), que o reconhecimento entregou grudadas
-       * na mesma linha. `marcaDeEnfaseValida` já desconta a negação dentro
-       * da cláusula; o corte garante que ela veja uma cláusula por vez.
-       */
-      enfatizada:
-        !parte.sintese &&
-        marcaDeEnfaseValida(semAcento(parte.texto)) !== null &&
-        !ehApenasMarcaDeSintese(parte.texto),
-      sintese: parte.sintese,
-    })),
-  );
+  const frasesFala = clausulasDaFala(transcript);
   const frasesQuadro: FraseAnalise[] = [...new Set(ocrLinhas)]
     .filter((l) => l.trim().split(/\s+/).length >= 2)
     .map((texto) => ({
@@ -383,7 +423,22 @@ export function gerarResumoGlobal({
       ? c.ocorrencias >= 1 || c.enfatizado || c.naSintese
       : c.ocorrencias >= 2,
   );
-  const base = sustentados.length > 0 ? sustentados : conceitos.slice(0, 1);
+  /*
+   * Sem nada sustentado, o resumo fica VAZIO — e a aba diz isso com todas as
+   * letras, em vez de mostrar um ponto principal inventado.
+   *
+   * A reserva anterior pegava o melhor conceito mesmo sem evidência, e numa
+   * aula de quatro linhas de conversa fiada ("Então pessoal beleza vamos
+   * começar / é isso daqui / vamos seguindo") produzia "A aula abordou
+   * daqui." — uma frase que parece um resumo e não diz nada. Uma palavra
+   * solta dita uma vez nunca é assunto; duas ou mais palavras já compõem uma
+   * expressão e continuam valendo com uma ocorrência só.
+   */
+  const base =
+    sustentados.length > 0
+      ? sustentados
+      : conceitos.filter((c) => c.tamanho >= 2).slice(0, 1);
+  if (base.length === 0) return vazio;
 
   const pontosPrincipais = base
     .slice(0, MAX_PONTOS)
@@ -497,20 +552,37 @@ function montarVisaoGeral(
     jaDito.add(relacionado.chave);
   }
 
+  /*
+   * CONSTRUÇÕES NEUTRAS, e de propósito.
+   *
+   * Os moldes anteriores concordavam com o complemento — "X foi apontada",
+   * "Também foram mencionados X" — e o complemento é um conceito extraído da
+   * fala, de gênero e número que o app não tem como saber. O resultado
+   * aparecia assim que o assunto não era feminino: "Protocolo HTTP foi
+   * apontada pelo professor", visto num roteiro de redes.
+   *
+   * Adivinhar o gênero pela terminação (-a feminino, -o masculino) acerta a
+   * maioria e erra feio numa classe inteira de palavras de aula: problema,
+   * sistema, tema, mapa, teorema, dia — todas masculinas terminadas em "a".
+   * Um resumo que escreve "o problema foi apresentada" perde mais confiança
+   * do que ganha em fluidez.
+   *
+   * "houve destaque para X" e "a aula também tratou de X" aceitam qualquer
+   * complemento sem concordar com ele. Nenhuma frase do resumo flexiona com
+   * uma palavra que veio do reconhecimento.
+   */
   const destacado = conceitos.find((c) => c.enfatizado);
   if (destacado) {
-    frases.push(
-      `${comoTitulo(destacado.canonico)} foi apontada pelo professor como conteúdo importante.`,
-    );
+    frases.push(`Durante a aula, houve destaque para ${destacado.canonico}.`);
     jaDito.add(destacado.chave);
   }
 
   const sobraram = conceitos.filter((c) => !jaDito.has(c.chave)).slice(0, 2);
   if (sobraram.length === 1) {
-    frases.push(`Também foi mencionado ${sobraram[0].canonico}.`);
+    frases.push(`A aula também tratou de ${sobraram[0].canonico}.`);
   } else if (sobraram.length === 2) {
     frases.push(
-      `Também foram mencionados ${sobraram[0].canonico} e ${sobraram[1].canonico}.`,
+      `A aula também tratou de ${sobraram[0].canonico} e ${sobraram[1].canonico}.`,
     );
   }
 
@@ -560,16 +632,21 @@ export function sugerirTitulo(
    * "Aula sem título", porque parece que o app entendeu algo que não
    * entendeu.
    */
+  /*
+   * As MESMAS cláusulas que o resumo analisa — `clausulasDaFala`, não uma
+   * segunda leitura simplificada.
+   *
+   * O título montava os conceitos com `sintese: false` em tudo, e por isso
+   * enxergava um mundo diferente do resumo: numa aula de história, o resumo
+   * descartava a enumeração da recapitulação e listava "Revolução
+   * industrial", "Máquina vapor" e "Urbanização", enquanto o título — cego
+   * para a recapitulação — nomeava a aula de "Revolução industrial máquina
+   * vapor". Duas análises da mesma fala é uma a mais.
+   */
   const conceitos = extrairConceitos(
-    frasesDaFala(transcript)
-      .filter((f) => f.texto.split(/\s+/).length >= MIN_PALAVRAS_FRASE)
-      .map((f) => ({
-        texto: f.texto,
-        atMs: f.atMs,
-        origem: "fala" as const,
-        enfatizada: false,
-        sintese: false,
-      })),
+    clausulasDaFala(transcript).filter(
+      (f) => f.texto.split(/\s+/).length >= MIN_PALAVRAS_FRASE,
+    ),
   )
     .filter((c) => c.ocorrencias >= 2 || c.tamanho >= 2)
     /*
